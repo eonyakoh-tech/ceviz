@@ -1,0 +1,29 @@
+# Environment
+.env
+.env.*
+config/.env
+config/.env.*
+!config/.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Inbox temp
+inbox/pending/

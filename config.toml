@@ -1,0 +1,113 @@
+# CEVIZ 전역 설정 파일
+# 보안 민감 정보(API 키 등)는 이 파일에 기입 금지 → .env 사용
+
+[meta]
+version = "1.0.0"
+updated = "2026-04-13"
+project = "CEVIZ"
+
+# ─── 하드웨어 프로파일 ───────────────────────────
+
+[hardware.server]
+label        = "PN40"
+cpu          = "Intel Celeron N4000"
+tier         = "low"
+ram_gb       = 4
+os           = "Ubuntu Linux"
+role         = "server"
+async_only   = true
+max_workers  = 2
+ollama_model = "gemma3:1b"
+batch_size   = 1
+tailscale_ip = ""
+
+[hardware.client]
+label        = "T480s"
+cpu          = "Intel Core i7-8550U"
+tier         = "mid"
+ram_gb       = 16
+os           = "Ubuntu Linux"
+role         = "client"
+max_workers  = 4
+ollama_model = "gemma3:4b"
+batch_size   = 4
+tailscale_ip = ""
+
+# ─── AI 모델 설정 ────────────────────────────────
+
+[ai.online]
+provider    = "anthropic"
+model       = "claude-sonnet-4-20250514"
+timeout_sec = 30
+max_tokens  = 4096
+
+[ai.local]
+provider    = "ollama"
+host        = "http://localhost:11434"
+timeout_sec = 60
+
+[ai.fallback]
+# 1순위: Local AI — 기본 진입점 / Privacy First
+tier1 = "local"
+tier1_model_threshold_b = 8          # 8B 미만 모델 기준; 초과 태스크는 tier2 위임
+
+# 2순위: Online AI — 고난도 태스크 / 네트워크 필요
+tier2 = "online"
+
+# 3순위: Static Diagnostic & Vault Search — Emergency Resilience
+tier3 = "static"
+tier3_vault_search_tool = "ripgrep"  # ripgrep(rg) 우선, 미설치 시 grep 사용
+tier3_pending_dir       = "${CEVIZ_HOME}/inbox/pending"
+
+# ─── 경로 설정 ───────────────────────────────────
+
+[paths]
+ceviz_home       = "/opt/ceviz"
+obsidian_inbox   = "${OBSIDIAN_VAULT}/00_Inbox"
+logs             = "${CEVIZ_HOME}/logs"
+inbox            = "${CEVIZ_HOME}/inbox"
+skills           = "${CEVIZ_HOME}/skills"
+personas         = "${CEVIZ_HOME}/personas"
+media_capture    = "${CEVIZ_HOME}/media/capture"
+media_processed  = "${CEVIZ_HOME}/media/processed"
+
+# ─── 텔레그램 봇 ────────────────────────────────
+
+[telegram]
+enabled             = false
+notify_on_fallback  = true
+notify_on_complete  = true
+notify_on_error     = true
+
+# ─── 동기화 ─────────────────────────────────────
+
+[sync]
+method              = "syncthing"
+tailscale_mesh      = true
+conflict_resolution = "newer_wins"
+auto_push_git       = false
+
+# ─── 보안 ───────────────────────────────────────
+
+[security]
+update_check_interval_days = 30
+bind_local_only            = true
+auto_notify_update         = true
+
+# ─── 오디오 캡처 ────────────────────────────────
+
+[audio]
+capture_method     = "pulseaudio_loopback"
+sample_rate        = 44100
+bit_depth          = 16
+encoding           = "flac"
+enable_diarization = true
+
+# ─── UI/UX ──────────────────────────────────────
+
+[ui]
+interface            = "cli"
+tmux_support         = true
+tab_chat             = true
+show_progress        = true
+english_prompt_hotkey = "ctrl+e"
