@@ -25,10 +25,11 @@ export class CevizPanel implements vscode.WebviewViewProvider {
     private _currentSessionId = "";
     private _englishMode = false;
     private _mode = "hybrid";
-    private _model = "gemma4:e2b";
+    private _model = "gemma3:1b";
     private _cloudModel = "claude";
     private _totalTokens = 0;
     private _lastCloudResponse: Message | null = null;
+    private _statusTimer?: ReturnType<typeof setInterval>;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -69,8 +70,27 @@ export class CevizPanel implements vscode.WebviewViewProvider {
     }
 
     private _getUrl(): string {
-        const ip = vscode.workspace.getConfiguration("ceviz").get<string>("serverIp") || "127.0.0.1";
+        const ip = vscode.workspace.getConfiguration("ceviz").get<string>("serverIp") || "100.69.155.43";
         return `http://${ip}:8000`;
+    }
+
+    private async _checkServerStatus() {
+        const url = `${this._getUrl()}/status`;
+        console.log("CEVIZ: _checkServerStatus →", url);
+        try {
+            const r = await axios.get(url, { timeout: 5000 });
+            console.log("CEVIZ: server ok →", JSON.stringify(r.data).slice(0, 120));
+            this._view?.webview.postMessage({ type: "serverStatus", data: r.data });
+        } catch (e: any) {
+            console.log("CEVIZ: server error →", e.message);
+            this._view?.webview.postMessage({ type: "serverStatus", data: null });
+        }
+    }
+
+    private _startStatusPolling() {
+        if (this._statusTimer) { clearInterval(this._statusTimer); }
+        this._checkServerStatus();
+        this._statusTimer = setInterval(() => this._checkServerStatus(), 15000);
     }
 
     private _sync() {
@@ -87,6 +107,7 @@ export class CevizPanel implements vscode.WebviewViewProvider {
     }
 
     resolveWebviewView(webviewView: vscode.WebviewView) {
+        console.log("CEVIZ: resolveWebviewView called, url =", this._getUrl());
         this._view = webviewView;
         webviewView.webview.options = {
             enableScripts: true,
@@ -94,16 +115,18 @@ export class CevizPanel implements vscode.WebviewViewProvider {
         };
         webviewView.webview.html = this._html();
 
+        this._startStatusPolling();
+
+        webviewView.onDidChangeVisibility(() => {
+            if (webviewView.visible) { this._checkServerStatus(); }
+        });
+
         webviewView.webview.onDidReceiveMessage(async (msg) => {
+            console.log("CEVIZ: webview msg →", msg.type);
             switch (msg.type) {
                 case "ready":
                     this._sync();
-                    try {
-                        const r = await axios.get(`${this._getUrl()}/status`, { timeout: 5000 });
-                        this._view?.webview.postMessage({ type: "serverStatus", data: r.data });
-                    } catch {
-                        this._view?.webview.postMessage({ type: "serverStatus", data: null });
-                    }
+                    await this._checkServerStatus();
                     try {
                         const r = await axios.get(`${this._getUrl()}/models`, { timeout: 5000 });
                         this._view?.webview.postMessage({ type: "models", list: r.data.models });
@@ -265,99 +288,27 @@ JSON 형식으로 각 에이전트 결과를 반환하세요:
         }
     }
 
+    private _getNonce(): string {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        return Array.from({ length: 32 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    }
+
     private _html(): string {
+        const nonce = this._getNonce();
+        const webview = this._view!.webview;
+        const scriptUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this._extensionUri, "media", "webview.js")
+        );
+        const styleUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this._extensionUri, "media", "webview.css")
+        );
         return `<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:var(--vscode-font-family);font-size:12px;color:var(--vscode-foreground);background:var(--vscode-sideBar-background);height:100vh;display:flex;flex-direction:column;overflow:hidden}
-
-/* 헤더 */
-.hdr{padding:6px 8px;border-bottom:1px solid var(--vscode-panel-border);background:var(--vscode-sideBarSectionHeader-background);flex-shrink:0}
-.hdr-top{display:flex;align-items:center;gap:5px;margin-bottom:5px}
-.brand{font-weight:700;font-size:13px;flex:1}
-.icon-row{display:flex;gap:3px}
-.ibtn{background:none;border:none;color:var(--vscode-foreground);cursor:pointer;padding:3px 4px;border-radius:3px;font-size:13px;opacity:.7;line-height:1}
-.ibtn:hover{background:var(--vscode-toolbar-hoverBackground);opacity:1}
-.ibtn.on{color:var(--vscode-focusBorder);opacity:1;background:var(--vscode-toolbar-hoverBackground)}
-.status{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--vscode-descriptionForeground)}
-.dot{width:6px;height:6px;border-radius:50%;background:#c44;flex-shrink:0}
-.dot.ok{background:#4c4}
-.token-bar{display:none;margin-top:4px;padding:3px 6px;background:var(--vscode-inputValidation-infoBackground);border-radius:3px;font-size:10px;color:var(--vscode-foreground)}
-.token-bar.show{display:block}
-
-/* 세션 */
-.sess{padding:4px 8px;border-bottom:1px solid var(--vscode-panel-border);flex-shrink:0}
-.sess-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}
-.sess-label{font-size:10px;font-weight:700;color:var(--vscode-descriptionForeground);text-transform:uppercase;letter-spacing:.5px}
-.nbtn{background:none;border:none;color:var(--vscode-foreground);cursor:pointer;font-size:11px;padding:1px 5px;border-radius:3px}
-.nbtn:hover{background:var(--vscode-toolbar-hoverBackground)}
-.sess-list{max-height:70px;overflow-y:auto;display:flex;flex-direction:column;gap:1px}
-.sitem{padding:2px 6px;border-radius:3px;cursor:pointer;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.7}
-.sitem:hover{background:var(--vscode-list-hoverBackground);opacity:1}
-.sitem.cur{background:var(--vscode-list-activeSelectionBackground);color:var(--vscode-list-activeSelectionForeground);opacity:1}
-
-/* 탭 */
-.tabs{display:flex;border-bottom:1px solid var(--vscode-panel-border);flex-shrink:0}
-.tab{flex:1;padding:5px;background:none;border:none;color:var(--vscode-foreground);cursor:pointer;font-size:11px;opacity:.6;border-bottom:2px solid transparent}
-.tab.on{opacity:1;border-bottom-color:var(--vscode-focusBorder)}
-
-/* 채팅 */
-.chat{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:8px}
-.msg{max-width:100%}
-.msg.user{align-self:flex-end}
-.msg.assistant{align-self:flex-start}
-.bubble{padding:7px 9px;border-radius:8px;line-height:1.5;white-space:pre-wrap;word-break:break-word;font-size:12px}
-.msg.user .bubble{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border-radius:8px 8px 2px 8px}
-.msg.assistant .bubble{background:var(--vscode-editor-inactiveSelectionBackground);border-radius:8px 8px 8px 2px}
-.meta{font-size:10px;color:var(--vscode-descriptionForeground);margin-top:2px;padding:0 2px;display:flex;align-items:center;gap:6px}
-.learn-btn{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground);border:none;border-radius:3px;padding:1px 6px;font-size:10px;cursor:pointer}
-.learn-btn:hover{background:var(--vscode-button-secondaryHoverBackground)}
-.think{display:flex;gap:4px;padding:8px 9px;align-items:center}
-.think span{width:6px;height:6px;border-radius:50%;background:var(--vscode-focusBorder);animation:bop 1s infinite}
-.think span:nth-child(2){animation-delay:.2s}
-.think span:nth-child(3){animation-delay:.4s}
-@keyframes bop{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
-
-/* 대시보드 */
-.dash{flex:1;overflow-y:auto;padding:8px;display:none;flex-direction:column;gap:8px}
-.dash.show{display:flex}
-.dash-title{font-weight:700;font-size:12px;margin-bottom:4px}
-.dash-plan{width:100%;height:80px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border);border-radius:4px;padding:6px;font-size:11px;resize:none;font-family:var(--vscode-font-family)}
-.dash-run{width:100%;margin-top:4px;padding:5px;background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;border-radius:4px;cursor:pointer;font-size:11px}
-.dash-run:hover{background:var(--vscode-button-hoverBackground)}
-.agent-card{background:var(--vscode-editor-inactiveSelectionBackground);border-radius:6px;padding:8px;font-size:11px}
-.agent-name{font-weight:700;margin-bottom:3px}
-.agent-status{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--vscode-descriptionForeground)}
-.progress{height:3px;background:var(--vscode-progressBar-background);border-radius:2px;margin-top:4px;overflow:hidden}
-.progress-inner{height:100%;background:var(--vscode-focusBorder);width:0;transition:width .3s}
-
-/* 입력 */
-.inp-area{border-top:1px solid var(--vscode-panel-border);padding:6px 8px;flex-shrink:0}
-.inp-row{display:flex;gap:5px;margin-bottom:5px;align-items:flex-end}
-.prompt{flex:1;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border);border-radius:4px;padding:5px 7px;font-size:12px;resize:none;min-height:34px;max-height:100px;font-family:var(--vscode-font-family);outline:none}
-.prompt:focus{border-color:var(--vscode-focusBorder)}
-.send{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;border-radius:4px;padding:5px 10px;cursor:pointer;font-size:14px;flex-shrink:0}
-.send:hover{background:var(--vscode-button-hoverBackground)}
-.bot-bar{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
-
-/* 모드 선택 드롭다운 */
-.mode-drop{position:relative;display:inline-block}
-.mode-btn{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground);border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px}
-.mode-btn:hover{background:var(--vscode-button-secondaryHoverBackground)}
-.drop-menu{display:none;position:absolute;bottom:100%;left:0;background:var(--vscode-dropdown-background);border:1px solid var(--vscode-dropdown-border);border-radius:4px;min-width:200px;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,.3);margin-bottom:4px}
-.drop-menu.show{display:block}
-.drop-section{padding:4px 8px 2px;font-size:10px;font-weight:700;color:var(--vscode-descriptionForeground);text-transform:uppercase;letter-spacing:.5px}
-.drop-sep{height:1px;background:var(--vscode-panel-border);margin:2px 0}
-.drop-item{padding:5px 12px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:6px}
-.drop-item:hover{background:var(--vscode-list-hoverBackground)}
-.drop-item.selected{background:var(--vscode-list-activeSelectionBackground);color:var(--vscode-list-activeSelectionForeground)}
-.new-chat-item{padding:6px 12px;cursor:pointer;font-size:11px;font-weight:700;border-bottom:1px solid var(--vscode-panel-border);display:flex;align-items:center;gap:6px}
-.new-chat-item:hover{background:var(--vscode-list-hoverBackground)}
-</style>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}' ${webview.cspSource};">
+<link rel="stylesheet" href="${styleUri}">
 </head>
 <body>
 
@@ -404,10 +355,7 @@ body{font-family:var(--vscode-font-family);font-size:12px;color:var(--vscode-for
   <div style="font-size:11px;color:var(--vscode-descriptionForeground);margin-bottom:6px">
     멀티 에이전트 팀 구성 계획을 입력하면 실시간으로 오케스트레이션합니다.
   </div>
-  <textarea class="dash-plan" id="orchPlan" placeholder="예: 게임 시나리오 제작
-- 에이전트1: 세계관 연구원 — 배경 설정 조사
-- 에이전트2: 스토리 작가 — 메인 플롯 작성
-- 에이전트3: 코드 검토자 — 게임 로직 검증"></textarea>
+  <textarea class="dash-plan" id="orchPlan" placeholder="예: 게임 시나리오 제작&#10;- 에이전트1: 세계관 연구원 — 배경 설정 조사&#10;- 에이전트2: 스토리 작가 — 메인 플롯 작성&#10;- 에이전트3: 코드 검토자 — 게임 로직 검증"></textarea>
   <button class="dash-run" id="orchRun">▶ 오케스트레이션 실행</button>
   <div id="agentCards"></div>
 </div>
@@ -419,264 +367,53 @@ body{font-family:var(--vscode-font-family);font-size:12px;color:var(--vscode-for
     <button class="send" id="sendBtn">↑</button>
   </div>
   <div class="bot-bar">
-    <!-- 모드 드롭다운 -->
     <div class="mode-drop" id="modeDrop">
       <button class="mode-btn" id="modeBtn">
-        <span id="modeBtnLabel">🔀 Hybrid · Gemma 4 E2B</span>
-        <span>▾</span>
+        <span id="modeBtnLabel">Hybrid · Gemma 3 1B</span>
+        <span style="opacity:.6;font-size:9px">▾</span>
       </button>
       <div class="drop-menu" id="dropMenu">
-        <div class="new-chat-item" id="newChatItem">＋ New Chat Session <span style="margin-left:auto;font-size:10px;opacity:.6">Ctrl+N</span></div>
+        <div class="new-chat-item" id="newChatItem">
+          <span>＋ New Chat Session</span>
+          <span style="margin-left:auto;font-size:10px;opacity:.5">Ctrl+N</span>
+        </div>
         <div class="drop-sep"></div>
-        <div class="drop-section">Local</div>
-        <div class="drop-item" data-mode="local" data-model="gemma4:e2b">🖥 Gemma 4 E2B</div>
-        <div class="drop-item" data-mode="local" data-model="gemma4:e4b">🖥 Gemma 4 E4B</div>
+        <div class="drop-continue">Continue In</div>
+        <div class="drop-category">
+          <span class="drop-cat-icon">🖥</span>
+          <span class="drop-cat-label">Local</span>
+        </div>
+        <div class="drop-item" data-mode="local" data-model="gemma3:1b"><span class="drop-model-icon">✦</span>Gemma 3 1B</div>
+        <div class="drop-item" data-mode="local" data-model="gemma4:e2b"><span class="drop-model-icon">✦</span>Gemma 4 E2B</div>
+        <div class="drop-item" data-mode="local" data-model="gemma4:e4b"><span class="drop-model-icon">✦</span>Gemma 4 E4B</div>
         <div class="drop-sep"></div>
-        <div class="drop-section">Cloud</div>
-        <div class="drop-item" data-mode="cloud" data-model="claude">✳️ Claude</div>
+        <div class="drop-category">
+          <span class="drop-cat-icon">⌨</span>
+          <span class="drop-cat-label">Copilot CLI</span>
+        </div>
+        <div class="drop-item" data-mode="copilot" data-model="copilot-cli"><span class="drop-model-icon" style="background:#1a3a2a;color:#4ec9b0">⊡</span>Copilot</div>
         <div class="drop-sep"></div>
-        <div class="drop-section">Hybrid</div>
-        <div class="drop-item selected" data-mode="hybrid" data-model="gemma4:e2b">🔀 Gemma 4 E2B</div>
-        <div class="drop-item" data-mode="hybrid" data-model="gemma4:e4b">🔀 Gemma 4 E4B</div>
+        <div class="drop-category">
+          <span class="drop-cat-icon">☁</span>
+          <span class="drop-cat-label">Cloud</span>
+        </div>
+        <div class="drop-item" data-mode="cloud" data-model="claude"><span class="drop-model-icon" style="background:#2d1b4e;color:#c586c0">✳</span>Claude</div>
+        <div class="drop-sep"></div>
+        <div class="drop-category">
+          <span class="drop-cat-icon">🌐</span>
+          <span class="drop-cat-label">Hybrid</span>
+        </div>
+        <div class="drop-item selected" data-mode="hybrid" data-model="gemma3:1b"><span class="drop-model-icon">✦</span>Gemma 3 1B</div>
+        <div class="drop-item" data-mode="hybrid" data-model="gemma4:e2b"><span class="drop-model-icon">✦</span>Gemma 4 E2B</div>
+        <div class="drop-item" data-mode="hybrid" data-model="gemma4:e4b"><span class="drop-model-icon">✦</span>Gemma 4 E4B</div>
+        <div class="drop-footer" id="agentHandoffLink">Learn about agent handoff...</div>
       </div>
     </div>
     <span id="enBadge" style="display:none;background:var(--vscode-focusBorder);color:#fff;border-radius:3px;padding:1px 5px;font-size:10px;font-weight:700">EN</span>
   </div>
 </div>
 
-<script>
-const vscode = acquireVsCodeApi();
-let mode = "hybrid", model = "gemma4:e2b", englishMode = false;
-let sessions = [], curId = "", totalTokens = 0;
-let lastCloudContent = null;
-let thinkEl = null;
-
-window.addEventListener("load", () => vscode.postMessage({ type: "ready" }));
-
-window.addEventListener("message", e => {
-    const m = e.data;
-    switch (m.type) {
-        case "sync":
-            sessions = m.sessions; curId = m.currentId;
-            mode = m.mode; model = m.model;
-            englishMode = m.englishMode; totalTokens = m.totalTokens;
-            renderSessions(); renderChat(); updateModeLabel();
-            document.getElementById("enBtn").classList.toggle("on", englishMode);
-            document.getElementById("enBadge").style.display = englishMode ? "inline" : "none";
-            break;
-        case "serverStatus":
-            const ok = m.data && m.data.ollama;
-            document.getElementById("dot").classList.toggle("ok", !!ok);
-            document.getElementById("statusTxt").textContent = ok
-                ? "PN40 연결됨 · Ollama ✓" : (m.data ? "PN40 연결됨" : "서버 연결 안됨");
-            break;
-        case "models":
-            updateLocalModels(m.list);
-            break;
-        case "userMsg":
-            hideThink(); appendMsg("user", m.content);
-            break;
-        case "thinking":
-            showThink();
-            break;
-        case "assistantMsg":
-            hideThink();
-            appendMsg("assistant", m.content, m.agent, m.tier, m.engine, m.isCloud, m.tokenUsage);
-            if (m.isCloud && m.tokenUsage) {
-                totalTokens = m.totalTokens || totalTokens;
-                document.getElementById("tokenCount").textContent = totalTokens;
-                document.getElementById("tokenBar").classList.add("show");
-            }
-            if (m.isCloud) lastCloudContent = m.content;
-            break;
-        case "openDashboard":
-            switchTab("dash");
-            break;
-        case "englishMode":
-            englishMode = m.enabled;
-            document.getElementById("enBtn").classList.toggle("on", englishMode);
-            document.getElementById("enBadge").style.display = englishMode ? "inline" : "none";
-            document.getElementById("promptInput").placeholder = englishMode
-                ? "Type in any language — English tutor active" : "무엇을 만들어 드릴까요?";
-            break;
-        case "orchStatus":
-            document.getElementById("agentCards").innerHTML =
-                m.status === "running"
-                ? "<div class=\'agent-card\'><div class=\'agent-name\'>⏳ 오케스트레이션 실행 중...</div><div class=\'progress\'><div class=\'progress-inner\' style=\'width:60%\'></div></div></div>"
-                : "<div class=\'agent-card\'>❌ 오류: " + (m.msg || "") + "</div>";
-            break;
-        case "orchResult":
-            renderOrchResult(m.result);
-            break;
-    }
-});
-
-function renderSessions() {
-    const list = document.getElementById("sessList");
-    list.innerHTML = "";
-    [...sessions].reverse().forEach(s => {
-        const el = document.createElement("div");
-        el.className = "sitem" + (s.id === curId ? " cur" : "");
-        el.textContent = s.title || "New Session";
-        el.onclick = () => { curId = s.id; vscode.postMessage({ type: "switchSession", id: s.id }); };
-        list.appendChild(el);
-    });
-}
-
-function renderChat() {
-    const area = document.getElementById("chatArea");
-    area.innerHTML = "";
-    const s = sessions.find(x => x.id === curId);
-    if (!s) { return; }
-    s.messages.forEach(m => appendMsg(m.role, m.content, m.agent, m.tier, m.engine, m.tier === 2, m.tokenUsage));
-}
-
-function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage) {
-    const area = document.getElementById("chatArea");
-    const div = document.createElement("div");
-    div.className = "msg " + role;
-    const bub = document.createElement("div");
-    bub.className = "bubble";
-    bub.textContent = content;
-    div.appendChild(bub);
-    if (role === "assistant") {
-        const meta = document.createElement("div");
-        meta.className = "meta";
-        meta.textContent = (agent || "") + (tier !== undefined ? " · Tier" + tier : "") + (engine ? " · " + engine : "") + (tokenUsage ? " · ~" + tokenUsage + " tokens" : "");
-        div.appendChild(meta);
-        if (isCloud && content) {
-            const lb = document.createElement("button");
-            lb.className = "learn-btn";
-            lb.textContent = "📚 로컬에 학습";
-            lb.title = "Cloud AI 처리 방식을 Local 모델에 단방향 학습";
-            lb.onclick = () => { lb.disabled = true; lb.textContent = "학습 중..."; vscode.postMessage({ type: "learnFromCloud", response: content }); };
-            meta.appendChild(lb);
-        }
-    }
-    area.appendChild(div);
-    area.scrollTop = area.scrollHeight;
-}
-
-function showThink() {
-    const area = document.getElementById("chatArea");
-    thinkEl = document.createElement("div");
-    thinkEl.className = "think";
-    thinkEl.innerHTML = "<span></span><span></span><span></span>";
-    area.appendChild(thinkEl);
-    area.scrollTop = area.scrollHeight;
-}
-function hideThink() { if (thinkEl) { thinkEl.remove(); thinkEl = null; } }
-
-function updateModeLabel() {
-    const labels = { local: "🖥 Local", cloud: "☁️ Cloud", hybrid: "🔀 Hybrid" };
-    const mLabel = (labels[mode] || "🔀 Hybrid") + " · " + model;
-    document.getElementById("modeBtnLabel").textContent = mLabel;
-    document.querySelectorAll(".drop-item").forEach(el => {
-        el.classList.toggle("selected", el.dataset.mode === mode && el.dataset.model === model);
-    });
-}
-
-function updateLocalModels(list) {
-    // 동적으로 Local 모델 추가 가능
-}
-
-function sendPrompt() {
-    const inp = document.getElementById("promptInput");
-    const p = inp.value.trim();
-    if (!p) { return; }
-    inp.value = ""; inp.style.height = "auto";
-    vscode.postMessage({ type: "sendPrompt", prompt: p, mode, model });
-}
-
-function switchTab(tab) {
-    const isChat = tab === "chat";
-    document.getElementById("chatTab").classList.toggle("on", isChat);
-    document.getElementById("dashTab").classList.toggle("on", !isChat);
-    document.getElementById("chatArea").style.display = isChat ? "flex" : "none";
-    document.getElementById("dashArea").classList.toggle("show", !isChat);
-}
-
-function renderOrchResult(raw) {
-    const cards = document.getElementById("agentCards");
-    try {
-        const data = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] || "{}");
-        const agents = data.agents || [];
-        cards.innerHTML = "";
-        agents.forEach(a => {
-            const c = document.createElement("div");
-            c.className = "agent-card";
-            c.innerHTML = "<div class=\'agent-name\'>" + a.name + " — " + a.role + "</div>" +
-                "<div style=\'margin-top:4px;font-size:11px\'>" + a.result + "</div>" +
-                "<div class=\'progress\'><div class=\'progress-inner\' style=\'width:100%\'></div></div>";
-            cards.appendChild(c);
-        });
-        if (data.final) {
-            const f = document.createElement("div");
-            f.className = "agent-card";
-            f.style.borderLeft = "3px solid var(--vscode-focusBorder)";
-            f.innerHTML = "<div class=\'agent-name\'>✅ 최종 결과</div><div style=\'margin-top:4px;font-size:11px\'>" + data.final + "</div>";
-            cards.appendChild(f);
-        }
-    } catch {
-        cards.innerHTML = "<div class=\'agent-card\'><div class=\'agent-name\'>결과</div><div style=\'margin-top:4px;font-size:11px\'>" + raw + "</div></div>";
-    }
-}
-
-// 이벤트
-document.getElementById("sendBtn").onclick = sendPrompt;
-document.getElementById("promptInput").addEventListener("keydown", e => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendPrompt(); }
-});
-document.getElementById("promptInput").addEventListener("input", function() {
-    this.style.height = "auto";
-    this.style.height = Math.min(this.scrollHeight, 100) + "px";
-});
-document.getElementById("newSessBtn").onclick = () => vscode.postMessage({ type: "newSession" });
-document.getElementById("chatTab").onclick = () => switchTab("chat");
-document.getElementById("dashTab").onclick = () => switchTab("dash");
-document.getElementById("soticBtn").onclick = () => switchTab("dash");
-document.getElementById("newChatItem").onclick = () => { vscode.postMessage({ type: "newSession" }); closeDropdown(); };
-
-// 모드 드롭다운
-document.getElementById("modeBtn").onclick = (e) => {
-    e.stopPropagation();
-    document.getElementById("dropMenu").classList.toggle("show");
-};
-document.querySelectorAll(".drop-item").forEach(el => {
-    el.onclick = () => {
-        mode = el.dataset.mode;
-        model = el.dataset.model;
-        vscode.postMessage({ type: "changeMode", mode, model });
-        updateModeLabel();
-        closeDropdown();
-    };
-});
-function closeDropdown() { document.getElementById("dropMenu").classList.remove("show"); }
-document.addEventListener("click", closeDropdown);
-document.getElementById("modeDrop").addEventListener("click", e => e.stopPropagation());
-
-// 아이콘 버튼
-document.getElementById("enBtn").onclick = () => vscode.postMessage({ type: "toggleEnglish" });
-document.getElementById("gearBtn").onclick = () => vscode.postMessage({ type: "settings" });
-document.getElementById("brainBtn").onclick = () => {
-    switchTab("chat");
-    appendMsg("assistant", "🧠 지식 신경망 동기화\nGitHub Obsidian Vault 연결은 Phase 8에서 구현됩니다.\n설정에서 GitHub URL을 먼저 입력해주세요.", "system", 0);
-};
-document.getElementById("skillBtn").onclick = () => {
-    switchTab("chat");
-    appendMsg("assistant", "⚡ Skill CRUD 패널은 Phase 7에서 구현됩니다.", "system", 0);
-};
-document.getElementById("orchRun").onclick = () => {
-    const plan = document.getElementById("orchPlan").value.trim();
-    if (!plan) { return; }
-    vscode.postMessage({ type: "orchSubmit", plan });
-};
-
-// Ctrl+N
-document.addEventListener("keydown", e => {
-    if (e.ctrlKey && e.key === "n") { e.preventDefault(); vscode.postMessage({ type: "newSession" }); }
-});
-</script>
+<script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
     }
