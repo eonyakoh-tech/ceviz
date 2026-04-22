@@ -36,7 +36,7 @@
       "properties": {
         "ceviz.serverIp": {
           "type": "string",
-          "default": "127.0.0.1",
+          "default": "100.69.155.43",
           "description": "PN40 서버 Tailscale IP"
         },
         "ceviz.defaultCloudModel": {
