@@ -60,13 +60,13 @@ async def tier1_local(prompt: str) -> dict:
                     messages=[{"role": "user", "content": prompt}]
                 )
             ),
-            timeout=120
+            timeout=150
         )
         result = response["message"]["content"]
         await log_event(1, "SUCCESS")
         return {"tier": 1, "engine": "ollama/gemma3:1b", "result": result}
     except asyncio.TimeoutError:
-        await log_event(1, "TIMEOUT", "60s 초과 → Tier2 위임")
+        await log_event(1, "TIMEOUT", "150s 초과 → Tier2 위임")
         raise
     except Exception as e:
         await log_event(1, "ERROR", str(e))
