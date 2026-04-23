@@ -22,6 +22,24 @@ PERSONAS_DIR = CEVIZ_HOME / "personas"
 
 
 # ── 페르소나 로더 ──────────────────────────────────────────
+
+SIMPLE_KEYWORDS = [
+    "안녕", "hi", "hello", "hey", "고마워", "감사", "잘했어",
+    "좋아", "응", "네", "아니", "ok", "yes", "no", "sure",
+    "뭐야", "뭔데", "ㅋ", "ㅎ", "ㅇㅇ", "ㄴㄴ",
+    "알겠어", "알았어", "맞아", "틀려", "그래", "아니야",
+]
+
+def is_simple_prompt(prompt: str) -> bool:
+    p = prompt.strip()
+    if len(p) <= 30:
+        return True
+    pl = p.lower()
+    for kw in SIMPLE_KEYWORDS:
+        if kw in pl:
+            return True
+    return False
+
 def load_persona(persona_id: str) -> dict:
     target = PERSONAS_DIR / f"{persona_id}.md"
     if not target.exists():
@@ -93,6 +111,11 @@ async def run_agent(agent_id: str, prompt: str) -> dict:
 
 # ── 메인 디스패처 ──────────────────────────────────────────
 async def dispatch(prompt: str) -> dict:
+    # 단축 경로: 간단한 프롬프트는 라우팅 생략
+    if is_simple_prompt(prompt):
+        result = await run_agent("general_agent", prompt)
+        return result
+
     await log_event(0, "DISPATCH", prompt[:80])
     agent_id = await detect_agent(prompt)
     response = await run_agent(agent_id, prompt)
