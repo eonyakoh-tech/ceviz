@@ -6,6 +6,7 @@ let sessions = [], curId = "", totalTokens = 0;
 let lastCloudContent = null;
 let thinkEl = null;
 let pendingLearnBtn = null;
+let skills = [], skillFilter = 'all', editingSkillId = null;
 
 window.addEventListener("load", () => {
     console.log("CEVIZ: load fired, sending ready");
@@ -82,6 +83,19 @@ window.addEventListener("message", e => {
             break;
         case "orchResult":
             renderOrchResult(m.result);
+            break;
+        case "skillsSync":
+            skills = m.skills || [];
+            renderSkills();
+            break;
+        case "skillSaved":
+            skills = m.skills || [];
+            renderSkills();
+            closeSkillForm();
+            break;
+        case "skillDeleted":
+            skills = m.skills || [];
+            renderSkills();
             break;
     }
 });
@@ -201,13 +215,114 @@ function sendPrompt() {
 }
 
 function switchTab(tab) {
-    const isChat = tab === "chat";
+    const isChat  = tab === "chat";
+    const isDash  = tab === "dash";
+    const isSkill = tab === "skill";
     document.getElementById("chatTab").classList.toggle("on", isChat);
-    document.getElementById("dashTab").classList.toggle("on", !isChat);
+    document.getElementById("dashTab").classList.toggle("on", isDash);
+    document.getElementById("skillTab").classList.toggle("on", isSkill);
     document.getElementById("chatArea").style.display = isChat ? "flex" : "none";
-    document.getElementById("dashArea").classList.toggle("show", !isChat);
-    document.getElementById("soticBtn").classList.toggle("on", !isChat);
+    document.getElementById("dashArea").classList.toggle("show", isDash);
+    document.getElementById("skillArea").classList.toggle("show", isSkill);
+    document.getElementById("soticBtn").classList.toggle("on", isDash);
+    document.getElementById("skillBtn").classList.toggle("on", isSkill);
 }
+
+/* ── SKILL CRUD ── */
+function renderSkills() {
+    const list = document.getElementById("skillList");
+    const filtered = skillFilter === "all" ? skills : skills.filter(s => s.category === skillFilter);
+    if (filtered.length === 0) {
+        list.innerHTML = '<div class="skill-empty">⚡ 스킬이 없습니다<br>+ 추가 버튼으로 만들어보세요</div>';
+        return;
+    }
+    const catEmoji = { game:"🎮", document:"📄", code:"💻", research:"🔍", media:"🎬" };
+    list.innerHTML = "";
+    filtered.forEach(sk => {
+        const div = document.createElement("div");
+        div.className = "skill-card";
+        const tags = (sk.tags || []).map(t => `<span class="sk-tag">${t}</span>`).join("");
+        div.innerHTML = `
+          <div class="sk-head">
+            <span class="sk-name">${sk.name}</span>
+            <span class="sk-cat">${catEmoji[sk.category] || "⚡"} ${sk.category}</span>
+          </div>
+          ${sk.description ? `<div class="sk-desc">${sk.description}</div>` : ""}
+          ${tags ? `<div class="sk-tags">${tags}</div>` : ""}
+          <div class="sk-foot">
+            <span class="sk-uses">사용 ${sk.uses || 0}회</span>
+            <button class="sk-edit">편집</button>
+            <button class="sk-del">삭제</button>
+          </div>`;
+        list.appendChild(div);
+        // CSP 준수: innerHTML onclick 대신 addEventListener 사용
+        div.querySelector(".sk-edit").addEventListener("click", () => showSkillForm(sk.id));
+        const delBtn = div.querySelector(".sk-del");
+        delBtn.addEventListener("click", () => {
+            if (delBtn.dataset.confirming === "1") {
+                vscode.postMessage({ type: "deleteSkill", id: sk.id });
+            } else {
+                delBtn.dataset.confirming = "1";
+                delBtn.textContent = "확인?";
+                delBtn.classList.add("confirm");
+                setTimeout(() => {
+                    if (delBtn.dataset.confirming === "1") {
+                        delBtn.dataset.confirming = "";
+                        delBtn.textContent = "삭제";
+                        delBtn.classList.remove("confirm");
+                    }
+                }, 2500);
+            }
+        });
+    });
+}
+
+function showSkillForm(id) {
+    editingSkillId = id || null;
+    const wrap = document.getElementById("skillFormWrap");
+    wrap.style.display = "";
+    document.getElementById("skillFormTitle").textContent = id ? "스킬 편집" : "새 스킬";
+    if (id) {
+        const sk = skills.find(s => s.id === id);
+        if (!sk) { return; }
+        document.getElementById("sfName").value = sk.name || "";
+        document.getElementById("sfCategory").value = sk.category || "game";
+        document.getElementById("sfDesc").value = sk.description || "";
+        document.getElementById("sfTags").value = (sk.tags || []).join(", ");
+        document.getElementById("sfPrompt").value = sk.promptTemplate || "";
+    } else {
+        document.getElementById("sfName").value = "";
+        document.getElementById("sfCategory").value = "game";
+        document.getElementById("sfDesc").value = "";
+        document.getElementById("sfTags").value = "";
+        document.getElementById("sfPrompt").value = "";
+    }
+    document.getElementById("sfName").focus();
+}
+
+function closeSkillForm() {
+    document.getElementById("skillFormWrap").style.display = "none";
+    editingSkillId = null;
+}
+
+function saveSkill() {
+    const name = document.getElementById("sfName").value.trim();
+    if (!name) { document.getElementById("sfName").focus(); return; }
+    const existing = editingSkillId ? skills.find(s => s.id === editingSkillId) : null;
+    const skill = {
+        id: editingSkillId || Date.now().toString(),
+        name,
+        category: document.getElementById("sfCategory").value,
+        description: document.getElementById("sfDesc").value.trim(),
+        tags: document.getElementById("sfTags").value.split(",").map(t => t.trim()).filter(Boolean),
+        promptTemplate: document.getElementById("sfPrompt").value.trim(),
+        uses: existing ? (existing.uses || 0) : 0,
+        createdAt: existing ? existing.createdAt : new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+    };
+    vscode.postMessage({ type: "saveSkill", skill, isEdit: !!editingSkillId });
+}
+
 
 function flashBtn(id) {
     const btn = document.getElementById(id);
@@ -255,6 +370,7 @@ document.getElementById("promptInput").addEventListener("input", function() {
 document.getElementById("newSessBtn").onclick = () => vscode.postMessage({ type: "newSession" });
 document.getElementById("chatTab").onclick = () => switchTab("chat");
 document.getElementById("dashTab").onclick = () => switchTab("dash");
+document.getElementById("skillTab").onclick = () => { switchTab("skill"); vscode.postMessage({ type: "getSkills" }); };
 document.getElementById("soticBtn").onclick = () => switchTab("dash");
 document.getElementById("stopBtn").onclick = () => vscode.postMessage({ type: "cancelPrompt" });
 document.getElementById("newChatItem").onclick = () => { vscode.postMessage({ type: "newSession" }); closeDropdown(); };
@@ -300,10 +416,20 @@ document.getElementById("brainBtn").onclick = () => {
     appendMsg("assistant", "🧠 지식 신경망 동기화\nGitHub Obsidian Vault 연결은 Phase 8에서 구현됩니다.\n설정에서 GitHub URL을 먼저 입력해주세요.", "system", 0);
 };
 document.getElementById("skillBtn").onclick = () => {
-    flashBtn("skillBtn");
-    switchTab("chat");
-    appendMsg("assistant", "⚡ Skill CRUD 패널은 Phase 7에서 구현됩니다.", "system", 0);
+    switchTab("skill");
+    vscode.postMessage({ type: "getSkills" });
 };
+document.getElementById("skillNewBtn").onclick = () => showSkillForm(null);
+document.getElementById("skillFormClose").onclick = closeSkillForm;
+document.getElementById("sfCancel").onclick = closeSkillForm;
+document.getElementById("sfSave").onclick = saveSkill;
+document.querySelectorAll(".cat-btn").forEach(btn => {
+    btn.onclick = () => {
+        skillFilter = btn.dataset.cat;
+        document.querySelectorAll(".cat-btn").forEach(b => b.classList.toggle("on", b === btn));
+        renderSkills();
+    };
+});
 document.getElementById("orchRun").onclick = () => {
     const plan = document.getElementById("orchPlan").value.trim();
     if (!plan) { return; }

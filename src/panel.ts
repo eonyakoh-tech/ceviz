@@ -19,6 +19,18 @@ interface Session {
     model: string;
 }
 
+interface Skill {
+    id: string;
+    name: string;
+    description: string;
+    promptTemplate: string;
+    category: string;
+    tags: string[];
+    uses: number;
+    createdAt: string;
+    updatedAt: string;
+}
+
 export class CevizPanel implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private _sessions: Session[] = [];
@@ -31,12 +43,14 @@ export class CevizPanel implements vscode.WebviewViewProvider {
     private _lastCloudResponse: Message | null = null;
     private _statusTimer?: ReturnType<typeof setInterval>;
     private _abortController?: AbortController;
+    private _skills: Skill[] = [];
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
         private readonly _context: vscode.ExtensionContext
     ) {
         this._sessions = this._context.globalState.get("ceviz.sessions", []);
+        this._skills   = this._context.globalState.get("ceviz.skills",   []);
         if (this._sessions.length === 0) { this._createSession(); }
         else { this._currentSessionId = this._sessions[this._sessions.length - 1].id; }
     }
@@ -128,6 +142,7 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                 case "ready":
                     this._sync();
                     await this._checkServerStatus();
+                    this._view?.webview.postMessage({ type: "skillsSync", skills: this._skills });
                     try {
                         const r = await axios.get(`${this._getUrl()}/models`, { timeout: 5000 });
                         this._view?.webview.postMessage({ type: "models", list: r.data.models });
@@ -173,6 +188,18 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                 case "orchSubmit":
                     await this._handleOrchestration(msg.plan);
                     break;
+
+                case "getSkills":
+                    this._view?.webview.postMessage({ type: "skillsSync", skills: this._skills });
+                    break;
+
+                case "saveSkill":
+                    await this._saveSkill(msg.skill, msg.isEdit);
+                    break;
+
+                case "deleteSkill":
+                    await this._deleteSkill(msg.id);
+                    break;
             }
         });
     }
@@ -183,10 +210,31 @@ export class CevizPanel implements vscode.WebviewViewProvider {
 
         let finalPrompt = prompt;
         if (this._englishMode) {
-            finalPrompt = `You are an English tutor. User wrote: "${prompt}".
-1. Understand their intent and confirm it in Korean.
-2. Correct their English and provide a refined version.
-3. Process their actual request.`;
+            finalPrompt = `You are an expert English tutor using the CEFR scale (A1→C2).
+
+User input: "${prompt}"
+
+Respond using EXACTLY this structure (plain text, no extra commentary):
+
+📌 의도 확인
+[1-2 sentences in Korean confirming what the user meant]
+
+📊 영어 수준 진단
+수준: [A1 / A2 / B1 / B2 / C1 / C2]
+근거: [One sentence in Korean explaining the assessment]
+
+✅ 교정된 영어
+[The corrected, most natural English version. If already perfect, write "✓ Perfect as written."]
+
+💡 레벨별 피드백
+[
+  • A1/A2 → Identify 2-3 basic grammar mistakes or wrong words. Explain corrections simply in Korean.
+  • B1/B2 → Suggest 2-3 more natural expressions, better idioms or phrasing. Explain in Korean.
+  • C1/C2 → Suggest 1-2 nuance improvements, advanced vocabulary or stylistic refinements. Explain in Korean.
+]
+
+💬 답변
+[Answer the user's actual question in English. Adjust vocabulary and sentence complexity to match their CEFR level.]`;
         }
 
         // Local 모드 고난도 감지
@@ -213,7 +261,7 @@ export class CevizPanel implements vscode.WebviewViewProvider {
         try {
             const res = await axios.post(`${this._getUrl()}/prompt`,
                 { prompt: finalPrompt, model: this._model },
-                { timeout: 120000, signal: this._abortController.signal }
+                { timeout: 200000, signal: this._abortController.signal }
             );
             const d = res.data;
             const isCloud = d.tier === 2;
@@ -307,6 +355,31 @@ JSON 형식으로 각 에이전트 결과를 반환하세요:
         }
     }
 
+    private async _saveSkill(skill: Skill, isEdit: boolean) {
+        if (isEdit) {
+            const idx = this._skills.findIndex(s => s.id === skill.id);
+            if (idx >= 0) { this._skills[idx] = skill; } else { this._skills.push(skill); }
+        } else {
+            this._skills.push(skill);
+        }
+        this._context.globalState.update("ceviz.skills", this._skills);
+        this._view?.webview.postMessage({ type: "skillSaved", skills: this._skills });
+        // non-blocking PN40 sync
+        const url = `${this._getUrl()}/skills`;
+        if (isEdit) {
+            axios.put(`${url}/${skill.id}`, skill, { timeout: 5000 }).catch(() => {});
+        } else {
+            axios.post(url, skill, { timeout: 5000 }).catch(() => {});
+        }
+    }
+
+    private async _deleteSkill(id: string) {
+        this._skills = this._skills.filter(s => s.id !== id);
+        this._context.globalState.update("ceviz.skills", this._skills);
+        this._view?.webview.postMessage({ type: "skillDeleted", skills: this._skills });
+        axios.delete(`${this._getUrl()}/skills/${id}`, { timeout: 5000 }).catch(() => {});
+    }
+
     private _getNonce(): string {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
         return Array.from({ length: 32 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
@@ -363,7 +436,8 @@ JSON 형식으로 각 에이전트 결과를 반환하세요:
 <!-- 탭 -->
 <div class="tabs">
   <button class="tab on" id="chatTab">💬 Chat</button>
-  <button class="tab" id="dashTab">🎛️ Soti-Skill</button>
+  <button class="tab" id="dashTab">🎛️ Soti</button>
+  <button class="tab" id="skillTab">⚡ Skill</button>
 </div>
 
 <!-- 채팅 영역 -->
@@ -378,6 +452,62 @@ JSON 형식으로 각 에이전트 결과를 반환하세요:
   <textarea class="dash-plan" id="orchPlan" placeholder="예: 게임 시나리오 제작&#10;- 에이전트1: 세계관 연구원 — 배경 설정 조사&#10;- 에이전트2: 스토리 작가 — 메인 플롯 작성&#10;- 에이전트3: 코드 검토자 — 게임 로직 검증"></textarea>
   <button class="dash-run" id="orchRun">▶ 오케스트레이션 실행</button>
   <div id="agentCards"></div>
+</div>
+
+<!-- 스킬 영역 -->
+<div class="skill-area" id="skillArea">
+  <div class="skill-top">
+    <div class="cat-filters" id="catFilters">
+      <button class="cat-btn on" data-cat="all">전체</button>
+      <button class="cat-btn" data-cat="game">🎮 게임</button>
+      <button class="cat-btn" data-cat="document">📄 문서</button>
+      <button class="cat-btn" data-cat="code">💻 코드</button>
+      <button class="cat-btn" data-cat="research">🔍 리서치</button>
+      <button class="cat-btn" data-cat="media">🎬 미디어</button>
+    </div>
+    <button class="skill-new-btn" id="skillNewBtn">+ 추가</button>
+  </div>
+  <div class="skill-form-wrap" id="skillFormWrap" style="display:none">
+    <div class="skill-form-hdr">
+      <span id="skillFormTitle">새 스킬</span>
+      <button class="skill-form-close" id="skillFormClose">✕</button>
+    </div>
+    <div class="skill-form">
+      <div class="sf-field">
+        <label class="sf-label" for="sfName">스킬 이름 <span class="sf-req">*</span></label>
+        <input class="sf-input sf-name-input" type="text" id="sfName" placeholder="예: 게임 시나리오 작가">
+      </div>
+      <div class="sf-field">
+        <label class="sf-label" for="sfCategory">카테고리</label>
+        <select class="sf-input" id="sfCategory">
+          <option value="game">🎮 게임</option>
+          <option value="document">📄 문서</option>
+          <option value="code">💻 코드</option>
+          <option value="research">🔍 리서치</option>
+          <option value="media">🎬 미디어</option>
+        </select>
+      </div>
+      <div class="sf-field">
+        <label class="sf-label" for="sfDesc">설명</label>
+        <input class="sf-input" type="text" id="sfDesc" placeholder="이 스킬이 하는 일을 간단히 설명">
+      </div>
+      <div class="sf-field">
+        <label class="sf-label" for="sfTags">태그 (쉼표로 구분)</label>
+        <input class="sf-input" type="text" id="sfTags" placeholder="예: 게임, 스토리, 시나리오">
+      </div>
+      <div class="sf-field">
+        <label class="sf-label" for="sfPrompt">AI 프롬프트 템플릿</label>
+        <textarea class="sf-input sf-textarea" id="sfPrompt" rows="4" placeholder="AI에게 전달할 시스템 프롬프트..."></textarea>
+      </div>
+      <div class="sf-actions">
+        <button id="sfCancel">취소</button>
+        <button id="sfSave" class="sf-save">저장</button>
+      </div>
+    </div>
+  </div>
+  <div class="skill-list" id="skillList">
+    <div class="skill-empty">⚡ 스킬이 없습니다<br>+ 추가 버튼으로 만들어보세요</div>
+  </div>
 </div>
 
 <!-- 입력 영역 -->
