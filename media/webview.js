@@ -5,6 +5,7 @@ let mode = "hybrid", model = "gemma3:1b", englishMode = false;
 let sessions = [], curId = "", totalTokens = 0;
 let lastCloudContent = null;
 let thinkEl = null;
+let pendingLearnBtn = null;
 
 window.addEventListener("load", () => {
     console.log("CEVIZ: load fired, sending ready");
@@ -19,9 +20,11 @@ window.addEventListener("message", e => {
             sessions = m.sessions; curId = m.currentId;
             mode = m.mode; model = m.model;
             englishMode = m.englishMode; totalTokens = m.totalTokens;
-            renderSessions(); renderChat(); updateModeLabel();
+            renderSessions(); renderChat(); updateModeLabel(); updateTokenBarVisibility();
             document.getElementById("enBtn").classList.toggle("on", englishMode);
             document.getElementById("enBadge").style.display = englishMode ? "inline" : "none";
+            document.getElementById("promptInput").placeholder = englishMode
+                ? "Type in any language — English tutor active" : "무엇을 만들어 드릴까요?";
             break;
         case "serverStatus": {
             const ollamaOk = m.data && (m.data.ollama || m.data.ollama_running || m.data.ollama_status === "ok");
@@ -40,15 +43,26 @@ window.addEventListener("message", e => {
         case "thinking":
             showThink();
             break;
+        case "requestCanceled":
+            hideThink();
+            appendMsg("assistant", "⏹ 요청이 취소되었습니다.", "system", 0);
+            break;
         case "assistantMsg":
             hideThink();
             appendMsg("assistant", m.content, m.agent, m.tier, m.engine, m.isCloud, m.tokenUsage);
             if (m.isCloud && m.tokenUsage) {
                 totalTokens = m.totalTokens || totalTokens;
                 document.getElementById("tokenCount").textContent = totalTokens;
-                document.getElementById("tokenBar").classList.add("show");
             }
             if (m.isCloud) { lastCloudContent = m.content; }
+            updateTokenBarVisibility();
+            break;
+        case "learnComplete":
+            if (pendingLearnBtn) {
+                pendingLearnBtn.disabled = false;
+                pendingLearnBtn.textContent = m.success ? "✅ 학습됨" : "❌ 재시도";
+                pendingLearnBtn = null;
+            }
             break;
         case "openDashboard":
             switchTab("dash");
@@ -99,6 +113,16 @@ function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage) {
     const bub = document.createElement("div");
     bub.className = "bubble";
     bub.textContent = content;
+    if (role === "user") {
+        bub.title = "클릭하여 수정";
+        bub.onclick = () => {
+            const inp = document.getElementById("promptInput");
+            inp.value = content;
+            inp.style.height = "auto";
+            inp.style.height = Math.min(inp.scrollHeight, 100) + "px";
+            inp.focus();
+        };
+    }
     div.appendChild(bub);
     if (role === "assistant") {
         const meta = document.createElement("div");
@@ -110,7 +134,7 @@ function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage) {
             lb.className = "learn-btn";
             lb.textContent = "📚 로컬에 학습";
             lb.title = "Cloud AI 처리 방식을 Local 모델에 단방향 학습";
-            lb.onclick = () => { lb.disabled = true; lb.textContent = "학습 중..."; vscode.postMessage({ type: "learnFromCloud", response: content }); };
+            lb.onclick = () => { pendingLearnBtn = lb; lb.disabled = true; lb.textContent = "학습 중..."; vscode.postMessage({ type: "learnFromCloud", response: content }); };
             meta.appendChild(lb);
         }
     }
@@ -125,8 +149,16 @@ function showThink() {
     thinkEl.innerHTML = "<span></span><span></span><span></span>";
     area.appendChild(thinkEl);
     area.scrollTop = area.scrollHeight;
+    document.getElementById("sendBtn").style.display = "none";
+    document.getElementById("stopBtn").classList.add("visible");
+    document.getElementById("promptInput").disabled = true;
 }
-function hideThink() { if (thinkEl) { thinkEl.remove(); thinkEl = null; } }
+function hideThink() {
+    if (thinkEl) { thinkEl.remove(); thinkEl = null; }
+    document.getElementById("sendBtn").style.display = "";
+    document.getElementById("stopBtn").classList.remove("visible");
+    document.getElementById("promptInput").disabled = false;
+}
 
 function updateModeLabel() {
     const modeNames = { local: "Local", cloud: "Cloud", hybrid: "Hybrid", copilot: "Copilot CLI" };
@@ -144,6 +176,16 @@ function updateModeLabel() {
     document.querySelectorAll(".drop-item").forEach(el => {
         el.classList.toggle("selected", el.dataset.mode === mode && el.dataset.model === model);
     });
+}
+
+function updateTokenBarVisibility() {
+    const bar = document.getElementById("tokenBar");
+    if (mode === "cloud" || totalTokens > 0) {
+        document.getElementById("tokenCount").textContent = totalTokens;
+        bar.classList.add("show");
+    } else {
+        bar.classList.remove("show");
+    }
 }
 
 function updateLocalModels(list) {
@@ -164,6 +206,15 @@ function switchTab(tab) {
     document.getElementById("dashTab").classList.toggle("on", !isChat);
     document.getElementById("chatArea").style.display = isChat ? "flex" : "none";
     document.getElementById("dashArea").classList.toggle("show", !isChat);
+    document.getElementById("soticBtn").classList.toggle("on", !isChat);
+}
+
+function flashBtn(id) {
+    const btn = document.getElementById(id);
+    btn.classList.remove("flash");
+    void btn.offsetWidth;
+    btn.classList.add("flash");
+    btn.addEventListener("animationend", () => btn.classList.remove("flash"), { once: true });
 }
 
 function renderOrchResult(raw) {
@@ -199,13 +250,21 @@ document.getElementById("promptInput").addEventListener("keydown", e => {
 });
 document.getElementById("promptInput").addEventListener("input", function() {
     this.style.height = "auto";
-    this.style.height = Math.min(this.scrollHeight, 100) + "px";
+    this.style.height = Math.min(this.scrollHeight, 238) + "px";
 });
 document.getElementById("newSessBtn").onclick = () => vscode.postMessage({ type: "newSession" });
 document.getElementById("chatTab").onclick = () => switchTab("chat");
 document.getElementById("dashTab").onclick = () => switchTab("dash");
 document.getElementById("soticBtn").onclick = () => switchTab("dash");
+document.getElementById("stopBtn").onclick = () => vscode.postMessage({ type: "cancelPrompt" });
 document.getElementById("newChatItem").onclick = () => { vscode.postMessage({ type: "newSession" }); closeDropdown(); };
+
+document.getElementById("sessToggle").onclick = () => {
+    const list = document.getElementById("sessList");
+    const isOpen = list.classList.toggle("open");
+    document.getElementById("sessToggle").textContent = isOpen ? "▼" : "▶";
+    document.getElementById("sessToggle").title = isOpen ? "세션 목록 접기" : "세션 목록 펼치기";
+};
 
 document.getElementById("modeBtn").onclick = () => {
     console.log("CEVIZ: modeBtn clicked");
@@ -222,6 +281,7 @@ document.querySelectorAll(".drop-item").forEach(el => {
         model = el.dataset.model;
         vscode.postMessage({ type: "changeMode", mode, model });
         updateModeLabel();
+        updateTokenBarVisibility();
         closeDropdown();
     };
 });
@@ -233,12 +293,14 @@ document.addEventListener("click", e => {
 });
 
 document.getElementById("enBtn").onclick = () => vscode.postMessage({ type: "toggleEnglish" });
-document.getElementById("gearBtn").onclick = () => vscode.postMessage({ type: "settings" });
+document.getElementById("gearBtn").onclick = () => { flashBtn("gearBtn"); vscode.postMessage({ type: "settings" }); };
 document.getElementById("brainBtn").onclick = () => {
+    flashBtn("brainBtn");
     switchTab("chat");
     appendMsg("assistant", "🧠 지식 신경망 동기화\nGitHub Obsidian Vault 연결은 Phase 8에서 구현됩니다.\n설정에서 GitHub URL을 먼저 입력해주세요.", "system", 0);
 };
 document.getElementById("skillBtn").onclick = () => {
+    flashBtn("skillBtn");
     switchTab("chat");
     appendMsg("assistant", "⚡ Skill CRUD 패널은 Phase 7에서 구현됩니다.", "system", 0);
 };

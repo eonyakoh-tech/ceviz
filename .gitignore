@@ -3,3 +3,5 @@ dist
 node_modules
 .vscode-test/
 *.vsix
+Chat window design.md
+pn40_router_patch.py

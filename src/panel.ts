@@ -30,6 +30,7 @@ export class CevizPanel implements vscode.WebviewViewProvider {
     private _totalTokens = 0;
     private _lastCloudResponse: Message | null = null;
     private _statusTimer?: ReturnType<typeof setInterval>;
+    private _abortController?: AbortController;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -157,6 +158,14 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                     vscode.commands.executeCommand("workbench.action.openSettings", "ceviz");
                     break;
 
+                case "toggleEnglish":
+                    this.toggleEnglish();
+                    break;
+
+                case "cancelPrompt":
+                    this._abortController?.abort();
+                    break;
+
                 case "learnFromCloud":
                     await this._learnFromCloud(msg.response);
                     break;
@@ -200,10 +209,11 @@ export class CevizPanel implements vscode.WebviewViewProvider {
         this._view?.webview.postMessage({ type: "userMsg", content: prompt });
         this._view?.webview.postMessage({ type: "thinking" });
 
+        this._abortController = new AbortController();
         try {
             const res = await axios.post(`${this._getUrl()}/prompt`,
                 { prompt: finalPrompt, model: this._model },
-                { timeout: 120000 }
+                { timeout: 120000, signal: this._abortController.signal }
             );
             const d = res.data;
             const isCloud = d.tier === 2;
@@ -233,11 +243,18 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                 totalTokens: this._totalTokens
             });
         } catch (e: any) {
-            this._view?.webview.postMessage({
-                type: "assistantMsg",
-                content: "❌ 오류: " + e.message,
-                agent: "system", tier: 0
-            });
+            if (e.code === "ERR_CANCELED" || e.name === "CanceledError") {
+                session.messages.pop();
+                this._view?.webview.postMessage({ type: "requestCanceled" });
+            } else {
+                this._view?.webview.postMessage({
+                    type: "assistantMsg",
+                    content: "❌ 오류: " + e.message,
+                    agent: "system", tier: 0
+                });
+            }
+        } finally {
+            this._abortController = undefined;
         }
     }
 
@@ -253,12 +270,14 @@ ${response}
                 { prompt, model: this._model },
                 { timeout: 60000 }
             );
+            this._view?.webview.postMessage({ type: "learnComplete", success: true });
             this._view?.webview.postMessage({
                 type: "assistantMsg",
                 content: "✅ Cloud AI 처리 방식을 로컬 모델에 학습 완료했습니다.",
                 agent: "system", tier: 1
             });
         } catch (e: any) {
+            this._view?.webview.postMessage({ type: "learnComplete", success: false });
             this._view?.webview.postMessage({
                 type: "assistantMsg",
                 content: "❌ 학습 실패: " + e.message,
@@ -334,6 +353,7 @@ JSON 형식으로 각 에이전트 결과를 반환하세요:
 <!-- 세션 -->
 <div class="sess">
   <div class="sess-hdr">
+    <button class="sess-toggle" id="sessToggle" title="세션 목록 펼치기/접기">▶</button>
     <span class="sess-label">Sessions</span>
     <button class="nbtn" id="newSessBtn">+ New</button>
   </div>
@@ -365,6 +385,7 @@ JSON 형식으로 각 에이전트 결과를 반환하세요:
   <div class="inp-row">
     <textarea class="prompt" id="promptInput" placeholder="무엇을 만들어 드릴까요?" rows="1"></textarea>
     <button class="send" id="sendBtn">↑</button>
+    <button class="stop-btn" id="stopBtn" title="전송 취소 (Stop)">■</button>
   </div>
   <div class="bot-bar">
     <div class="mode-drop" id="modeDrop">
