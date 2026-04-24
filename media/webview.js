@@ -8,6 +8,8 @@ let thinkEl = null;
 let pendingLearnBtn = null;
 let skills = [], skillFilter = 'all', editingSkillId = null;
 let vaultOpen = false;
+let currentProject = "";
+let projModalOpen = false;
 
 window.addEventListener("load", () => {
     console.log("CEVIZ: load fired, sending ready");
@@ -27,6 +29,7 @@ window.addEventListener("message", e => {
             document.getElementById("enBadge").style.display = englishMode ? "inline" : "none";
             document.getElementById("promptInput").placeholder = englishMode
                 ? "Type in any language — English tutor active" : "무엇을 만들어 드릴까요?";
+            if (m.currentProject) { currentProject = m.currentProject; updateProjBar(); }
             break;
         case "serverStatus": {
             const ollamaOk = m.data && (m.data.ollama || m.data.ollama_running || m.data.ollama_status === "ok");
@@ -106,6 +109,33 @@ window.addEventListener("message", e => {
             break;
         case "vaultSearchResult":
             renderVaultResults(m.results, m.error);
+            break;
+        case "projectsList":
+            renderProjList(m.projects, m.current);
+            break;
+        case "projectCreated":
+            currentProject = m.name;
+            closeProjModal();
+            updateProjBar();
+            document.getElementById("projNewBtn").disabled = false;
+            document.getElementById("projNewBtn").textContent = "+ 생성";
+            appendMsg("assistant",
+                `✅ 프로젝트 "${m.name}" 생성됨.\n~/ceviz/projects/${m.name}/CONTEXT.md 자동 생성 완료.`,
+                "system", 0);
+            break;
+        case "projectLoaded":
+            currentProject = m.name;
+            closeProjModal();
+            updateProjBar();
+            if (m.inProgress || m.lastLog) {
+                const what = m.inProgress || m.lastLog;
+                appendMsg("assistant",
+                    `📁 프로젝트 "${m.name}" 복원됨.\n지난번에 "${what}" 작업까지 기록되어 있습니다. 이어서 진행할까요?`,
+                    "system", 0);
+            }
+            break;
+        case "contextUpdated":
+            showCtxToast("✅ CONTEXT.md 자동 업데이트: " + (m.items || []).join(", ").slice(0, 50));
             break;
     }
 });
@@ -621,4 +651,82 @@ document.getElementById("orchRun").onclick = () => {
 
 document.addEventListener("keydown", e => {
     if (e.ctrlKey && e.key === "n") { e.preventDefault(); vscode.postMessage({ type: "newSession" }); }
+    if (e.key === "Escape" && projModalOpen) { closeProjModal(); }
+});
+
+// ── PROJECT ───────────────────────────────────────────────────────────────
+
+function openProjModal() {
+    projModalOpen = true;
+    document.getElementById("projOverlay").classList.add("show");
+    document.getElementById("projNewInput").value = "";
+    document.getElementById("projNewBtn").disabled = false;
+    document.getElementById("projNewBtn").textContent = "+ 생성";
+    vscode.postMessage({ type: "projectList" });
+}
+
+function closeProjModal() {
+    projModalOpen = false;
+    document.getElementById("projOverlay").classList.remove("show");
+}
+
+function updateProjBar() {
+    const bar = document.getElementById("projBar");
+    if (currentProject) {
+        document.getElementById("projBarLabel").textContent = currentProject;
+        bar.style.display = "flex";
+    } else {
+        bar.style.display = "none";
+    }
+}
+
+function renderProjList(projects, current) {
+    const list = document.getElementById("projList");
+    list.innerHTML = "";
+    if (!projects || projects.length === 0) {
+        list.innerHTML = '<div class="proj-list-empty">프로젝트가 없습니다<br>아래에서 새로 생성하세요</div>';
+        return;
+    }
+    projects.forEach(p => {
+        const div = document.createElement("div");
+        div.className = "proj-item" + (p.name === current ? " cur" : "");
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = "📁 " + p.name;
+        nameSpan.style.flex = "1";
+        const dateSpan = document.createElement("span");
+        dateSpan.className = "proj-item-date";
+        if (p.lastActive) { dateSpan.textContent = p.lastActive.slice(0, 10); }
+        div.appendChild(nameSpan);
+        div.appendChild(dateSpan);
+        div.onclick = () => vscode.postMessage({ type: "projectSelect", name: p.name });
+        list.appendChild(div);
+    });
+}
+
+function showCtxToast(msg) {
+    const el = document.getElementById("ctxToast");
+    el.textContent = msg;
+    el.classList.add("show");
+    setTimeout(() => el.classList.remove("show"), 3000);
+}
+
+function createProject() {
+    const name = document.getElementById("projNewInput").value.trim();
+    if (!name) { document.getElementById("projNewInput").focus(); return; }
+    const btn = document.getElementById("projNewBtn");
+    btn.disabled = true;
+    btn.textContent = "생성 중...";
+    vscode.postMessage({ type: "projectNew", name });
+}
+
+document.getElementById("projBtn").onclick = openProjModal;
+document.getElementById("projBar").onclick = openProjModal;
+document.getElementById("projModalClose").onclick = closeProjModal;
+document.getElementById("projOverlay").onclick = e => {
+    if (e.target === document.getElementById("projOverlay")) { closeProjModal(); }
+};
+document.getElementById("projNewBtn").onclick = createProject;
+document.getElementById("projNewInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") { createProject(); }
+    if (e.key === "Escape") { closeProjModal(); }
 });

@@ -41,6 +41,11 @@ interface Skill {
     updatedAt: string;
 }
 
+interface Project {
+    name: string;
+    lastActive: string;
+}
+
 export class CevizPanel implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private _sessions: Session[] = [];
@@ -54,13 +59,15 @@ export class CevizPanel implements vscode.WebviewViewProvider {
     private _statusTimer?: ReturnType<typeof setInterval>;
     private _abortController?: AbortController;
     private _skills: Skill[] = [];
+    private _currentProject = "";
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
         private readonly _context: vscode.ExtensionContext
     ) {
-        this._sessions = this._context.globalState.get("ceviz.sessions", []);
-        this._skills   = this._context.globalState.get("ceviz.skills",   []);
+        this._sessions       = this._context.globalState.get("ceviz.sessions", []);
+        this._skills         = this._context.globalState.get("ceviz.skills",   []);
+        this._currentProject = this._context.globalState.get("ceviz.currentProject", "");
         if (this._sessions.length === 0) { this._createSession(); }
         else { this._currentSessionId = this._sessions[this._sessions.length - 1].id; }
     }
@@ -127,7 +134,8 @@ export class CevizPanel implements vscode.WebviewViewProvider {
             model: this._model,
             cloudModel: this._cloudModel,
             englishMode: this._englishMode,
-            totalTokens: this._totalTokens
+            totalTokens: this._totalTokens,
+            currentProject: this._currentProject
         });
     }
 
@@ -226,6 +234,45 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                 case "vaultSelectDetected":
                     await this._saveVaultPath(msg.path);
                     break;
+
+                case "projectList":
+                    this._view?.webview.postMessage({
+                        type: "projectsList",
+                        projects: this._listProjects(),
+                        current: this._currentProject
+                    });
+                    break;
+
+                case "projectNew": {
+                    const pname = (msg.name || "").trim().replace(/[^\w가-힣\-]/g, "_");
+                    if (!pname) { break; }
+                    const created = this._createProject(pname);
+                    if (created) {
+                        this._currentProject = pname;
+                        this._context.globalState.update("ceviz.currentProject", pname);
+                        const ctx = this._readContext(pname);
+                        this._view?.webview.postMessage({ type: "projectCreated", name: pname, context: ctx });
+                        axios.post(`${this._getUrl()}/projects/${encodeURIComponent(pname)}/context`,
+                            { content: ctx }, { timeout: 5000 }).catch(() => {});
+                    }
+                    break;
+                }
+
+                case "projectSelect": {
+                    const pname = msg.name;
+                    this._currentProject = pname;
+                    this._context.globalState.update("ceviz.currentProject", pname);
+                    const ctx = this._readContext(pname);
+                    const lastLog = this._getLastLogEntry(ctx);
+                    const inProgress = this._getInProgress(ctx);
+                    this._appendLogEntry(pname, "세션 재시작");
+                    this._view?.webview.postMessage({
+                        type: "projectLoaded", name: pname, context: ctx, lastLog, inProgress
+                    });
+                    axios.get(`${this._getUrl()}/projects/${encodeURIComponent(pname)}/context`,
+                        { timeout: 5000 }).catch(() => {});
+                    break;
+                }
             }
         });
     }
@@ -316,6 +363,17 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
                 tokenUsage: isCloud ? tokenEstimate : null,
                 totalTokens: this._totalTokens
             });
+            // 프로젝트 컨텍스트 자동 업데이트
+            if (this._currentProject) {
+                const items = this._detectCompletionKeywords(d.result);
+                if (items.length > 0) {
+                    items.forEach(item =>
+                        this._appendToContextSection(this._currentProject, "## ✅ 완료 항목", item)
+                    );
+                    this._appendLogEntry(this._currentProject, prompt.slice(0, 60));
+                    this._view?.webview.postMessage({ type: "contextUpdated", items });
+                }
+            }
         } catch (e: any) {
             if (e.code === "ERR_CANCELED" || e.name === "CanceledError") {
                 session.messages.pop();
@@ -326,6 +384,9 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
                     content: "❌ 오류: " + e.message,
                     agent: "system", tier: 0
                 });
+                if (this._currentProject) {
+                    this._appendIssue(this._currentProject, e.message);
+                }
             }
         } finally {
             this._abortController = undefined;
@@ -559,6 +620,133 @@ JSON 형식으로 각 에이전트 결과를 반환하세요:
         return Array.from(fileMap.values()).slice(0, 15);
     }
 
+    // ── PROJECT CONTEXT ──────────────────────────────────────────────────────
+
+    private _getProjectsDir(): string {
+        return path.join(process.env.HOME || "", "ceviz", "projects");
+    }
+
+    private _getContextPath(name: string): string {
+        return path.join(this._getProjectsDir(), name, "CONTEXT.md");
+    }
+
+    private _listProjects(): Project[] {
+        const dir = this._getProjectsDir();
+        try {
+            fs.mkdirSync(dir, { recursive: true });
+            return fs.readdirSync(dir, { withFileTypes: true })
+                .filter(e => e.isDirectory())
+                .map(e => {
+                    let lastActive = "";
+                    try { lastActive = fs.statSync(this._getContextPath(e.name)).mtime.toISOString(); } catch {}
+                    return { name: e.name, lastActive };
+                })
+                .sort((a, b) => b.lastActive.localeCompare(a.lastActive));
+        } catch { return []; }
+    }
+
+    private _createProject(name: string): boolean {
+        const dir = path.join(this._getProjectsDir(), name);
+        const ctxPath = path.join(dir, "CONTEXT.md");
+        try {
+            fs.mkdirSync(dir, { recursive: true });
+            if (!fs.existsSync(ctxPath)) {
+                const today = new Date().toISOString().slice(0, 10);
+                fs.writeFileSync(ctxPath, [
+                    `# ${name}`, "",
+                    "## 📋 개요", "", "",
+                    "## ✅ 완료 항목", "", "",
+                    "## ⏳ 진행 중", "", "",
+                    "## 📝 할 일", "", "",
+                    "## 🐛 이슈 히스토리", "", "",
+                    "## 📅 작업 로그",
+                    `### ${today}`,
+                    "- 프로젝트 생성", ""
+                ].join("\n"), "utf8");
+            }
+            return true;
+        } catch { return false; }
+    }
+
+    private _readContext(name: string): string {
+        try { return fs.readFileSync(this._getContextPath(name), "utf8"); }
+        catch { return ""; }
+    }
+
+    private _getLastLogEntry(ctx: string): string {
+        const m = ctx.match(/## 📅 작업 로그\n([\s\S]*)$/);
+        if (!m) { return ""; }
+        const lines = m[1].split("\n").filter(l => l.trim().startsWith("-"));
+        return lines[lines.length - 1]?.replace(/^-\s*/, "").trim() || "";
+    }
+
+    private _getInProgress(ctx: string): string {
+        const m = ctx.match(/## ⏳ 진행 중\n([\s\S]*?)(?=\n## |$)/);
+        if (!m) { return ""; }
+        const items = m[1].split("\n")
+            .filter(l => l.trim().startsWith("-"))
+            .map(l => l.replace(/^-\s*/, "").trim());
+        return items[0] || "";
+    }
+
+    private _appendToContextSection(name: string, sectionPrefix: string, entry: string) {
+        const ctxPath = this._getContextPath(name);
+        try {
+            let c = fs.readFileSync(ctxPath, "utf8");
+            const idx = c.indexOf(sectionPrefix);
+            if (idx === -1) { return; }
+            const next = c.indexOf("\n## ", idx + 4);
+            const at = next === -1 ? c.length : next;
+            c = c.slice(0, at).trimEnd() + `\n- ${entry}` + c.slice(at);
+            fs.writeFileSync(ctxPath, c, "utf8");
+        } catch {}
+    }
+
+    private _appendLogEntry(name: string, entry: string) {
+        const ctxPath = this._getContextPath(name);
+        try {
+            let c = fs.readFileSync(ctxPath, "utf8");
+            const today = new Date().toISOString().slice(0, 10);
+            const h3 = `### ${today}`;
+            if (c.includes(h3)) {
+                const i = c.lastIndexOf(h3);
+                const next = c.indexOf("\n### ", i + 1);
+                const at = next === -1 ? c.length : next;
+                c = c.slice(0, at).trimEnd() + `\n- ${entry}` + c.slice(at);
+            } else {
+                c = c.trimEnd() + `\n\n${h3}\n- ${entry}\n`;
+            }
+            fs.writeFileSync(ctxPath, c, "utf8");
+        } catch {}
+    }
+
+    private _detectCompletionKeywords(response: string): string[] {
+        const kws = ["완료", "구현됨", "수정됨", "완성됨", "done", "implemented", "fixed", "해결됨"];
+        return response
+            .split(/[.!?\n]/)
+            .filter(s => kws.some(k => s.includes(k)) && s.trim().length > 5 && s.trim().length < 120)
+            .map(s => s.trim())
+            .slice(0, 3);
+    }
+
+    private _appendIssue(name: string, errMsg: string) {
+        const ctxPath = this._getContextPath(name);
+        try {
+            let c = fs.readFileSync(ctxPath, "utf8");
+            const today = new Date().toISOString().slice(0, 10);
+            const issue = `\n### [${today}] 오류\n- **증상**: ${errMsg.slice(0, 100)}\n`;
+            const idx = c.indexOf("## 🐛 이슈 히스토리");
+            if (idx !== -1) {
+                const next = c.indexOf("\n## ", idx + 4);
+                const at = next === -1 ? c.length : next;
+                c = c.slice(0, at).trimEnd() + issue + c.slice(at);
+                fs.writeFileSync(ctxPath, c, "utf8");
+            }
+        } catch {}
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
     private _getNonce(): string {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
         return Array.from({ length: 32 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
@@ -588,6 +776,7 @@ JSON 형식으로 각 에이전트 결과를 반환하세요:
   <div class="hdr-top">
     <span class="brand">🌰 My AI Creations</span>
     <div class="icon-row">
+      <button class="ibtn" id="projBtn" title="프로젝트 관리">📁</button>
       <button class="ibtn" id="brainBtn" title="지식 신경망 동기화">🧠</button>
       <button class="ibtn" id="soticBtn" title="Soti-Skill 대시보드">🎛️</button>
       <button class="ibtn" id="skillBtn" title="Skill CRUD">⚡</button>
@@ -600,6 +789,11 @@ JSON 형식으로 각 에이전트 결과를 반환하세요:
     <span id="statusTxt">연결 중...</span>
   </div>
   <div class="token-bar" id="tokenBar">🔢 토큰 사용량: <span id="tokenCount">0</span> tokens</div>
+  <div class="proj-bar" id="projBar" style="display:none">
+    <span>📁</span>
+    <span class="proj-bar-label" id="projBarLabel"></span>
+    <span class="proj-bar-change">전환 ▸</span>
+  </div>
 </div>
 
 <!-- 세션 -->
@@ -764,6 +958,24 @@ JSON 형식으로 각 에이전트 결과를 반환하세요:
   </div>
 </div>
 
+<!-- 프로젝트 모달 -->
+<div class="proj-overlay" id="projOverlay">
+  <div class="proj-modal">
+    <div class="proj-modal-hdr">
+      <span>📁 프로젝트</span>
+      <button class="proj-modal-close" id="projModalClose">✕</button>
+    </div>
+    <div class="proj-list-wrap">
+      <div class="proj-list" id="projList"></div>
+    </div>
+    <div class="proj-new-wrap">
+      <input class="proj-new-input" id="projNewInput" type="text" placeholder="새 프로젝트 이름...">
+      <button class="proj-new-btn" id="projNewBtn">+ 생성</button>
+    </div>
+  </div>
+</div>
+<!-- 컨텍스트 업데이트 토스트 -->
+<div class="ctx-toast" id="ctxToast"></div>
 <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
