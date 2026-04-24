@@ -27,9 +27,27 @@
       ]
     },
     "commands": [
-      { "command": "ceviz.newSession", "title": "CEVIZ: New Session" },
-      { "command": "ceviz.toggleEnglish", "title": "CEVIZ: Toggle English Mode" },
-      { "command": "ceviz.openDashboard", "title": "CEVIZ: Open Soti-Skill Dashboard" }
+      { "command": "ceviz.newSession",        "title": "CEVIZ: New Session" },
+      { "command": "ceviz.toggleEnglish",     "title": "CEVIZ: Toggle English Mode" },
+      { "command": "ceviz.openDashboard",     "title": "CEVIZ: Open Soti-Skill Dashboard" },
+      { "command": "ceviz.injectSelection",   "title": "CEVIZ: 선택 코드 질문하기" }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "ceviz.injectSelection",
+          "when": "editorHasSelection",
+          "group": "ceviz@1"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "ceviz.injectSelection",
+        "key": "ctrl+alt+c",
+        "mac": "cmd+alt+c",
+        "when": "editorHasSelection"
+      }
     ],
     "configuration": {
       "title": "CEVIZ",

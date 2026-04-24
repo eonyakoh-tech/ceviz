@@ -60,6 +60,7 @@ export class CevizPanel implements vscode.WebviewViewProvider {
     private _abortController?: AbortController;
     private _skills: Skill[] = [];
     private _currentProject = "";
+    private _orchStream?: NodeJS.ReadableStream;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -99,6 +100,22 @@ export class CevizPanel implements vscode.WebviewViewProvider {
 
     public openDashboard() {
         this._view?.webview.postMessage({ type: "openDashboard" });
+    }
+
+    public injectCodeContext(ctx: { code: string; fileName: string; language: string; lineStart: number; lineEnd: number }) {
+        const MAX = 5000;
+        const truncated = ctx.code.length > MAX;
+        this._view?.webview.postMessage({
+            type: "injectCode",
+            code: truncated ? ctx.code.slice(0, MAX) + "\n… (truncated)" : ctx.code,
+            fileName: ctx.fileName,
+            language: ctx.language,
+            lineStart: ctx.lineStart,
+            lineEnd: ctx.lineEnd,
+            truncated
+        });
+        // CEVIZ 패널이 보이지 않으면 포커스 이동
+        vscode.commands.executeCommand("ceviz.chatView.focus");
     }
 
     private _getUrl(): string {
@@ -199,6 +216,12 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                     this._abortController?.abort();
                     break;
 
+                case "cancelOrch":
+                    (this._orchStream as any)?.destroy();
+                    this._orchStream = undefined;
+                    this._view?.webview.postMessage({ type: "orchEvent", data: { type: "error", message: "사용자가 중단했습니다." } });
+                    break;
+
                 case "learnFromCloud":
                     await this._learnFromCloud(msg.response);
                     break;
@@ -217,6 +240,10 @@ export class CevizPanel implements vscode.WebviewViewProvider {
 
                 case "deleteSkill":
                     await this._deleteSkill(msg.id);
+                    break;
+
+                case "clearCodeContext":
+                    // webview 측에서 코드 컨텍스트 해제 — 확장 측 상태 없음, no-op
                     break;
 
                 case "vaultGetInfo":
@@ -423,22 +450,38 @@ ${response}
 
     private async _handleOrchestration(plan: string) {
         this._view?.webview.postMessage({ type: "orchStatus", status: "running" });
-        const prompt = `멀티 에이전트 오케스트레이션 실행:
-${plan}
-각 에이전트의 역할을 분담하여 순차적으로 처리하고 결과를 통합하세요.
-JSON 형식으로 각 에이전트 결과를 반환하세요:
-{"agents": [{"name": "...", "role": "...", "result": "..."}], "final": "..."}`;
         try {
-            const res = await axios.post(`${this._getUrl()}/prompt`,
-                { prompt, model: this._model },
-                { timeout: 180000 }
+            const response = await axios.post(
+                `${this._getUrl()}/orchestrate`,
+                { plan, model: this._model },
+                { responseType: "stream", timeout: 600000 }
             );
-            this._view?.webview.postMessage({
-                type: "orchResult",
-                result: res.data.result
+            this._orchStream = response.data;
+            let buffer = "";
+            response.data.on("data", (chunk: Buffer) => {
+                buffer += chunk.toString();
+                const lines = buffer.split("\n");
+                buffer = lines.pop() ?? "";
+                for (const line of lines) {
+                    if (!line.startsWith("data: ")) { continue; }
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        this._view?.webview.postMessage({ type: "orchEvent", data });
+                    } catch {}
+                }
+            });
+            await new Promise<void>((resolve, reject) => {
+                response.data.on("end", resolve);
+                response.data.on("error", (e: Error) => {
+                    // destroy()로 중단한 경우 조용히 처리
+                    if ((e as any).code !== "ERR_STREAM_DESTROYED") { reject(e); }
+                    else { resolve(); }
+                });
             });
         } catch (e: any) {
             this._view?.webview.postMessage({ type: "orchStatus", status: "error", msg: e.message });
+        } finally {
+            this._orchStream = undefined;
         }
     }
 
@@ -844,7 +887,11 @@ JSON 형식으로 각 에이전트 결과를 반환하세요:
     멀티 에이전트 팀 구성 계획을 입력하면 실시간으로 오케스트레이션합니다.
   </div>
   <textarea class="dash-plan" id="orchPlan" placeholder="예: 게임 시나리오 제작&#10;- 에이전트1: 세계관 연구원 — 배경 설정 조사&#10;- 에이전트2: 스토리 작가 — 메인 플롯 작성&#10;- 에이전트3: 코드 검토자 — 게임 로직 검증"></textarea>
-  <button class="dash-run" id="orchRun">▶ 오케스트레이션 실행</button>
+  <div class="orch-btn-row">
+    <button class="orch-add-btn" id="orchAddAgent">＋ 에이전트 추가</button>
+    <button class="dash-run" id="orchRun">▶ 오케스트레이션 실행</button>
+    <button class="orch-stop-btn" id="orchStop">■ Stop</button>
+  </div>
   <div id="agentCards"></div>
 </div>
 
@@ -906,6 +953,13 @@ JSON 형식으로 각 에이전트 결과를 반환하세요:
 
 <!-- 입력 영역 -->
 <div class="inp-area">
+  <div class="code-ctx" id="codeCtx">
+    <div class="code-ctx-hdr">
+      <span class="code-ctx-badge" id="codeCtxBadge"></span>
+      <button class="code-ctx-clear" id="codeCtxClear" title="코드 참조 제거">✕</button>
+    </div>
+    <pre class="code-ctx-preview" id="codeCtxPreview"></pre>
+  </div>
   <div class="inp-row">
     <textarea class="prompt" id="promptInput" placeholder="무엇을 만들어 드릴까요?" rows="1"></textarea>
     <button class="send" id="sendBtn">↑</button>

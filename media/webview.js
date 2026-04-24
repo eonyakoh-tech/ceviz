@@ -10,6 +10,7 @@ let skills = [], skillFilter = 'all', editingSkillId = null;
 let vaultOpen = false;
 let currentProject = "";
 let projModalOpen = false;
+let injectedCode = null; // { code, fileName, language, lineStart, lineEnd }
 
 window.addEventListener("load", () => {
     console.log("CEVIZ: load fired, sending ready");
@@ -80,13 +81,15 @@ window.addEventListener("message", e => {
                 ? "Type in any language — English tutor active" : "무엇을 만들어 드릴까요?";
             break;
         case "orchStatus":
-            document.getElementById("agentCards").innerHTML =
-                m.status === "running"
-                ? '<div class="agent-card"><div class="agent-name">⏳ 오케스트레이션 실행 중...</div><div class="progress"><div class="progress-inner" style="width:60%"></div></div></div>'
-                : '<div class="agent-card">❌ 오류: ' + (m.msg || "") + "</div>";
+            if (m.status === "error") {
+                orchAddErrorCard(m.msg || "알 수 없는 오류");
+            }
             break;
         case "orchResult":
             renderOrchResult(m.result);
+            break;
+        case "orchEvent":
+            handleOrchEvent(m.data);
             break;
         case "skillsSync":
             skills = m.skills || [];
@@ -136,6 +139,9 @@ window.addEventListener("message", e => {
             break;
         case "contextUpdated":
             showCtxToast("✅ CONTEXT.md 자동 업데이트: " + (m.items || []).join(", ").slice(0, 50));
+            break;
+        case "injectCode":
+            setInjectedCode(m);
             break;
     }
 });
@@ -249,9 +255,15 @@ function updateLocalModels(list) {
 function sendPrompt() {
     const inp = document.getElementById("promptInput");
     const p = inp.value.trim();
-    if (!p) { return; }
+    if (!p && !injectedCode) { return; }
+    let finalPrompt = p;
+    if (injectedCode) {
+        const ref = `[코드 참조: ${injectedCode.fileName} L${injectedCode.lineStart}-${injectedCode.lineEnd} | ${injectedCode.language}]\n\`\`\`${injectedCode.language}\n${injectedCode.code}\n\`\`\``;
+        finalPrompt = p ? ref + "\n\n" + p : ref;
+        clearInjectedCode();
+    }
     inp.value = ""; inp.style.height = "auto";
-    vscode.postMessage({ type: "sendPrompt", prompt: p, mode, model });
+    vscode.postMessage({ type: "sendPrompt", prompt: finalPrompt, mode, model });
 }
 
 function closeVaultPanel() {
@@ -646,13 +658,286 @@ document.querySelectorAll(".cat-btn").forEach(btn => {
 document.getElementById("orchRun").onclick = () => {
     const plan = document.getElementById("orchPlan").value.trim();
     if (!plan) { return; }
+    document.getElementById("orchRun").disabled = true;
+    document.getElementById("orchRun").textContent = "⏳ 실행 중...";
+    document.getElementById("orchStop").classList.add("visible");
+    document.getElementById("agentCards").innerHTML = "";
+    orchStartTime = Date.now();
     vscode.postMessage({ type: "orchSubmit", plan });
 };
+document.getElementById("orchStop").onclick = () => {
+    vscode.postMessage({ type: "cancelOrch" });
+};
+document.getElementById("orchAddAgent").onclick = () => {
+    const ta = document.getElementById("orchPlan");
+    const lines = ta.value.trimEnd().split("\n");
+    const count = lines.filter(l => /^[-•]/.test(l.trim())).length + 1;
+    ta.value = ta.value.trimEnd() + "\n- 에이전트" + count + ": 역할 이름 — 담당 작업을 여기에 입력";
+    ta.style.height = "auto";
+    ta.style.height = Math.min(ta.scrollHeight, 180) + "px";
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+};
+
+// ── ORCHESTRATION REAL-TIME ────────────────────────────────────────────────
+
+let orchStartTime = 0;
+const orchAgentCards = {};  // index → DOM element
+
+function handleOrchEvent(data) {
+    const cards = document.getElementById("agentCards");
+    switch (data.type) {
+        case "start":
+            orchAgentCards._goal = data.goal;
+            cards.innerHTML = "";
+            const headerDiv = document.createElement("div");
+            headerDiv.className = "orch-header";
+            headerDiv.innerHTML =
+                '<span class="orch-goal">' + escHtml(data.goal) + '</span>' +
+                '<span class="orch-badge">' + data.count + '개 에이전트</span>';
+            cards.appendChild(headerDiv);
+            break;
+
+        case "queued":
+            orchAgentCards[data.index] = orchCreateCard(data.index, data.name, data.task, "queued");
+            cards.appendChild(orchAgentCards[data.index]);
+            break;
+
+        case "agent_start":
+            orchUpdateCard(data.index, "running");
+            break;
+
+        case "agent_done":
+            orchUpdateCard(data.index, "done", data.result, data.elapsed);
+            break;
+
+        case "agent_error":
+            orchUpdateCard(data.index, "error", data.error || "오류 발생");
+            break;
+
+        case "review_start":
+            const reviewCard = document.createElement("div");
+            reviewCard.className = "agent-card orch-review";
+            reviewCard.id = "orchReviewCard";
+            reviewCard.innerHTML = '<div class="agent-name">🔄 결과 통합 중...</div>' +
+                '<div class="progress"><div class="progress-inner orch-anim"></div></div>';
+            cards.appendChild(reviewCard);
+            break;
+
+        case "done":
+            const rc = document.getElementById("orchReviewCard");
+            if (rc) { rc.remove(); }
+            orchRenderFinal(data.final, data.task_id);
+            orchResetControls();
+            break;
+
+        case "error":
+            orchAddErrorCard(data.message);
+            orchResetControls();
+            break;
+    }
+}
+
+function orchResetControls() {
+    document.getElementById("orchRun").disabled = false;
+    document.getElementById("orchRun").textContent = "▶ 오케스트레이션 실행";
+    document.getElementById("orchStop").classList.remove("visible");
+}
+
+function orchCreateCard(index, name, task, status) {
+    const div = document.createElement("div");
+    div.className = "agent-card orch-card-" + status;
+    div.id = "orchCard-" + index;
+
+    const nameLine = document.createElement("div");
+    nameLine.className = "agent-name";
+    nameLine.innerHTML =
+        '<span class="orch-status-dot dot-' + status + '"></span>' +
+        '<span class="orch-agent-label">' + escHtml(name) + '</span>' +
+        '<span class="orch-timer" id="orchTimer-' + index + '"></span>';
+
+    // ✏️ 편집 버튼
+    const editBtn = document.createElement("button");
+    editBtn.className = "orch-card-btn orch-edit-btn";
+    editBtn.textContent = "✏️";
+    editBtn.title = "에이전트 역할 편집";
+    editBtn.onclick = () => orchEditAgentInPlan(index, name, task);
+
+    // 🗑️ 삭제 버튼
+    const delBtn = document.createElement("button");
+    delBtn.className = "orch-card-btn orch-del-btn";
+    delBtn.textContent = "🗑️";
+    delBtn.title = "에이전트 삭제";
+    delBtn.onclick = () => {
+        if (delBtn.dataset.confirm === "1") {
+            orchRemoveAgentFromPlan(index, name);
+            div.remove();
+        } else {
+            delBtn.dataset.confirm = "1";
+            delBtn.textContent = "확인?";
+            setTimeout(() => { delBtn.dataset.confirm = ""; delBtn.textContent = "🗑️"; }, 2500);
+        }
+    };
+
+    nameLine.appendChild(editBtn);
+    nameLine.appendChild(delBtn);
+
+    const taskDiv = document.createElement("div");
+    taskDiv.className = "orch-task";
+    taskDiv.textContent = task;
+
+    const progress = document.createElement("div");
+    progress.className = "progress";
+    progress.innerHTML = '<div class="progress-inner" id="orchBar-' + index + '" style="width:0"></div>';
+
+    const result = document.createElement("div");
+    result.className = "orch-result";
+    result.id = "orchResult-" + index;
+    result.style.display = "none";
+
+    div.appendChild(nameLine);
+    div.appendChild(taskDiv);
+    div.appendChild(progress);
+    div.appendChild(result);
+    return div;
+}
+
+function orchEditAgentInPlan(index, name, task) {
+    const ta = document.getElementById("orchPlan");
+    const lines = ta.value.split("\n");
+    // 해당 에이전트 라인 찾기 (이름 또는 index로)
+    let found = -1;
+    let agentCount = 0;
+    for (let i = 0; i < lines.length; i++) {
+        if (/^[-•*]/.test(lines[i].trim())) {
+            if (agentCount === index) { found = i; break; }
+            agentCount++;
+        }
+    }
+    if (found >= 0) {
+        // 해당 라인 선택
+        const start = lines.slice(0, found).join("\n").length + (found > 0 ? 1 : 0);
+        const end = start + lines[found].length;
+        ta.focus();
+        ta.setSelectionRange(start, end);
+    } else {
+        ta.focus();
+    }
+    // Soti 탭의 orchPlan으로 포커스
+    document.getElementById("orchPlan").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function orchRemoveAgentFromPlan(index, name) {
+    const ta = document.getElementById("orchPlan");
+    const lines = ta.value.split("\n");
+    let agentCount = 0;
+    const newLines = lines.filter(line => {
+        if (/^[-•*]/.test(line.trim())) {
+            if (agentCount === index) { agentCount++; return false; }
+            agentCount++;
+        }
+        return true;
+    });
+    ta.value = newLines.join("\n");
+}
+
+function orchUpdateCard(index, status, result, elapsed) {
+    const card = orchAgentCards[index];
+    if (!card) { return; }
+    card.className = "agent-card orch-card-" + status;
+    const dot = card.querySelector(".orch-status-dot");
+    if (dot) { dot.className = "orch-status-dot dot-" + status; }
+    const bar = document.getElementById("orchBar-" + index);
+    if (bar) {
+        bar.style.width = status === "done" ? "100%" : status === "running" ? "60%" : "0";
+        if (status === "running") { bar.classList.add("orch-anim"); }
+        else { bar.classList.remove("orch-anim"); }
+    }
+    const timer = document.getElementById("orchTimer-" + index);
+    if (timer && elapsed !== undefined) { timer.textContent = " · " + elapsed + "s"; }
+    if (result !== undefined) {
+        const resEl = document.getElementById("orchResult-" + index);
+        if (resEl) {
+            resEl.style.display = "";
+            resEl.textContent = result;
+        }
+    }
+}
+
+function orchRenderFinal(final, taskId) {
+    const cards = document.getElementById("agentCards");
+    const elapsed = orchStartTime ? ((Date.now() - orchStartTime) / 1000).toFixed(1) : "?";
+    const div = document.createElement("div");
+    div.className = "agent-card orch-final";
+    const pre = document.createElement("pre");
+    pre.className = "orch-final-text";
+    pre.textContent = final;
+    const meta = document.createElement("div");
+    meta.className = "orch-meta";
+    meta.textContent = "task_id: " + taskId + " · 총 소요: " + elapsed + "s";
+    const sendBtn = document.createElement("button");
+    sendBtn.className = "orch-send-btn";
+    sendBtn.textContent = "💬 채팅으로 전달";
+    sendBtn.onclick = () => {
+        switchTab("chat");
+        const inp = document.getElementById("promptInput");
+        inp.value = final;
+        inp.style.height = "auto";
+        inp.style.height = Math.min(inp.scrollHeight, 238) + "px";
+        inp.focus();
+    };
+    const hdr = document.createElement("div");
+    hdr.className = "agent-name";
+    hdr.textContent = "✅ 최종 결과";
+    div.appendChild(hdr);
+    div.appendChild(pre);
+    div.appendChild(meta);
+    div.appendChild(sendBtn);
+    cards.appendChild(div);
+    cards.scrollTop = cards.scrollHeight;
+}
+
+function orchAddErrorCard(msg) {
+    const cards = document.getElementById("agentCards");
+    const div = document.createElement("div");
+    div.className = "agent-card orch-error";
+    div.innerHTML = '<div class="agent-name">❌ 오류</div><div class="orch-task">' + escHtml(msg) + '</div>';
+    cards.appendChild(div);
+}
+
+function escHtml(s) {
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
 
 document.addEventListener("keydown", e => {
     if (e.ctrlKey && e.key === "n") { e.preventDefault(); vscode.postMessage({ type: "newSession" }); }
     if (e.key === "Escape" && projModalOpen) { closeProjModal(); }
 });
+
+// ── CODE CONTEXT ─────────────────────────────────────────────────────────
+
+function setInjectedCode(data) {
+    injectedCode = data;
+    const box = document.getElementById("codeCtx");
+    const badge = document.getElementById("codeCtxBadge");
+    const preview = document.getElementById("codeCtxPreview");
+    badge.textContent = `📎 ${data.fileName}  L${data.lineStart}–${data.lineEnd}  [${data.language}]`;
+    if (data.truncated) { badge.textContent += "  ⚠️ truncated"; }
+    // 미리보기: 최대 5줄
+    const lines = data.code.split("\n").slice(0, 5);
+    preview.textContent = lines.join("\n") + (data.code.split("\n").length > 5 ? "\n…" : "");
+    box.classList.add("show");
+    document.getElementById("promptInput").focus();
+}
+
+function clearInjectedCode() {
+    injectedCode = null;
+    document.getElementById("codeCtx").classList.remove("show");
+    document.getElementById("codeCtxPreview").textContent = "";
+    vscode.postMessage({ type: "clearCodeContext" });
+}
+
+document.getElementById("codeCtxClear").onclick = clearInjectedCode;
 
 // ── PROJECT ───────────────────────────────────────────────────────────────
 

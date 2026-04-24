@@ -50,7 +50,8 @@ body{font-family:var(--vscode-font-family);font-size:12px;color:var(--vscode-for
 .think span:nth-child(3){animation-delay:.4s}
 @keyframes bop{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
 
-.dash{flex:1;overflow-y:auto;padding:8px;display:none;flex-direction:column;gap:8px}
+.dash{flex:1;overflow-y:auto;padding:8px;display:none;flex-direction:column;gap:8px;min-height:0}
+#agentCards{overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:6px}
 .dash.show{display:flex}
 .dash-title{font-weight:700;font-size:12px;margin-bottom:4px}
 .dash-plan{width:100%;height:80px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border);border-radius:4px;padding:6px;font-size:11px;resize:none;font-family:var(--vscode-font-family)}
@@ -189,3 +190,52 @@ body{font-family:var(--vscode-font-family);font-size:12px;color:var(--vscode-for
 .proj-new-btn:disabled{opacity:.5;cursor:default}
 .ctx-toast{position:fixed;bottom:64px;left:50%;transform:translateX(-50%);background:var(--vscode-editor-background);color:var(--vscode-foreground);border:1px solid var(--vscode-focusBorder);border-radius:5px;padding:6px 14px;font-size:11px;z-index:9999;opacity:0;pointer-events:none;transition:opacity .3s;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis}
 .ctx-toast.show{opacity:1}
+
+/* ── CODE CONTEXT ── */
+.code-ctx{display:none;margin:4px 0 2px;border:1px solid var(--vscode-focusBorder);border-radius:5px;overflow:hidden;flex-shrink:0;background:var(--vscode-editor-background)}
+.code-ctx.show{display:block}
+.code-ctx-hdr{display:flex;align-items:center;justify-content:space-between;padding:3px 8px;background:var(--vscode-sideBarSectionHeader-background);border-bottom:1px solid var(--vscode-panel-border)}
+.code-ctx-badge{font-size:10px;font-weight:600;color:var(--vscode-foreground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.code-ctx-clear{background:none;border:none;color:var(--vscode-descriptionForeground);cursor:pointer;font-size:12px;padding:0 3px;line-height:1;flex-shrink:0}
+.code-ctx-clear:hover{color:var(--vscode-foreground)}
+.code-ctx-preview{font-family:var(--vscode-editor-font-family,monospace);font-size:10px;padding:5px 8px;margin:0;white-space:pre;overflow:hidden;color:var(--vscode-editor-foreground);background:var(--vscode-editor-background);max-height:72px;overflow-y:auto;line-height:1.5}
+
+/* ── ORCHESTRATION CARDS ── */
+.orch-header{display:flex;align-items:center;gap:6px;margin-bottom:6px;padding:5px 8px;background:var(--vscode-sideBarSectionHeader-background);border-radius:5px}
+.orch-goal{font-size:11px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.orch-badge{font-size:10px;padding:2px 7px;border-radius:10px;background:var(--vscode-focusBorder);color:#fff;flex-shrink:0}
+.orch-card-queued{opacity:.6}
+.orch-card-running{border-left:3px solid var(--vscode-focusBorder)!important}
+.orch-card-done{border-left:3px solid #4c4!important}
+.orch-card-error{border-left:3px solid #c44!important}
+.orch-status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;flex-shrink:0;vertical-align:middle}
+.dot-queued{background:var(--vscode-descriptionForeground)}
+.dot-running{background:var(--vscode-focusBorder);animation:orchPulse .9s infinite}
+.dot-done{background:#4c4}
+.dot-error{background:#c44}
+@keyframes orchPulse{0%,100%{opacity:1}50%{opacity:.35}}
+.orch-timer{font-size:10px;color:var(--vscode-descriptionForeground);margin-left:auto;font-weight:400}
+.orch-task{font-size:10px;color:var(--vscode-descriptionForeground);margin:3px 0 5px;padding-left:12px}
+.orch-result{font-size:11px;margin-top:5px;padding:5px 8px;background:var(--vscode-editor-background);border-radius:3px;white-space:pre-wrap;word-break:break-word;max-height:80px;overflow-y:auto;line-height:1.5}
+.orch-anim{animation:orchSlide 1.4s ease-in-out infinite;width:60%!important}
+@keyframes orchSlide{0%,100%{opacity:.5}50%{opacity:1}}
+.orch-review{border-left:3px solid #c8a!important;opacity:.8}
+.orch-final{border-left:3px solid #4c4!important;background:var(--vscode-editor-background)}
+.orch-final-text{font-size:11px;padding:5px 8px;margin:6px 0;white-space:pre-wrap;word-break:break-word;max-height:160px;overflow-y:auto;line-height:1.6;font-family:var(--vscode-font-family)}
+.orch-meta{font-size:9px;color:var(--vscode-descriptionForeground);margin:2px 0 6px}
+.orch-send-btn{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;border-radius:4px;padding:4px 12px;cursor:pointer;font-size:11px;font-family:var(--vscode-font-family)}
+.orch-send-btn:hover{background:var(--vscode-button-hoverBackground)}
+.orch-error{border-left:3px solid #c44!important}
+
+/* Stop · Add-agent · card-action buttons */
+.orch-btn-row{display:flex;gap:5px;margin-top:4px;align-items:center}
+.orch-add-btn{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground);border:none;border-radius:4px;padding:5px 10px;cursor:pointer;font-size:11px;font-family:var(--vscode-font-family);white-space:nowrap}
+.orch-add-btn:hover{background:var(--vscode-button-secondaryHoverBackground)}
+.orch-stop-btn{display:none;background:#8b0000;color:#fff;border:none;border-radius:4px;padding:5px 9px;cursor:pointer;font-size:11px;font-family:var(--vscode-font-family);animation:stopPulse 1s infinite;white-space:nowrap}
+.orch-stop-btn:hover{background:#b30000}
+.orch-stop-btn.visible{display:block}
+.orch-card-btn{background:none;border:none;cursor:pointer;font-size:12px;padding:1px 3px;opacity:.5;transition:.15s;line-height:1}
+.orch-card-btn:hover{opacity:1}
+.orch-edit-btn{color:var(--vscode-foreground)}
+.orch-del-btn{color:#e05050}
+.orch-agent-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

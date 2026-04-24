@@ -38,7 +38,7 @@
 | 항목 | 내용 |
 |------|------|
 | 브랜치 | `extension-ui` |
-| 최신 Phase | Phase 8 완료 (2026-04-24) |
+| 최신 Phase | Phase 10 완료 (2026-04-24) |
 | 패키지 버전 | `ceviz-0.2.0` |
 | 백엔드 주소 | `100.69.155.43:8000` (기본값) |
 | 빌드 상태 | webpack 컴파일 정상 |
@@ -94,9 +94,16 @@
 - **내용**: 프로젝트별 CONTEXT.md 자동 생성 (`~/ceviz/projects/{name}/`), 모달 UI, 완료 키워드 감지 → 자동 업데이트, 세션 재시작 시 이전 상태 복원, PN40 `/projects/*` 엔드포인트 연동(비동기)
 - **파일**: `src/panel.ts`, `media/webview.js`, `media/webview.css`
 
-### ⬜ Phase 10 — 파일 컨텍스트 주입 (코드 선택 → 프롬프트)
-- **목표**: VS Code 에디터에서 선택한 코드 블록을 채팅 입력에 자동 삽입
-- **예상 파일**: `src/extension.ts`, `src/panel.ts`, `media/webview.js`
+### ✅ Phase 10a — 파일 컨텍스트 주입 (코드 선택 → 프롬프트)
+- **완료**: 2026-04-24
+- **내용**: `ceviz.injectSelection` 커맨드 등록, 우클릭 컨텍스트 메뉴 + `Ctrl+Alt+C` 단축키, 코드 미리보기 박스 UI, 전송 시 코드 블록 자동 첨부 (5000자 제한), 패널 포커스 자동 이동
+- **파일**: `src/extension.ts`, `src/panel.ts`, `media/webview.js`, `media/webview.css`, `package.json`
+
+### ✅ Phase 10b — Soti-Skill 대시보드 백엔드 통합
+- **완료**: 2026-04-24
+- **내용**: PN40 `orchestrator.py` 신규 생성 (asyncio.gather 병렬 실행, SSE 스트리밍, Local Ollama 전용), api_server.py에 `POST /orchestrate` 추가, Extension SSE 스트림 수신, 에이전트 카드 실시간 업데이트, "채팅으로 전달" 버튼
+- **파일(PN40)**: `~/ceviz/orchestrator.py`, `~/ceviz/api_server.py`
+- **파일(T480s)**: `src/panel.ts`, `media/webview.js`, `media/webview.css`
 
 ### ⬜ Phase 11 — Diff / Patch 미리보기
 - **목표**: AI 응답에 포함된 코드 변경사항을 diff 형태로 인라인 렌더링, 1-클릭 적용
@@ -131,6 +138,8 @@
 | 2026-04-24 | Phase 8 커밋·패키징·설치 | `ceviz-0.2.0.vsix` 패키징, VS Code 재설치, `extension-ui` 브랜치 커밋 완료 |
 | 2026-04-24 | CLAUDE.md 자동 업데이트 규칙 설정 | CLAUDE.md 전면 재작성, Stop 훅 설정 완료 |
 | 2026-04-24 | Phase 9: 프로젝트 컨텍스트 자동 관리 | CONTEXT.md 생성·갱신, 모달 UI, 키워드 감지, 세션 복원, ceviz-0.2.0.vsix 재설치 완료 |
+| 2026-04-24 | Phase 10a: 파일 컨텍스트 주입 | 커맨드·메뉴·단축키 등록, 코드 미리보기 박스, 프롬프트 자동 첨부 완료 |
+| 2026-04-24 | Phase 10b: Soti-Skill 백엔드 통합 | PN40 orchestrator.py 생성, /orchestrate SSE 엔드포인트 추가·검증, Extension SSE 스트리밍, 실시간 에이전트 카드 UI, ceviz-0.2.0.vsix 재설치 완료 |
 
 ---
 
@@ -147,7 +156,7 @@
 ## 미완료 항목
 
 - [x] Phase 9: 프로젝트 컨텍스트 자동 관리 완료
-- [ ] Phase 10: 파일 컨텍스트 주입 미시작
+- [x] Phase 10: 파일 컨텍스트 주입 완료
 - [ ] Phase 11~16: 미시작
 - [ ] `.vscodeignore` 정비 — `pn40_*.py`, TUKON 문서 등 불필요 파일 패키지 제외 필요
 - [ ] `package.json` `repository` 필드 누락 (vsce 패키징 경고)
