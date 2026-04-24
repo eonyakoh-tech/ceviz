@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="description" content="TUKON CENTER A.Ş. — K-Implant Global Gateway. Türkiye merkezli K-implant küresel dağıtım merkezi.">
+<title>TUKON CENTER A.Ş. | K-Implant Global Gateway</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ─────────────────────────────────────────────
+   DESIGN TOKENS
+───────────────────────────────────────────── */
+:root{
+  --navy:       #071428;
+  --navy-mid:   #0d1f3c;
+  --navy-light: #122347;
+  --blue:       #1060c9;
+  --blue-h:     #0d50ad;
+  --gold:       #c9a84c;
+  --gold-l:     #e2bf6a;
+  --gold-dim:   rgba(201,168,76,0.15);
+  --white:      #ffffff;
+  --off:        #f7f9fc;
+  --gray-50:    #f9fafb;
+  --gray-100:   #f1f4f8;
+  --gray-200:   #e4e9f0;
+  --gray-400:   #9aa3b0;
+  --gray-600:   #52616e;
+  --gray-800:   #1e2a35;
+  --text:       #0f1a24;
+  --max-w:      1200px;
+  --r:          10px;
+  --sh:         0 2px 16px rgba(0,0,0,0.08);
+  --sh-lg:      0 8px 40px rgba(0,0,0,0.14);
+  --t:          0.3s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* ─────────────────────────────────────────────
+   RESET & BASE
+───────────────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;font-size:16px}
+body{font-family:'Inter','Noto Sans KR',system-ui,sans-serif;color:var(--text);background:#fff;line-height:1.7;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+img{max-width:100%;display:block}
+a{text-decoration:none;color:inherit}
+
+.container{max-width:var(--max-w);margin:0 auto;padding:0 24px}
+section{padding:88px 0}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--gold);margin-bottom:14px;display:block}
+.section-title{font-size:clamp(1.75rem,3.5vw,2.75rem);font-weight:800;line-height:1.2;letter-spacing:-0.5px;color:var(--navy)}
+.section-title.light{color:#fff}
+.divider{width:44px;height:3px;background:linear-gradient(90deg,var(--gold),var(--gold-l));border-radius:2px;margin:18px 0 28px}
+.divider.center{margin-left:auto;margin-right:auto}
+.section-lead{font-size:1.05rem;color:var(--gray-600);line-height:1.8;max-width:580px}
+.section-lead.light{color:rgba(255,255,255,0.65)}
+
+/* ─────────────────────────────────────────────
+   TOP BAR
+───────────────────────────────────────────── */
+#topbar{background:var(--navy);border-bottom:1px solid rgba(255,255,255,0.06);padding:8px 24px;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:rgba(255,255,255,0.5)}
+.topbar-left{display:flex;gap:24px;align-items:center}
+.topbar-item{display:flex;align-items:center;gap:6px}
+.topbar-item svg{flex-shrink:0;opacity:0.6}
+.topbar-right{display:flex;align-items:center;gap:20px}
+.topbar-badge{background:var(--gold-dim);border:1px solid rgba(201,168,76,0.3);color:var(--gold-l);font-size:10px;font-weight:700;padding:2px 10px;border-radius:3px;letter-spacing:1px}
+
+/* ─────────────────────────────────────────────
+   NAVIGATION
+───────────────────────────────────────────── */
+#navbar{position:sticky;top:0;z-index:999;background:var(--navy-mid);border-bottom:1px solid rgba(255,255,255,0.07);padding:0 24px;transition:var(--t)}
+#navbar.elevated{box-shadow:0 4px 24px rgba(0,0,0,0.4)}
+.nav-inner{max-width:var(--max-w);margin:0 auto;height:66px;display:flex;align-items:center;gap:0}
+.nav-logo{display:flex;align-items:center;gap:10px;flex-shrink:0;margin-right:36px}
+.nav-logo-mark{width:38px;height:38px;background:linear-gradient(135deg,var(--gold),var(--gold-l));border-radius:7px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;color:var(--navy);letter-spacing:-0.5px}
+.nav-logo-info{line-height:1.2}
+.nav-logo-name{color:#fff;font-size:14px;font-weight:700;letter-spacing:0.3px}
+.nav-logo-tag{color:var(--gold);font-size:9.5px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase}
+.nav-links{display:flex;align-items:center;gap:2px;flex:1}
+.nav-link{color:rgba(255,255,255,0.75);font-size:13px;font-weight:500;padding:8px 14px;border-radius:6px;transition:var(--t);white-space:nowrap}
+.nav-link:hover{color:#fff;background:rgba(255,255,255,0.09)}
+.nav-actions{display:flex;align-items:center;gap:10px;margin-left:auto}
+.lang-switch{display:flex;background:rgba(255,255,255,0.08);border-radius:20px;padding:3px}
+.lbtn{border:none;background:none;color:rgba(255,255,255,0.6);font-size:11px;font-weight:700;padding:4px 13px;border-radius:17px;cursor:pointer;transition:var(--t);letter-spacing:0.5px;font-family:inherit}
+.lbtn.on{background:var(--gold);color:var(--navy)}
+.btn-nav{background:var(--blue);color:#fff;font-size:12px;font-weight:600;padding:8px 20px;border-radius:6px;border:none;cursor:pointer;transition:var(--t);letter-spacing:0.3px;font-family:inherit}
+.btn-nav:hover{background:var(--blue-h);transform:translateY(-1px)}
+.hamburger{display:none;background:none;border:none;cursor:pointer;padding:6px;gap:5px;flex-direction:column}
+.hamburger span{display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:var(--t)}
+.mob-menu{display:none;position:fixed;inset:0;background:var(--navy);z-index:998;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:40px}
+.mob-menu a{color:#fff;font-size:20px;font-weight:600}
+.mob-menu.open{display:flex}
+
+/* ─────────────────────────────────────────────
+   HERO
+───────────────────────────────────────────── */
+#hero{min-height:100vh;background:var(--navy);display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:100px 24px 60px}
+.hero-geo{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.hero-geo::before{content:'';position:absolute;width:800px;height:800px;border:1px solid rgba(201,168,76,0.07);border-radius:50%;top:-200px;right:-200px}
+.hero-geo::after{content:'';position:absolute;width:550px;height:550px;border:1px solid rgba(201,168,76,0.05);border-radius:50%;bottom:-150px;left:-150px}
+.hero-grid-bg{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.025) 1px,transparent 1px);background-size:72px 72px}
+.hero-glow{position:absolute;width:600px;height:400px;background:radial-gradient(ellipse,rgba(16,96,201,0.18) 0%,transparent 70%);top:20%;left:50%;transform:translateX(-50%);pointer-events:none}
+.hero-content{position:relative;z-index:1;max-width:820px}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);color:var(--gold-l);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:6px 18px;border-radius:20px;margin-bottom:32px}
+.hero-badge::before{content:'';width:6px;height:6px;background:var(--gold);border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.hero h1{font-size:clamp(2.4rem,5.5vw,4.2rem);font-weight:900;color:#fff;line-height:1.12;letter-spacing:-1px;margin-bottom:10px}
+.hero h1 .accent{background:linear-gradient(135deg,var(--gold),var(--gold-l));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:clamp(1rem,2.2vw,1.2rem);color:rgba(255,255,255,0.62);margin-bottom:10px;font-weight:300}
+.hero-tag{font-size:0.9rem;color:rgba(255,255,255,0.38);margin-bottom:52px;letter-spacing:0.3px}
+.hero-btns{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:72px}
+.btn-gold{background:linear-gradient(135deg,var(--gold),var(--gold-l));color:var(--navy);font-family:inherit;font-weight:700;font-size:14px;padding:14px 34px;border-radius:8px;border:none;cursor:pointer;transition:var(--t);letter-spacing:0.3px;box-shadow:0 4px 20px rgba(201,168,76,0.35)}
+.btn-gold:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(201,168,76,0.45)}
+.btn-ghost{background:none;border:1.5px solid rgba(255,255,255,0.25);color:rgba(255,255,255,0.85);font-family:inherit;font-weight:500;font-size:14px;padding:13px 30px;border-radius:8px;cursor:pointer;transition:var(--t)}
+.btn-ghost:hover{border-color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.06)}
+.hero-kpi{display:flex;gap:0;justify-content:center;border-top:1px solid rgba(255,255,255,0.08);padding-top:48px;flex-wrap:wrap}
+.kpi{padding:0 40px;text-align:center;position:relative}
+.kpi+.kpi::before{content:'';position:absolute;left:0;top:10%;height:80%;width:1px;background:rgba(255,255,255,0.1)}
+.kpi-num{font-size:2.2rem;font-weight:900;color:var(--gold-l);line-height:1;letter-spacing:-1px}
+.kpi-label{font-size:10.5px;color:rgba(255,255,255,0.42);text-transform:uppercase;letter-spacing:1.2px;margin-top:5px}
+
+/* ─────────────────────────────────────────────
+   MARQUEE STRIP
+───────────────────────────────────────────── */
+.marquee-strip{background:var(--gold);padding:10px 0;overflow:hidden;white-space:nowrap}
+.marquee-inner{display:inline-flex;animation:marquee 30s linear infinite;gap:0}
+.marquee-item{font-size:12px;font-weight:700;color:var(--navy);padding:0 32px;letter-spacing:0.5px;display:inline-flex;align-items:center;gap:10px}
+.marquee-dot{width:4px;height:4px;background:var(--navy);border-radius:50%;opacity:0.4}
+@keyframes marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+/* ─────────────────────────────────────────────
+   PROLOGUE
+───────────────────────────────────────────── */
+#prologue{background:var(--off)}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center}
+.info-stack{display:flex;flex-direction:column;gap:16px}
+.info-card{background:#fff;border-radius:var(--r);padding:28px 32px;box-shadow:var(--sh);border-left:3px solid var(--gold);transition:var(--t)}
+.info-card:hover{box-shadow:var(--sh-lg);transform:translateX(4px)}
+.info-card h3{font-size:1rem;font-weight:700;color:var(--navy);margin-bottom:8px;display:flex;align-items:center;gap:10px}
+.info-card p{font-size:0.92rem;color:var(--gray-600);line-height:1.75}
+.ic-icon{width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.ic-red{background:#fff0ee}
+.ic-blue{background:#eef3ff}
+
+/* ─────────────────────────────────────────────
+   OPPORTUNITY
+───────────────────────────────────────────── */
+#opportunity{background:#fff}
+.cards-3{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:48px}
+.opp-card{background:var(--off);border-radius:var(--r);padding:32px;border:1.5px solid transparent;transition:var(--t);position:relative;overflow:hidden}
+.opp-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--gold),var(--gold-l))}
+.opp-card:hover{border-color:var(--gold-l);background:#fff;box-shadow:var(--sh-lg);transform:translateY(-5px)}
+.oc-num{font-size:2.5rem;font-weight:900;color:var(--gray-200);line-height:1;margin-bottom:16px;font-variant-numeric:tabular-nums}
+.opp-card h3{font-size:1.05rem;font-weight:700;color:var(--navy);margin-bottom:10px}
+.opp-card p{font-size:0.9rem;color:var(--gray-600);line-height:1.75}
+.tag-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:16px}
+.tag{background:var(--gold-dim);border:1px solid rgba(201,168,76,0.25);color:#7a5e1a;font-size:10.5px;font-weight:600;padding:3px 10px;border-radius:4px}
+
+/* ─────────────────────────────────────────────
+   GLOBAL REACH (NEW)
+───────────────────────────────────────────── */
+#reach{background:var(--navy);padding:80px 0}
+#reach .section-title{color:#fff}
+.reach-intro{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:start;margin-bottom:56px}
+.market-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.market-card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:var(--r);padding:20px 16px;text-align:center;transition:var(--t);cursor:default}
+.market-card:hover{background:rgba(201,168,76,0.12);border-color:rgba(201,168,76,0.35);transform:translateY(-3px)}
+.mc-flag{font-size:2rem;margin-bottom:8px;display:block}
+.mc-name{font-size:12px;font-weight:700;color:rgba(255,255,255,0.85);margin-bottom:4px}
+.mc-cert{font-size:10px;color:rgba(255,255,255,0.38);letter-spacing:0.5px}
+.mc-cert span{background:rgba(201,168,76,0.2);border:1px solid rgba(201,168,76,0.3);color:var(--gold-l);border-radius:3px;padding:1px 6px;font-weight:600}
+
+/* ─────────────────────────────────────────────
+   STRATEGY
+───────────────────────────────────────────── */
+#strategy{background:var(--navy-mid)}
+.cards-3-dark{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:48px}
+.sc{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:var(--r);padding:36px 32px;transition:var(--t);position:relative;overflow:hidden}
+.sc:hover{background:rgba(255,255,255,0.08);border-color:rgba(201,168,76,0.3)}
+.sc-num{font-size:3.5rem;font-weight:900;color:rgba(201,168,76,0.1);line-height:1;position:absolute;top:24px;right:24px}
+.sc-icon{width:44px;height:44px;border-radius:9px;background:var(--gold-dim);border:1px solid rgba(201,168,76,0.3);display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:20px}
+.sc h3{font-size:1.05rem;font-weight:700;color:var(--gold-l);margin-bottom:10px}
+.sc p{font-size:0.9rem;color:rgba(255,255,255,0.6);line-height:1.75}
+.fda-badge{display:inline-block;background:rgba(16,96,201,0.2);border:1px solid rgba(16,96,201,0.4);color:#7eb3ff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:4px;margin-top:12px;letter-spacing:1px}
+
+/* ─────────────────────────────────────────────
+   TEAM
+───────────────────────────────────────────── */
+#team{background:var(--off)}
+.team-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:28px;margin-top:48px}
+.tc{background:#fff;border-radius:var(--r);padding:36px 28px;text-align:center;box-shadow:var(--sh);transition:var(--t);border-top:3px solid transparent}
+.tc:hover{transform:translateY(-5px);box-shadow:var(--sh-lg);border-top-color:var(--gold)}
+.tc-avatar{width:76px;height:76px;border-radius:50%;background:linear-gradient(135deg,var(--navy-light),var(--blue));display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:2rem}
+.tc-region{font-size:10.5px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);margin-bottom:6px}
+.tc-role{font-size:1rem;font-weight:700;color:var(--navy);margin-bottom:10px}
+.tc p{font-size:0.88rem;color:var(--gray-600);line-height:1.7}
+.tc-tags{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin-top:14px}
+.tc-tag{background:var(--gray-100);color:var(--gray-600);font-size:10px;padding:3px 9px;border-radius:4px;font-weight:500}
+
+/* ─────────────────────────────────────────────
+   PHASES / TIMELINE
+───────────────────────────────────────────── */
+#phases{background:#fff}
+.timeline{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:56px;position:relative}
+.timeline::before{content:'';position:absolute;top:44px;left:16.5%;right:16.5%;height:2px;background:linear-gradient(90deg,var(--gold),var(--gold-l),var(--gold));z-index:0}
+.tl{padding:0 28px;text-align:center;position:relative;z-index:1}
+.tl-node{width:88px;height:88px;border-radius:50%;background:linear-gradient(135deg,var(--navy),var(--blue));display:flex;align-items:center;justify-content:center;margin:0 auto 24px;box-shadow:0 4px 24px rgba(7,20,40,0.4);position:relative}
+.tl-node::after{content:'';position:absolute;inset:-5px;border-radius:50%;border:2px solid rgba(201,168,76,0.35)}
+.tl-phase{font-size:20px;font-weight:900;color:#fff}
+.tl-period{font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px}
+.tl-title{font-size:1rem;font-weight:700;color:var(--navy);margin-bottom:10px}
+.tl p{font-size:0.87rem;color:var(--gray-600);line-height:1.75}
+.tl-items{margin-top:12px;display:flex;flex-direction:column;gap:5px}
+.tl-item{font-size:0.83rem;color:var(--gray-600);display:flex;align-items:flex-start;gap:6px;text-align:left}
+.tl-item::before{content:'→';color:var(--gold);flex-shrink:0;font-size:11px;margin-top:3px}
+
+/* ─────────────────────────────────────────────
+   CREDENTIALS (NEW)
+───────────────────────────────────────────── */
+#creds{background:var(--gray-50);padding:56px 0;border-top:1px solid var(--gray-200);border-bottom:1px solid var(--gray-200)}
+.creds-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:24px}
+.cred{display:flex;flex-direction:column;align-items:center;gap:10px;padding:24px;background:#fff;border-radius:var(--r);box-shadow:var(--sh)}
+.cred-icon{font-size:2rem}
+.cred-title{font-size:0.88rem;font-weight:700;color:var(--navy);text-align:center}
+.cred-desc{font-size:0.8rem;color:var(--gray-600);text-align:center;line-height:1.6}
+
+/* ─────────────────────────────────────────────
+   CTA BAND
+───────────────────────────────────────────── */
+#cta{background:linear-gradient(135deg,var(--navy) 0%,var(--navy-light) 100%);padding:96px 24px;text-align:center;position:relative;overflow:hidden}
+#cta::before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,0.02) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.02) 1px,transparent 1px);background-size:60px 60px}
+.cta-content{position:relative;z-index:1;max-width:680px;margin:0 auto}
+.cta-line{width:60px;height:3px;background:var(--gold);border-radius:2px;margin:20px auto 32px}
+.cta-btns{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:40px}
+
+/* ─────────────────────────────────────────────
+   FOOTER
+───────────────────────────────────────────── */
+footer{background:#040e1c;padding:64px 24px 32px;color:rgba(255,255,255,0.45)}
+.footer-inner{max-width:var(--max-w);margin:0 auto}
+.footer-top{display:grid;grid-template-columns:2.2fr 1fr 1fr 1.4fr;gap:48px;padding-bottom:48px;border-bottom:1px solid rgba(255,255,255,0.07)}
+.fbrand h3{color:#fff;font-size:1rem;font-weight:700;margin-bottom:8px}
+.fbrand p{font-size:0.85rem;line-height:1.75;margin-bottom:18px;max-width:280px}
+.fbrand-badge{display:inline-block;background:var(--gold-dim);border:1px solid rgba(201,168,76,0.3);color:var(--gold-l);font-size:10px;font-weight:700;padding:4px 12px;border-radius:4px;letter-spacing:1px}
+.fcol h4{color:rgba(255,255,255,0.75);font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:16px}
+.fcol ul{list-style:none;display:flex;flex-direction:column;gap:9px}
+.fcol li{font-size:0.85rem}
+.fcol a{color:rgba(255,255,255,0.45);transition:color 0.2s}
+.fcol a:hover{color:var(--gold-l)}
+.fcontact-item{display:flex;align-items:flex-start;gap:10px;font-size:0.85rem;margin-bottom:10px}
+.fcontact-icon{font-size:14px;flex-shrink:0;margin-top:2px}
+.footer-bottom{display:flex;justify-content:space-between;align-items:center;padding-top:28px;flex-wrap:wrap;gap:12px;font-size:12px}
+.footer-bottom-right{display:flex;align-items:center;gap:16px}
+
+/* ─────────────────────────────────────────────
+   SCROLL REVEAL
+───────────────────────────────────────────── */
+.rv{opacity:0;transform:translateY(28px);transition:opacity 0.6s ease,transform 0.6s ease}
+.rv.in{opacity:1;transform:none}
+.rv-d1{transition-delay:0.1s}
+.rv-d2{transition-delay:0.2s}
+.rv-d3{transition-delay:0.3s}
+.rv-d4{transition-delay:0.4s}
+
+/* ─────────────────────────────────────────────
+   RESPONSIVE
+───────────────────────────────────────────── */
+@media(max-width:1024px){
+  .cards-3,.cards-3-dark,.team-grid,.creds-grid{grid-template-columns:repeat(2,1fr)}
+  .two-col,.reach-intro{grid-template-columns:1fr;gap:36px}
+  .timeline{grid-template-columns:1fr}
+  .timeline::before{display:none}
+  .tl{margin-bottom:32px}
+  .market-grid{grid-template-columns:repeat(3,1fr)}
+  .footer-top{grid-template-columns:1fr 1fr}
+}
+@media(max-width:768px){
+  section{padding:64px 0}
+  #topbar{display:none}
+  .nav-links{display:none}
+  .hamburger{display:flex}
+  .cards-3,.cards-3-dark,.team-grid,.creds-grid{grid-template-columns:1fr}
+  .market-grid{grid-template-columns:repeat(2,1fr)}
+  .hero-kpi{gap:0}
+  .kpi{padding:0 20px}
+  .footer-top{grid-template-columns:1fr}
+  .footer-bottom{flex-direction:column;text-align:center}
+}
+@media(max-width:480px){
+  .container{padding:0 16px}
+  #hero{padding:90px 16px 48px}
+  .hero-kpi{flex-wrap:wrap}
+  .kpi{flex:0 0 50%;padding:16px 0;border-right:none!important}
+  .kpi::before{display:none!important}
+  .market-grid{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div class="topbar-left">
+    <span class="topbar-item">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      <span data-kr="이스탄불, 튀르키예" data-tr="İstanbul, Türkiye">이스탄불, 튀르키예</span>
+    </span>
+    <span class="topbar-item">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.8 19.79 19.79 0 01.22 1.18 2 2 0 012.18 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 7.09a16 16 0 006 6l.5-.5a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.92z"/></svg>
+      <span>info@tukoncenter.com</span>
+    </span>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-badge" data-kr="FDA 인증 파트너" data-tr="FDA Onaylı Ortak">FDA 인증 파트너</span>
+    <span class="topbar-badge" data-kr="K-임플란트 글로벌 허브" data-tr="K-implant Global Merkezi">K-임플란트 글로벌 허브</span>
+  </div>
+</div>
+
+<!-- NAVBAR -->
+<nav id="navbar">
+  <div class="nav-inner">
+    <a href="#hero" class="nav-logo">
+      <div class="nav-logo-mark">TC</div>
+      <div class="nav-logo-info">
+        <div class="nav-logo-name">TUKON CENTER</div>
+        <div class="nav-logo-tag">A.Ş. · Global Gateway</div>
+      </div>
+    </a>
+    <div class="nav-links">
+      <a href="#prologue" class="nav-link" data-kr="시장 분석" data-tr="Pazar Analizi">시장 분석</a>
+      <a href="#opportunity" class="nav-link" data-kr="블루오션" data-tr="Mavi Okyanus">블루오션</a>
+      <a href="#reach" class="nav-link" data-kr="글로벌 거점" data-tr="Küresel Varlık">글로벌 거점</a>
+      <a href="#strategy" class="nav-link" data-kr="전략" data-tr="Strateji">전략</a>
+      <a href="#team" class="nav-link" data-kr="팀" data-tr="Takım">팀</a>
+      <a href="#phases" class="nav-link" data-kr="실행 계획" data-tr="Uygulama">실행 계획</a>
+    </div>
+    <div class="nav-actions">
+      <div class="lang-switch">
+        <button class="lbtn on" onclick="setLang('kr')">KR</button>
+        <button class="lbtn" onclick="setLang('tr')">TR</button>
+      </div>
+      <button class="btn-nav" onclick="document.getElementById('cta').scrollIntoView({behavior:'smooth'})" data-kr="파트너십 문의" data-tr="Ortaklık İletişimi">파트너십 문의</button>
+    </div>
+    <button class="hamburger" id="hamburger">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+
+<!-- MOBILE MENU -->
+<div class="mob-menu" id="mobMenu">
+  <a href="#prologue" onclick="closeMob()" data-kr="시장 분석" data-tr="Pazar Analizi">시장 분석</a>
+  <a href="#opportunity" onclick="closeMob()" data-kr="블루오션" data-tr="Mavi Okyanus">블루오션</a>
+  <a href="#reach" onclick="closeMob()" data-kr="글로벌 거점" data-tr="Küresel Varlık">글로벌 거점</a>
+  <a href="#strategy" onclick="closeMob()" data-kr="전략" data-tr="Strateji">전략</a>
+  <a href="#team" onclick="closeMob()" data-kr="팀" data-tr="Takım">팀</a>
+  <a href="#phases" onclick="closeMob()" data-kr="실행 계획" data-tr="Uygulama">실행 계획</a>
+  <div class="lang-switch" style="margin-top:16px">
+    <button class="lbtn on" onclick="setLang('kr');closeMob()">KR</button>
+    <button class="lbtn" onclick="setLang('tr');closeMob()">TR</button>
+  </div>
+</div>
+
+<!-- HERO -->
+<section id="hero">
+  <div class="hero-geo"></div>
+  <div class="hero-grid-bg"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-badge" data-kr="K-Implant Global Gateway" data-tr="K-implant Küresel Ağ Geçidi">K-Implant Global Gateway</div>
+    <h1 data-kr="<span class='accent'>튀르키예</span>를 거점으로,<br>새로운 임플란트 시장을 개척하다" data-tr="<span class='accent'>Türkiye</span>'yi Merkez Alarak<br>Yeni İmplant Pazarları Yaratıyoruz"><span class="accent">튀르키예</span>를 거점으로,<br>새로운 임플란트 시장을 개척하다</h1>
+    <p class="hero-sub" data-kr="TUKON CENTER A.Ş. — 유럽·아프리카·중동·아시아를 연결하는 K-임플란트 글로벌 허브" data-tr="TUKON CENTER A.Ş. — Avrupa, Afrika, Orta Doğu ve Asya'yı birleştiren K-implant küresel merkezi">TUKON CENTER A.Ş. — 유럽·아프리카·중동·아시아를 연결하는 K-임플란트 글로벌 허브</p>
+    <p class="hero-tag" data-kr="레드오션을 넘어 블루오션으로 — FDA 인증 시장의 유일무이한 선구자" data-tr="Kırmızı Okyanus'un ötesinde — FDA onaylı pazarların eşsiz öncüsü">레드오션을 넘어 블루오션으로 — FDA 인증 시장의 유일무이한 선구자</p>
+    <div class="hero-btns">
+      <button class="btn-gold" onclick="document.getElementById('prologue').scrollIntoView({behavior:'smooth'})" data-kr="사업 소개 보기" data-tr="İş Tanıtımını Gör">사업 소개 보기</button>
+      <button class="btn-ghost" onclick="document.getElementById('cta').scrollIntoView({behavior:'smooth'})" data-kr="파트너십 제안" data-tr="Ortaklık Teklifi">파트너십 제안</button>
+    </div>
+    <div class="hero-kpi">
+      <div class="kpi"><div class="kpi-num">10+</div><div class="kpi-label" data-kr="타겟 국가" data-tr="Hedef Ülke">타겟 국가</div></div>
+      <div class="kpi"><div class="kpi-num">FDA</div><div class="kpi-label" data-kr="인증 기반 전략" data-tr="Onaylı Strateji">인증 기반 전략</div></div>
+      <div class="kpi"><div class="kpi-num">3</div><div class="kpi-label" data-kr="권역별 전문가" data-tr="Bölge Uzmanı">권역별 전문가</div></div>
+      <div class="kpi"><div class="kpi-num">4</div><div class="kpi-label" data-kr="대륙 커버리지" data-tr="Kıta Kapsama">대륙 커버리지</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- MARQUEE -->
+<div class="marquee-strip">
+  <div class="marquee-inner" id="marquee">
+    <span class="marquee-item">K-Implant Global Gateway <span class="marquee-dot"></span></span>
+    <span class="marquee-item" data-kr="FDA 인증 전략 · 블루오션 시장 선점" data-tr="FDA Onaylı Strateji · Mavi Okyanus">FDA 인증 전략 · 블루오션 시장 선점 <span class="marquee-dot"></span></span>
+    <span class="marquee-item">TUKON CENTER A.Ş. <span class="marquee-dot"></span></span>
+    <span class="marquee-item" data-kr="유럽 · 중동 · 아프리카 · CIS" data-tr="Avrupa · Orta Doğu · Afrika · BDT">유럽 · 중동 · 아프리카 · CIS <span class="marquee-dot"></span></span>
+    <span class="marquee-item" data-kr="K-브랜드 파워 · 글로벌 네트워크" data-tr="K-Marka Gücü · Küresel Ağ">K-브랜드 파워 · 글로벌 네트워크 <span class="marquee-dot"></span></span>
+    <!-- duplicate for seamless loop -->
+    <span class="marquee-item">K-Implant Global Gateway <span class="marquee-dot"></span></span>
+    <span class="marquee-item" data-kr="FDA 인증 전략 · 블루오션 시장 선점" data-tr="FDA Onaylı Strateji · Mavi Okyanus">FDA 인증 전략 · 블루오션 시장 선점 <span class="marquee-dot"></span></span>
+    <span class="marquee-item">TUKON CENTER A.Ş. <span class="marquee-dot"></span></span>
+    <span class="marquee-item" data-kr="유럽 · 중동 · 아프리카 · CIS" data-tr="Avrupa · Orta Doğu · Afrika · BDT">유럽 · 중동 · 아프리카 · CIS <span class="marquee-dot"></span></span>
+    <span class="marquee-item" data-kr="K-브랜드 파워 · 글로벌 네트워크" data-tr="K-Marka Gücü · Küresel Ağ">K-브랜드 파워 · 글로벌 네트워크 <span class="marquee-dot"></span></span>
+  </div>
+</div>
+
+<!-- PROLOGUE -->
+<section id="prologue">
+  <div class="container">
+    <div class="two-col">
+      <div class="rv">
+        <span class="eyebrow" data-kr="I. 프롤로그" data-tr="I. Prolog">I. 프롤로그</span>
+        <h2 class="section-title" data-kr="과열된 시장,<br>보이지 않던 기회" data-tr="Kızgın Pazar,<br>Görünmeyen Fırsatlar">과열된 시장,<br>보이지 않던 기회</h2>
+        <div class="divider"></div>
+        <p class="section-lead" data-kr="글로벌 임플란트 시장, 특히 이스탄불은 포화 상태의 레드오션입니다. 그러나 기존 강자들의 독과점과 불명예는 오히려 새로운 대안을 갈망하는 시장의 강력한 신호입니다. 우리는 이 신호를 기회로 읽었습니다." data-tr="Küresel implant pazarı, özellikle İstanbul, doymuş bir kırmızı okyanustur. Ancak mevcut güçlü oyuncuların tekelciliği tam tersine yeni alternatiflere özlem duyan pazarın güçlü bir sinyalidir. Biz bu sinyali fırsat olarak okuduk.">글로벌 임플란트 시장, 특히 이스탄불은 포화 상태의 레드오션입니다. 그러나 기존 강자들의 독과점과 불명예는 오히려 새로운 대안을 갈망하는 시장의 강력한 신호입니다. 우리는 이 신호를 기회로 읽었습니다.</p>
+      </div>
+      <div class="info-stack rv rv-d1">
+        <div class="info-card">
+          <h3><span class="ic-icon ic-red">🔴</span><span data-kr="레드오션의 역설" data-tr="Kırmızı Okyanus'un Paradoksu">레드오션의 역설</span></h3>
+          <p data-kr="전 세계 기업의 각축장인 튀르키예 시장. 소수 기업의 독과점 속에서도 소비자와 의사들의 잠재적 불만이 존재합니다. 이것이 바로 우리의 진입 신호입니다." data-tr="Dünya genelindeki şirketlerin rekabet alanı olan Türkiye pazarı. Tekel altında bile tüketici ve doktorlar arasında potansiyel memnuniyetsizlikler mevcuttur.">전 세계 기업의 각축장인 튀르키예 시장. 소수 기업의 독과점 속에서도 소비자와 의사들의 잠재적 불만이 존재합니다. 이것이 바로 우리의 진입 신호입니다.</p>
+        </div>
+        <div class="info-card">
+          <h3><span class="ic-icon ic-blue">🔵</span><span data-kr="우리의 비전" data-tr="Vizyonumuz">우리의 비전</span></h3>
+          <p data-kr="튀르키예를 단순한 판매 시장이 아닌, 유럽-아프리카-중동-아시아를 잇는 글로벌 게이트웨이로 활용해 K-임플란트의 글로벌 허브를 구축합니다." data-tr="Türkiye'yi satış pazarı değil, Avrupa-Afrika-Orta Doğu-Asya'yı birbirine bağlayan küresel ağ geçidi olarak kullanarak K-implantın küresel merkezini kuruyoruz.">튀르키예를 단순한 판매 시장이 아닌, 유럽-아프리카-중동-아시아를 잇는 글로벌 게이트웨이로 활용해 K-임플란트의 글로벌 허브를 구축합니다.</p>
+        </div>
+        <div class="info-card">
+          <h3><span class="ic-icon ic-red">⚡</span><span data-kr="CE 진입 장벽 → 우리의 기회" data-tr="CE Engeli → Bizim Fırsatımız">CE 진입 장벽 → 우리의 기회</span></h3>
+          <p data-kr="튀르키예 내수는 CE 인증을 요구합니다. 하지만 우리는 '내' 시장이 아닌 '밖' 시장을 공략합니다. FDA 인증만으로 가능한 시장이 광범위하게 열려 있습니다." data-tr="Türkiye iç pazarı CE sertifikası gerektirmektedir. Ancak biz iç pazarı değil, dış pazarı hedefliyoruz. FDA onayıyla girilebilecek geniş bir pazar bizi bekliyor.">튀르키예 내수는 CE 인증을 요구합니다. 하지만 우리는 '내' 시장이 아닌 '밖' 시장을 공략합니다. FDA 인증만으로 가능한 시장이 광범위하게 열려 있습니다.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- OPPORTUNITY -->
+<section id="opportunity">
+  <div class="container">
+    <div style="text-align:center;max-width:600px;margin:0 auto" class="rv">
+      <span class="eyebrow" data-kr="II. 블루오션 발견" data-tr="II. Mavi Okyanusun Keşfi">II. 블루오션 발견</span>
+      <h2 class="section-title" data-kr="왜 지금, 왜 튀르키예인가?" data-tr="Neden Şimdi, Neden Türkiye?">왜 지금, 왜 튀르키예인가?</h2>
+      <div class="divider center"></div>
+      <p class="section-lead" style="margin:0 auto" data-kr="CE 인증 경쟁을 피해 FDA 인증만으로 사업이 가능한 새로운 시장을 선점합니다. 경쟁사들이 놓치고 있는 바로 그 시장입니다." data-tr="CE sertifikası rekabetinden kaçınarak yalnızca FDA onayıyla iş yapılabilecek yeni pazarları önceliyoruz. Rakiplerin gözden kaçırdığı tam da o pazar.">CE 인증 경쟁을 피해 FDA 인증만으로 사업이 가능한 새로운 시장을 선점합니다. 경쟁사들이 놓치고 있는 바로 그 시장입니다.</p>
+    </div>
+    <div class="cards-3">
+      <div class="opp-card rv rv-d1">
+        <div class="oc-num">01</div>
+        <h3 data-kr="시장의 명백한 한계" data-tr="Pazarın Açık Sınırları">시장의 명백한 한계</h3>
+        <p data-kr="경쟁 과열, 독과점의 그림자, CE 인증 진입 장벽. 세 가지 한계가 역설적으로 새로운 진입 기회를 만들어 냅니다." data-tr="Yoğun rekabet, tekel gölgesi, CE sertifikası giriş engeli. Bu üç sınır paradoks olarak yeni giriş fırsatı yaratmaktadır.">경쟁 과열, 독과점의 그림자, CE 인증 진입 장벽. 세 가지 한계가 역설적으로 새로운 진입 기회를 만들어 냅니다.</p>
+      </div>
+      <div class="opp-card rv rv-d2">
+        <div class="oc-num">02</div>
+        <h3 data-kr="FDA 인증 — 새로운 시장의 열쇠" data-tr="FDA Onayı — Yeni Pazarın Anahtarı">FDA 인증 — 새로운 시장의 열쇠</h3>
+        <p data-kr="CE 인증에만 집중하던 경쟁사들이 완전히 놓치고 있는 FDA 시장. 발상의 전환으로 튀르키예 '밖' 시장을 공략합니다." data-tr="CE sertifikasına odaklanan rakiplerin tamamen gözden kaçırdığı FDA pazarı. Düşünce değişikliğiyle Türkiye dışı pazarı hedefliyoruz.">CE 인증에만 집중하던 경쟁사들이 완전히 놓치고 있는 FDA 시장. 발상의 전환으로 튀르키예 '밖' 시장을 공략합니다.</p>
+        <div class="tag-row">
+          <span class="tag">Kosovo</span><span class="tag">Jordan</span><span class="tag">Iraq</span><span class="tag">Iran</span><span class="tag">Saudi</span><span class="tag">Azerbaijan</span>
+        </div>
+      </div>
+      <div class="opp-card rv rv-d3">
+        <div class="oc-num">03</div>
+        <h3 data-kr="이스탄불 — 지정학적 허브" data-tr="İstanbul — Jeopolitik Merkez">이스탄불 — 지정학적 허브</h3>
+        <p data-kr="유럽, 중동, 아프리카, CIS 국가의 의료진들이 가장 쉽게 모일 수 있는 최적의 장소. 세미나와 박람회의 중심이 됩니다." data-tr="Avrupa, Orta Doğu, Afrika ve BDT ülkelerinden sağlık profesyonellerinin en kolay bir araya geleceği yer. Seminer ve fuarların merkezi olacağız.">유럽, 중동, 아프리카, CIS 국가의 의료진들이 가장 쉽게 모일 수 있는 최적의 장소. 세미나와 박람회의 중심이 됩니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- GLOBAL REACH -->
+<section id="reach">
+  <div class="container">
+    <div class="reach-intro">
+      <div class="rv">
+        <span class="eyebrow" data-kr="글로벌 거점 시장" data-tr="Küresel Hedef Pazarlar">글로벌 거점 시장</span>
+        <h2 class="section-title light" data-kr="FDA 인증으로 진입하는<br>10개국 이상의 블루오션" data-tr="FDA Onayıyla Girilebilecek<br>10+ Ülkenin Mavi Okyanusu">FDA 인증으로 진입하는<br>10개국 이상의 블루오션</h2>
+        <div class="divider"></div>
+        <p class="section-lead light" data-kr="CE 인증이 아닌 FDA 인증만으로도 사업 가능한 국가들이 튀르키예 주변에 광범위하게 분포합니다. 경쟁사들이 완전히 놓치고 있는 이 시장을 우리가 선점합니다." data-tr="Türkiye çevresinde yalnızca FDA onayıyla iş yapılabilecek ülkeler geniş coğrafyada yayılmıştır. Rakiplerin tamamen gözden kaçırdığı bu pazarı biz önceliyoruz.">CE 인증이 아닌 FDA 인증만으로도 사업 가능한 국가들이 튀르키예 주변에 광범위하게 분포합니다. 경쟁사들이 완전히 놓치고 있는 이 시장을 우리가 선점합니다.</p>
+      </div>
+      <div class="rv rv-d1" style="display:flex;flex-direction:column;gap:14px">
+        <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:var(--r);padding:20px 24px">
+          <div style="font-size:11px;font-weight:700;color:var(--gold);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px" data-kr="경쟁 전략" data-tr="Rekabet Stratejisi">경쟁 전략</div>
+          <div style="font-size:0.9rem;color:rgba(255,255,255,0.7)" data-kr="CE 인증 경쟁 → 완전 회피<br>FDA 인증 시장 → 독점 선점" data-tr="CE sertifikası rekabeti → Tamamen kaçının<br>FDA onaylı pazar → Tekelci öncülük">CE 인증 경쟁 → 완전 회피<br>FDA 인증 시장 → 독점 선점</div>
+        </div>
+        <div style="background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.25);border-radius:var(--r);padding:20px 24px">
+          <div style="font-size:11px;font-weight:700;color:var(--gold);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px" data-kr="핵심 경쟁력" data-tr="Temel Rekabet Gücü">핵심 경쟁력</div>
+          <div style="font-size:0.9rem;color:rgba(255,255,255,0.7)" data-kr="K-브랜드 신뢰도 + 현지 네트워크<br>+ 다국적 공동대표 시너지" data-tr="K-Marka güvenilirliği + Yerel ağ<br>+ Çok uluslu ortak başkan sinerjisi">K-브랜드 신뢰도 + 현지 네트워크<br>+ 다국적 공동대표 시너지</div>
+        </div>
+      </div>
+    </div>
+    <div class="market-grid rv">
+      <div class="market-card"><span class="mc-flag">🇽🇰</span><div class="mc-name" data-kr="코소보" data-tr="Kosova">코소보</div><div class="mc-cert"><span>FDA</span></div></div>
+
+      <div class="market-card"><span class="mc-flag">🇯🇴</span><div class="mc-name" data-kr="요르단" data-tr="Ürdün">요르단</div><div class="mc-cert"><span>FDA</span></div></div>
+      <div class="market-card"><span class="mc-flag">🇮🇶</span><div class="mc-name" data-kr="이라크" data-tr="Irak">이라크</div><div class="mc-cert"><span>FDA</span></div></div>
+      <div class="market-card"><span class="mc-flag">🇮🇷</span><div class="mc-name" data-kr="이란" data-tr="İran">이란</div><div class="mc-cert"><span>FDA</span></div></div>
+      <div class="market-card"><span class="mc-flag">🇸🇦</span><div class="mc-name" data-kr="사우디아라비아" data-tr="Suudi Arabistan">사우디아라비아</div><div class="mc-cert"><span>FDA</span></div></div>
+      <div class="market-card"><span class="mc-flag">🇦🇿</span><div class="mc-name" data-kr="아제르바이잔" data-tr="Azerbaycan">아제르바이잔</div><div class="mc-cert"><span>FDA</span></div></div>
+      <div class="market-card"><span class="mc-flag">🌍</span><div class="mc-name" data-kr="아프리카 (다수)" data-tr="Afrika (Çok Sayıda)">아프리카 (다수)</div><div class="mc-cert"><span>FDA</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- STRATEGY -->
+<section id="strategy">
+  <div class="container">
+    <div class="rv">
+      <span class="eyebrow" data-kr="III. 핵심 전략" data-tr="III. Temel Strateji">III. 핵심 전략</span>
+      <h2 class="section-title light" data-kr="무엇이 우리를 특별하게 만드는가?" data-tr="Bizi Özel Kılan Ne?">무엇이 우리를 특별하게 만드는가?</h2>
+      <div class="divider"></div>
+    </div>
+    <div class="cards-3-dark">
+      <div class="sc rv rv-d1">
+        <div class="sc-num">01</div>
+        <div class="sc-icon">🏙️</div>
+        <h3 data-kr="튀르키예 — 전략적 허브" data-tr="Türkiye — Stratejik Merkez">튀르키예 — 전략적 허브</h3>
+        <p data-kr="판매 시장이 아닌 전략적 허브. 지정학적 이점을 극대화하고 K-Brand Power를 활용해 유럽·중동·아프리카 의료진이 집결하는 세미나 메카를 구축합니다." data-tr="Satış pazarı değil, stratejik bir merkez. Jeopolitik avantajları maksimize ederek K-Marka Gücü'nü kullanarak Avrupa, Orta Doğu ve Afrika'dan sağlık profesyonellerinin buluştuğu seminer mekası kuruyoruz.">판매 시장이 아닌 전략적 허브. 지정학적 이점을 극대화하고 K-Brand Power를 활용해 유럽·중동·아프리카 의료진이 집결하는 세미나 메카를 구축합니다.</p>
+      </div>
+      <div class="sc rv rv-d2">
+        <div class="sc-num">02</div>
+        <div class="sc-icon">🔑</div>
+        <h3 data-kr="FDA 인증 — 차별화된 무기" data-tr="FDA Onayı — Farklılaştırılmış Silah">FDA 인증 — 차별화된 무기</h3>
+        <p data-kr="CE 인증 경쟁을 회피하고 FDA 인증 제품으로 우리만의 독자적인 시장을 구축합니다. 경쟁사가 따라올 수 없는 차별화된 전략입니다." data-tr="CE sertifikası rekabetinden kaçınarak FDA onaylı ürünlerle kendimize özgü bir pazar kuruyoruz. Rakiplerin takip edemeyeceği farklılaştırılmış bir strateji.">CE 인증 경쟁을 회피하고 FDA 인증 제품으로 우리만의 독자적인 시장을 구축합니다. 경쟁사가 따라올 수 없는 차별화된 전략입니다.</p>
+        <span class="fda-badge">FDA Certified ✓</span>
+      </div>
+      <div class="sc rv rv-d3">
+        <div class="sc-num">03</div>
+        <div class="sc-icon">🌐</div>
+        <h3 data-kr="글로벌 드림팀 & 현지 네트워크" data-tr="Global Rüya Takımı & Yerel Ağ">글로벌 드림팀 & 현지 네트워크</h3>
+        <p data-kr="다국적 공동대표와 튀르키예 치과 협회 및 주요 치의대와의 긴밀한 관계. 누구도 복제할 수 없는 네트워크 자산입니다." data-tr="Çok uluslu ortak başkanlar ve Türkiye Diş Hekimleri Birliği ile yakın ilişkiler. Kimsenin kopyalayamayacağı ağ varlıkları.">다국적 공동대표와 튀르키예 치과 협회 및 주요 치의대와의 긴밀한 관계. 누구도 복제할 수 없는 네트워크 자산입니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TEAM -->
+<section id="team">
+  <div class="container">
+    <div style="text-align:center;max-width:540px;margin:0 auto" class="rv">
+      <span class="eyebrow" data-kr="글로벌 드림팀" data-tr="Global Rüya Takımı">글로벌 드림팀</span>
+      <h2 class="section-title" data-kr="다국적 공동대표 시너지" data-tr="Çok Uluslu Ortak Başkan Sinerjisi">다국적 공동대표 시너지</h2>
+      <div class="divider center"></div>
+    </div>
+    <div class="team-grid">
+      <div class="tc rv rv-d1">
+        <div class="tc-avatar">🌍</div>
+        <div class="tc-region" data-kr="유럽 & 아프리카" data-tr="Avrupa & Afrika">유럽 & 아프리카</div>
+        <div class="tc-role" data-kr="지역 시장 전문가" data-tr="Bölgesel Pazar Uzmanı">지역 시장 전문가</div>
+        <p data-kr="해당 대륙의 시장과 문화에 정통한 광범위한 비즈니스 네트워크 보유. 유럽·아프리카 의료 유통망을 통한 신속한 시장 진입을 주도합니다." data-tr="İlgili kıtaların pazarlarına ve kültürlerine hakim geniş iş ağına sahip. Avrupa-Afrika medikal dağıtım ağı üzerinden hızlı pazar girişini yönetiyor.">해당 대륙의 시장과 문화에 정통한 광범위한 비즈니스 네트워크 보유. 유럽·아프리카 의료 유통망을 통한 신속한 시장 진입을 주도합니다.</p>
+        <div class="tc-tags"><span class="tc-tag">EU</span><span class="tc-tag">Africa</span><span class="tc-tag" data-kr="의료 유통" data-tr="Medikal Dağıtım">의료 유통</span></div>
+      </div>
+      <div class="tc rv rv-d2">
+        <div class="tc-avatar">🕌</div>
+        <div class="tc-region" data-kr="아랍 & 러시아 CIS" data-tr="Arap & Rusya BDT">아랍 & 러시아 CIS</div>
+        <div class="tc-role" data-kr="중동·CIS 전문가" data-tr="Orta Doğu & BDT Uzmanı">중동·CIS 전문가</div>
+        <p data-kr="중동과 CIS 국가를 잇는 강력한 비즈니스 네트워크 및 현지 파트너십 보유. 아랍 및 러시아권 치과 의료 시장의 핵심 게이트키퍼입니다." data-tr="Orta Doğu ve BDT ülkelerini birbirine bağlayan güçlü iş ağı ve yerel ortaklıklara sahip. Arap ve Rusya bölgesi diş hekimliği pazarlarının kilit kapı bekçisi.">중동과 CIS 국가를 잇는 강력한 비즈니스 네트워크 및 현지 파트너십 보유. 아랍 및 러시아권 치과 의료 시장의 핵심 게이트키퍼입니다.</p>
+        <div class="tc-tags"><span class="tc-tag">Middle East</span><span class="tc-tag">CIS</span><span class="tc-tag" data-kr="B2B 파트너십" data-tr="B2B Ortaklıklar">B2B 파트너십</span></div>
+      </div>
+      <div class="tc rv rv-d3">
+        <div class="tc-avatar">🌙</div>
+        <div class="tc-region" data-kr="이란 & 주변국" data-tr="İran & Çevre Ülkeler">이란 & 주변국</div>
+        <div class="tc-role" data-kr="이란권역 전문가" data-tr="İran Bölgesi Uzmanı">이란권역 전문가</div>
+        <p data-kr="해당 권역의 깊이 있는 시장 접근성과 현지 문화 이해를 바탕으로 한 전략적 진입. 이란·주변국 치과 네트워크의 독보적 접근 경로를 보유합니다." data-tr="İlgili bölgeye derinlemesine pazar erişimi ve yerel kültür anlayışına dayalı stratejik giriş. İran ve çevre ülkelerin diş hekimliği ağına eşsiz erişim kanalları mevcuttur.">해당 권역의 깊이 있는 시장 접근성과 현지 문화 이해를 바탕으로 한 전략적 진입. 이란·주변국 치과 네트워크의 독보적 접근 경로를 보유합니다.</p>
+        <div class="tc-tags"><span class="tc-tag">Iran</span><span class="tc-tag" data-kr="주변국" data-tr="Çevre Ülkeler">주변국</span><span class="tc-tag" data-kr="현지 네트워크" data-tr="Yerel Ağ">현지 네트워크</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PHASES -->
+<section id="phases">
+  <div class="container">
+    <div style="text-align:center;max-width:600px;margin:0 auto" class="rv">
+      <span class="eyebrow" data-kr="IV. 사업 실행 계획" data-tr="IV. İş Uygulama Planı">IV. 사업 실행 계획</span>
+      <h2 class="section-title" data-kr="어떻게 실행할 것인가?" data-tr="Nasıl Uygulayacağız?">어떻게 실행할 것인가?</h2>
+      <div class="divider center"></div>
+    </div>
+    <div class="timeline">
+      <div class="tl rv rv-d1">
+        <div class="tl-node"><span class="tl-phase">1</span></div>
+        <div class="tl-period" data-kr="Phase 1 · 1~6개월" data-tr="Aşama 1 · 1-6 Ay">Phase 1 · 1~6개월</div>
+        <div class="tl-title" data-kr="기반 구축" data-tr="Temel Oluşturma">기반 구축</div>
+        <div class="tl-items">
+          <div class="tl-item" data-kr="튀르키예 현지 법인 설립 및 인준 완료" data-tr="Türkiye'de yerel şirket kuruluşu ve onayların tamamlanması">튀르키예 현지 법인 설립 및 인준 완료</div>
+          <div class="tl-item" data-kr="제1회 K-Implant Global Seminar in Istanbul 기획" data-tr="1. K-Implant Global Semineri İstanbul planlaması">제1회 K-Implant Global Seminar in Istanbul 기획</div>
+          <div class="tl-item" data-kr="FDA 시장 타겟 KOL 초청 시작" data-tr="FDA pazarı hedef KOL davetlerine başlanması">FDA 시장 타겟 KOL 초청 시작</div>
+        </div>
+      </div>
+      <div class="tl rv rv-d2">
+        <div class="tl-node"><span class="tl-phase">2</span></div>
+        <div class="tl-period" data-kr="Phase 2 · 6~18개월" data-tr="Aşama 2 · 6-18 Ay">Phase 2 · 6~18개월</div>
+        <div class="tl-title" data-kr="시장 선점" data-tr="Pazar Öncülüğü">시장 선점</div>
+        <div class="tl-items">
+          <div class="tl-item" data-kr="글로벌 세미나 및 박람회 정기 개최" data-tr="Küresel seminerler ve fuarların düzenli yapılması">글로벌 세미나 및 박람회 정기 개최</div>
+          <div class="tl-item" data-kr="초청 의료진 → 각국 판매 대리점 전환" data-tr="Davet edilen sağlık profesyonelleri → Satış temsilcilerine dönüştürme">초청 의료진 → 각국 판매 대리점 전환</div>
+          <div class="tl-item" data-kr="타겟 국가별 맞춤형 영업·마케팅 전략 실행" data-tr="Hedef ülkelere özel satış ve pazarlama stratejisi uygulaması">타겟 국가별 맞춤형 영업·마케팅 전략 실행</div>
+        </div>
+      </div>
+      <div class="tl rv rv-d3">
+        <div class="tl-node"><span class="tl-phase">3</span></div>
+        <div class="tl-period" data-kr="Phase 3 · 18개월 이후" data-tr="Aşama 3 · 18 Ay Sonrası">Phase 3 · 18개월 이후</div>
+        <div class="tl-title" data-kr="확장 및 고도화" data-tr="Genişleme ve Gelişme">확장 및 고도화</div>
+        <div class="tl-items">
+          <div class="tl-item" data-kr="CE 인증 획득 → 튀르키예·유럽 시장 역진출" data-tr="CE sertifikası alma → Türkiye ve Avrupa pazarına ters giriş">CE 인증 획득 → 튀르키예·유럽 시장 역진출</div>
+          <div class="tl-item" data-kr="디지털 덴티스트리 솔루션 포트폴리오 확장" data-tr="Dijital diş hekimliği çözümleri portföy genişlemesi">디지털 덴티스트리 솔루션 포트폴리오 확장</div>
+          <div class="tl-item" data-kr="치과 의료 관광 사업 연계" data-tr="Diş hekimliği medikal turizmi entegrasyonu">치과 의료 관광 사업 연계</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CREDENTIALS -->
+<section id="creds">
+  <div class="container">
+    <div class="creds-grid">
+      <div class="cred rv rv-d1">
+        <span class="cred-icon">🦷</span>
+        <div class="cred-title" data-kr="튀르키예 치과 협회 파트너" data-tr="Türkiye Diş Hekimleri Birliği Ortağı">튀르키예 치과 협회 파트너</div>
+        <p class="cred-desc" data-kr="주요 치의대 및 치과 협회와의 긴밀한 공식 관계" data-tr="Önde gelen diş hekimliği fakülteleri ve birlikleri ile yakın resmi ilişkiler">주요 치의대 및 치과 협회와의 긴밀한 공식 관계</p>
+      </div>
+      <div class="cred rv rv-d2">
+        <span class="cred-icon">✅</span>
+        <div class="cred-title" data-kr="FDA 인증 제품 라인업" data-tr="FDA Onaylı Ürün Yelpazesi">FDA 인증 제품 라인업</div>
+        <p class="cred-desc" data-kr="FDA 기반 유통으로 CE 경쟁 시장을 완전히 우회하는 전략" data-tr="FDA tabanlı dağıtımla CE rekabet pazarını tamamen bypass eden strateji">FDA 기반 유통으로 CE 경쟁 시장을 완전히 우회하는 전략</p>
+      </div>
+      <div class="cred rv rv-d3">
+        <span class="cred-icon">🌏</span>
+        <div class="cred-title" data-kr="K-브랜드 글로벌 신뢰도" data-tr="K-Marka Küresel Güvenilirliği">K-브랜드 글로벌 신뢰도</div>
+        <p class="cred-desc" data-kr="한류 열풍과 한국 제품 신뢰도를 마케팅 자산으로 극대화" data-tr="Hallyu rüzgarı ve Kore ürün güvenilirliğini pazarlama varlığı olarak maksimize etme">한류 열풍과 한국 제품 신뢰도를 마케팅 자산으로 극대화</p>
+      </div>
+      <div class="cred rv rv-d4">
+        <span class="cred-icon">🤝</span>
+        <div class="cred-title" data-kr="다국적 공동대표 네트워크" data-tr="Çok Uluslu Ortak Başkan Ağı">다국적 공동대표 네트워크</div>
+        <p class="cred-desc" data-kr="유럽·아랍·이란 권역의 3개 전문가 팀이 구축한 현지 인프라" data-tr="Avrupa, Arap ve İran bölgelerinin 3 uzman ekibi tarafından kurulan yerel altyapı">유럽·아랍·이란 권역의 3개 전문가 팀이 구축한 현지 인프라</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section id="cta">
+  <div class="container">
+    <div class="cta-content rv">
+      <span class="eyebrow" style="justify-content:center;display:block" data-kr="V. 새로운 역사의 시작" data-tr="V. Yeni Bir Tarihin Başlangıcı">V. 새로운 역사의 시작</span>
+      <h2 class="section-title light" data-kr="K-임플란트 새로운 역사를<br>함께 만들어가길 제안합니다" data-tr="K-implantın Yeni Tarihini<br>Birlikte Yazmayı Teklif Ediyoruz">K-임플란트 새로운 역사를<br>함께 만들어가길 제안합니다</h2>
+      <div class="cta-line"></div>
+      <p class="section-lead light" style="margin:0 auto" data-kr="우리의 사업은 단순히 임플란트를 판매하는 것이 아닙니다. 과열된 경쟁을 피해 새로운 시장의 규칙을 만드는 Game Changer가 되는 것입니다. 귀하의 참여는 이 위대한 여정의 성공을 앞당길 핵심 동력이 됩니다." data-tr="İşimiz sadece implant satmak değildir. Kızgın rekabetten kaçınarak yeni bir pazarın kurallarını belirleyen Oyun Değiştirici olmaktır. Katılımınız, bu yüce yolculuğun başarısını hızlandıracak temel itici güçtür.">우리의 사업은 단순히 임플란트를 판매하는 것이 아닙니다. 과열된 경쟁을 피해 새로운 시장의 규칙을 만드는 Game Changer가 되는 것입니다. 귀하의 참여는 이 위대한 여정의 성공을 앞당길 핵심 동력이 됩니다.</p>
+      <div class="cta-btns">
+        <button class="btn-gold" onclick="window.location.href='mailto:info@tukoncenter.com'" data-kr="파트너십 제안 보내기" data-tr="Ortaklık Teklifi Gönder">파트너십 제안 보내기</button>
+        <button class="btn-ghost" onclick="document.getElementById('prologue').scrollIntoView({behavior:'smooth'})" data-kr="사업 소개 다시 보기" data-tr="İş Tanıtımını Tekrar Gör">사업 소개 다시 보기</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-top">
+      <div class="fbrand">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <div class="nav-logo-mark" style="width:34px;height:34px;font-size:13px">TC</div>
+          <div>
+            <div style="color:#fff;font-size:13px;font-weight:700">TUKON CENTER A.Ş.</div>
+            <div style="color:var(--gold);font-size:10px;font-weight:600;letter-spacing:1px">K-IMPLANT GLOBAL GATEWAY</div>
+          </div>
+        </div>
+        <p data-kr="튀르키예를 거점으로 한 K-임플란트 글로벌 게이트웨이. 유럽·아프리카·중동·아시아를 연결하는 치과 의료기기 전문 기업." data-tr="Türkiye merkezli K-implant küresel ağ geçidi. Avrupa, Afrika, Orta Doğu ve Asya'yı birleştiren diş hekimliği medikal cihaz uzman firması.">튀르키예를 거점으로 한 K-임플란트 글로벌 게이트웨이. 유럽·아프리카·중동·아시아를 연결하는 치과 의료기기 전문 기업.</p>
+        <span class="fbrand-badge">K-Implant Global Gateway</span>
+      </div>
+      <div class="fcol">
+        <h4 data-kr="사업 소개" data-tr="İş Tanıtımı">사업 소개</h4>
+        <ul>
+          <li><a href="#prologue" data-kr="시장 분석" data-tr="Pazar Analizi">시장 분석</a></li>
+          <li><a href="#opportunity" data-kr="블루오션 기회" data-tr="Mavi Okyanus Fırsatı">블루오션 기회</a></li>
+          <li><a href="#reach" data-kr="글로벌 거점" data-tr="Küresel Varlık">글로벌 거점</a></li>
+          <li><a href="#strategy" data-kr="핵심 전략" data-tr="Temel Strateji">핵심 전략</a></li>
+          <li><a href="#phases" data-kr="실행 계획" data-tr="Uygulama Planı">실행 계획</a></li>
+        </ul>
+      </div>
+      <div class="fcol">
+        <h4 data-kr="타겟 시장" data-tr="Hedef Pazarlar">타겟 시장</h4>
+        <ul>
+          <li><a href="#reach" data-kr="코소보" data-tr="Kosova">코소보</a></li>
+          <li><a href="#reach" data-kr="요르단 / 이라크" data-tr="Ürdün / Irak">요르단 / 이라크</a></li>
+          <li><a href="#reach" data-kr="이란 / 사우디" data-tr="İran / Suudi Arabistan">이란 / 사우디</a></li>
+          <li><a href="#reach" data-kr="아제르바이잔" data-tr="Azerbaycan">아제르바이잔</a></li>
+          <li><a href="#reach" data-kr="아프리카 지역" data-tr="Afrika Bölgesi">아프리카 지역</a></li>
+        </ul>
+      </div>
+      <div class="fcol">
+        <h4 data-kr="연락처" data-tr="İletişim">연락처</h4>
+        <div class="fcontact-item"><span class="fcontact-icon">📍</span><span data-kr="Istanbul, Türkiye" data-tr="İstanbul, Türkiye">Istanbul, Türkiye</span></div>
+        <div class="fcontact-item"><span class="fcontact-icon">✉️</span><a href="mailto:info@tukoncenter.com" style="color:rgba(255,255,255,0.45)">info@tukoncenter.com</a></div>
+        <div class="fcontact-item"><span class="fcontact-icon">🦷</span><span data-kr="K-Implant Global Seminar" data-tr="K-Implant Global Semineri">K-Implant Global Seminar</span></div>
+        <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+          <span style="background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.25);color:var(--gold-l);font-size:10px;font-weight:700;padding:4px 10px;border-radius:4px">FDA ✓</span>
+          <span style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);font-size:10px;font-weight:700;padding:4px 10px;border-radius:4px">K-Brand</span>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 TUKON CENTER A.Ş. All rights reserved.</span>
+      <div class="footer-bottom-right">
+        <span data-kr="사업자 등록: 이스탄불, 튀르키예" data-tr="Şirket Tescili: İstanbul, Türkiye">사업자 등록: 이스탄불, 튀르키예</span>
+        <span>|</span>
+        <span>K-Implant Global Gateway</span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+/* ── LANGUAGE ── */
+let lang = 'kr';
+function setLang(l) {
+  lang = l;
+  document.documentElement.lang = l === 'kr' ? 'ko' : 'tr';
+  document.querySelectorAll('[data-kr]').forEach(el => {
+    const v = l === 'kr' ? el.dataset.kr : el.dataset.tr;
+    if (!v) return;
+    if (v.includes('<')) el.innerHTML = v;
+    else el.textContent = v;
+  });
+  document.querySelectorAll('.lbtn').forEach(b => {
+    b.classList.toggle('on', (l==='kr'&&b.textContent==='KR')||(l==='tr'&&b.textContent==='TR'));
+  });
+}
+
+/* ── NAVBAR SCROLL ── */
+const nav = document.getElementById('navbar');
+window.addEventListener('scroll', () => nav.classList.toggle('elevated', scrollY > 60), {passive:true});
+
+/* ── HAMBURGER ── */
+const burger = document.getElementById('hamburger');
+const mob = document.getElementById('mobMenu');
+burger.addEventListener('click', () => mob.classList.toggle('open'));
+function closeMob() { mob.classList.remove('open'); }
+document.addEventListener('click', e => {
+  if (!nav.contains(e.target) && !mob.contains(e.target)) closeMob();
+});
+
+/* ── SCROLL REVEAL ── */
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); observer.unobserve(e.target); } });
+}, {threshold: 0.1});
+document.querySelectorAll('.rv').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>

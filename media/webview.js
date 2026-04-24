@@ -7,6 +7,7 @@ let lastCloudContent = null;
 let thinkEl = null;
 let pendingLearnBtn = null;
 let skills = [], skillFilter = 'all', editingSkillId = null;
+let vaultOpen = false;
 
 window.addEventListener("load", () => {
     console.log("CEVIZ: load fired, sending ready");
@@ -96,6 +97,15 @@ window.addEventListener("message", e => {
         case "skillDeleted":
             skills = m.skills || [];
             renderSkills();
+            break;
+        case "vaultInfo":
+            renderVaultInfo(m);
+            break;
+        case "vaultDetect":
+            renderVaultDetect(m.paths);
+            break;
+        case "vaultSearchResult":
+            renderVaultResults(m.results, m.error);
             break;
     }
 });
@@ -214,7 +224,15 @@ function sendPrompt() {
     vscode.postMessage({ type: "sendPrompt", prompt: p, mode, model });
 }
 
+function closeVaultPanel() {
+    if (!vaultOpen) { return; }
+    vaultOpen = false;
+    document.getElementById("brainBtn").classList.remove("on");
+    document.getElementById("vaultPanel").classList.remove("show");
+}
+
 function switchTab(tab) {
+    closeVaultPanel();
     const isChat  = tab === "chat";
     const isDash  = tab === "dash";
     const isSkill = tab === "skill";
@@ -411,10 +429,175 @@ document.addEventListener("click", e => {
 document.getElementById("enBtn").onclick = () => vscode.postMessage({ type: "toggleEnglish" });
 document.getElementById("gearBtn").onclick = () => { flashBtn("gearBtn"); vscode.postMessage({ type: "settings" }); };
 document.getElementById("brainBtn").onclick = () => {
-    flashBtn("brainBtn");
-    switchTab("chat");
-    appendMsg("assistant", "🧠 지식 신경망 동기화\nGitHub Obsidian Vault 연결은 Phase 8에서 구현됩니다.\n설정에서 GitHub URL을 먼저 입력해주세요.", "system", 0);
+    if (vaultOpen) {
+        closeVaultPanel();
+        document.getElementById("chatArea").style.display = "flex";
+        return;
+    }
+    // vault 패널 열기 — chat tab으로 강제 이동
+    closeVaultPanel();
+    document.getElementById("chatTab").classList.add("on");
+    document.getElementById("dashTab").classList.remove("on");
+    document.getElementById("skillTab").classList.remove("on");
+    document.getElementById("dashArea").classList.remove("show");
+    document.getElementById("skillArea").classList.remove("show");
+    document.getElementById("chatArea").style.display = "none";
+    document.getElementById("vaultPanel").classList.add("show");
+    document.getElementById("brainBtn").classList.add("on");
+    vaultOpen = true;
+    vscode.postMessage({ type: "vaultGetInfo" });
+    setTimeout(() => document.getElementById("vaultSearchInput").focus(), 80);
 };
+
+document.getElementById("vaultClose").onclick = () => {
+    closeVaultPanel();
+    document.getElementById("chatArea").style.display = "flex";
+};
+
+document.getElementById("vaultCfgBtn").onclick = () => {
+    vscode.postMessage({ type: "vaultOpenSettings" });
+};
+
+function doVaultSearch() {
+    const kw = document.getElementById("vaultSearchInput").value.trim();
+    if (!kw) { return; }
+    const area = document.getElementById("vaultResults");
+    area.innerHTML = "";
+    const loading = document.createElement("div");
+    loading.className = "vault-empty";
+    loading.textContent = "검색 중...";
+    area.appendChild(loading);
+    vscode.postMessage({ type: "vaultSearch", keyword: kw });
+}
+
+document.getElementById("vaultSearchBtn").onclick = doVaultSearch;
+document.getElementById("vaultSearchInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") { doVaultSearch(); }
+});
+
+function renderVaultInfo(info) {
+    const pathEl = document.getElementById("vaultPath");
+    const countEl = document.getElementById("vaultCount");
+    if (!info.configured) {
+        pathEl.textContent = "경로 미설정 — 아래 [경로 변경]에서 vaultPath를 입력하세요";
+        countEl.textContent = "";
+    } else {
+        pathEl.textContent = info.path + (info.error ? " ⚠️" : "");
+        countEl.textContent = "노트 " + (info.count || 0) + "개 · " + (info.lastSync || "");
+        // clear any leftover detect UI
+        document.getElementById("vaultResults").innerHTML = '<div class="vault-empty">검색어를 입력하세요</div>';
+    }
+}
+
+function renderVaultDetect(paths) {
+    const pathEl = document.getElementById("vaultPath");
+    const countEl = document.getElementById("vaultCount");
+    const area = document.getElementById("vaultResults");
+
+    pathEl.textContent = "🔍 Vault 자동 감지됨";
+    countEl.textContent = paths.length + "개 후보";
+
+    area.innerHTML = "";
+
+    const header = document.createElement("div");
+    header.className = "vault-empty";
+    header.style.marginBottom = "6px";
+    header.textContent = paths.length === 1
+        ? "아래 Vault를 사용하시겠습니까?"
+        : "사용할 Obsidian Vault를 선택하세요:";
+    area.appendChild(header);
+
+    paths.forEach(p => {
+        const div = document.createElement("div");
+        div.className = "vault-result";
+        div.style.cursor = "pointer";
+
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "vault-file";
+        const parts = p.replace(/\/+$/, "").split("/");
+        nameSpan.textContent = "📁 " + (parts[parts.length - 1] || p);
+
+        const pathSpan = document.createElement("span");
+        pathSpan.className = "vault-preview";
+        pathSpan.textContent = p;
+
+        const useBtn = document.createElement("button");
+        useBtn.className = "vault-cfg-btn";
+        useBtn.textContent = "이 Vault 사용";
+        useBtn.style.marginTop = "4px";
+        useBtn.onclick = (e) => {
+            e.stopPropagation();
+            useBtn.disabled = true;
+            useBtn.textContent = "저장 중...";
+            vscode.postMessage({ type: "vaultSelectDetected", path: p });
+        };
+
+        div.appendChild(nameSpan);
+        div.appendChild(pathSpan);
+        div.appendChild(useBtn);
+        div.onclick = () => {
+            useBtn.disabled = true;
+            useBtn.textContent = "저장 중...";
+            vscode.postMessage({ type: "vaultSelectDetected", path: p });
+        };
+        area.appendChild(div);
+    });
+
+    if (paths.length > 1) {
+        const skipDiv = document.createElement("div");
+        skipDiv.style.textAlign = "center";
+        skipDiv.style.marginTop = "6px";
+        const skipBtn = document.createElement("button");
+        skipBtn.className = "vault-cfg-btn";
+        skipBtn.textContent = "직접 입력";
+        skipBtn.onclick = () => vscode.postMessage({ type: "vaultOpenSettings" });
+        skipDiv.appendChild(skipBtn);
+        area.appendChild(skipDiv);
+    }
+}
+
+function renderVaultResults(results, error) {
+    const area = document.getElementById("vaultResults");
+    area.innerHTML = "";
+    if (error) {
+        const el = document.createElement("div");
+        el.className = "vault-empty";
+        el.textContent = "❌ " + error;
+        area.appendChild(el);
+        return;
+    }
+    if (!results || results.length === 0) {
+        const el = document.createElement("div");
+        el.className = "vault-empty";
+        el.textContent = "검색 결과 없음";
+        area.appendChild(el);
+        return;
+    }
+    results.forEach(r => {
+        const div = document.createElement("div");
+        div.className = "vault-result";
+        const fnSpan = document.createElement("span");
+        fnSpan.className = "vault-file";
+        fnSpan.textContent = "📄 " + r.file;
+        const pvSpan = document.createElement("span");
+        pvSpan.className = "vault-preview";
+        pvSpan.textContent = (r.matches || []).slice(0, 2).join(" · ").slice(0, 120);
+        div.appendChild(fnSpan);
+        div.appendChild(pvSpan);
+        div.onclick = () => {
+            const inp = document.getElementById("promptInput");
+            const ref = "\n\n[참조: " + r.file + "]\n" + (r.matches || []).join("\n");
+            inp.value = (inp.value.trim() + ref).trim();
+            inp.style.height = "auto";
+            inp.style.height = Math.min(inp.scrollHeight, 238) + "px";
+            closeVaultPanel();
+            document.getElementById("chatArea").style.display = "flex";
+            inp.focus();
+            appendMsg("assistant", "🧠 참조됨: " + r.file, "vault", 0);
+        };
+        area.appendChild(div);
+    });
+}
 document.getElementById("skillBtn").onclick = () => {
     switchTab("skill");
     vscode.postMessage({ type: "getSkills" });

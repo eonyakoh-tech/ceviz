@@ -43,6 +43,11 @@
           "type": "string",
           "default": "claude",
           "description": "Hybrid 모드 기본 Cloud AI"
+        },
+        "ceviz.vaultPath": {
+          "type": "string",
+          "default": "",
+          "description": "Obsidian Vault 로컬 경로 (예: ~/Jaccanim_VCOU/Obsidian_Mock/)"
         }
       }
     }

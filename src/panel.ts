@@ -1,4 +1,7 @@
 import * as vscode from "vscode";
+import * as cp from "child_process";
+import * as path from "path";
+import * as fs from "fs";
 import axios from "axios";
 
 interface Message {
@@ -17,6 +20,13 @@ interface Session {
     createdAt: string;
     mode: string;
     model: string;
+}
+
+interface VaultResult {
+    file: string;
+    relPath: string;
+    fullPath: string;
+    matches: string[];
 }
 
 interface Skill {
@@ -200,6 +210,22 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                 case "deleteSkill":
                     await this._deleteSkill(msg.id);
                     break;
+
+                case "vaultGetInfo":
+                    await this._sendVaultInfo();
+                    break;
+
+                case "vaultSearch":
+                    await this._searchVault(msg.keyword);
+                    break;
+
+                case "vaultOpenSettings":
+                    vscode.commands.executeCommand("workbench.action.openSettings", "ceviz.vaultPath");
+                    break;
+
+                case "vaultSelectDetected":
+                    await this._saveVaultPath(msg.path);
+                    break;
             }
         });
     }
@@ -380,6 +406,159 @@ JSON 형식으로 각 에이전트 결과를 반환하세요:
         axios.delete(`${this._getUrl()}/skills/${id}`, { timeout: 5000 }).catch(() => {});
     }
 
+    private _getVaultPath(): string {
+        const raw = vscode.workspace.getConfiguration("ceviz").get<string>("vaultPath") || "";
+        return raw.replace(/^~/, process.env.HOME || "");
+    }
+
+    private _detectVaults(): string[] {
+        const home = process.env.HOME || "";
+        const searchDirs = [
+            path.join(home, "Documents"),
+            path.join(home, "Obsidian"),
+            home
+        ];
+        const found: string[] = [];
+        for (const dir of searchDirs) {
+            // check if the search dir itself is a vault
+            try {
+                fs.accessSync(path.join(dir, ".obsidian"), fs.constants.F_OK);
+                if (!found.includes(dir)) { found.push(dir); }
+            } catch {}
+            // check immediate subdirectories
+            try {
+                const entries = fs.readdirSync(dir, { withFileTypes: true });
+                for (const entry of entries) {
+                    if (!entry.isDirectory() || entry.name.startsWith(".")) { continue; }
+                    const candidate = path.join(dir, entry.name);
+                    try {
+                        fs.accessSync(path.join(candidate, ".obsidian"), fs.constants.F_OK);
+                        if (!found.includes(candidate)) { found.push(candidate); }
+                    } catch {}
+                }
+            } catch {}
+        }
+        return found;
+    }
+
+    private async _saveVaultPath(vaultPath: string) {
+        await vscode.workspace.getConfiguration("ceviz").update(
+            "vaultPath", vaultPath, vscode.ConfigurationTarget.Global
+        );
+        await this._sendVaultInfo();
+    }
+
+    private async _sendVaultInfo() {
+        const vaultPath = this._getVaultPath();
+        const rawPath = vscode.workspace.getConfiguration("ceviz").get<string>("vaultPath") || "";
+        if (!vaultPath) {
+            const detected = this._detectVaults();
+            if (detected.length > 0) {
+                this._view?.webview.postMessage({ type: "vaultDetect", paths: detected });
+            } else {
+                this._view?.webview.postMessage({ type: "vaultInfo", configured: false });
+            }
+            return;
+        }
+        try {
+            const count = this._countMdFiles(vaultPath);
+            this._view?.webview.postMessage({
+                type: "vaultInfo",
+                configured: true,
+                path: rawPath,
+                count,
+                lastSync: new Date().toLocaleTimeString("ko-KR")
+            });
+        } catch (e: any) {
+            this._view?.webview.postMessage({
+                type: "vaultInfo",
+                configured: true,
+                path: rawPath,
+                count: 0,
+                error: e.message
+            });
+        }
+    }
+
+    private _countMdFiles(dir: string): number {
+        let count = 0;
+        try {
+            const entries = fs.readdirSync(dir, { withFileTypes: true });
+            for (const entry of entries) {
+                if (entry.name.startsWith(".")) { continue; }
+                if (entry.isDirectory()) {
+                    count += this._countMdFiles(path.join(dir, entry.name));
+                } else if (entry.name.endsWith(".md")) {
+                    count++;
+                }
+            }
+        } catch {}
+        return count;
+    }
+
+    private async _searchVault(keyword: string) {
+        const vaultPath = this._getVaultPath();
+        if (!vaultPath || !keyword.trim()) {
+            this._view?.webview.postMessage({ type: "vaultSearchResult", results: [] });
+            return;
+        }
+        try {
+            const results = await this._runRipgrep(keyword.trim(), vaultPath);
+            this._view?.webview.postMessage({ type: "vaultSearchResult", results, keyword });
+        } catch (e: any) {
+            this._view?.webview.postMessage({ type: "vaultSearchResult", results: [], error: e.message });
+        }
+    }
+
+    private _runRipgrep(keyword: string, dir: string): Promise<VaultResult[]> {
+        return new Promise((resolve, reject) => {
+            const args = [
+                "--json",
+                "--ignore-case",
+                "--max-count", "3",
+                "--glob", "*.md",
+                "--max-filesize", "500K",
+                keyword,
+                dir
+            ];
+            cp.execFile("rg", args, { maxBuffer: 2 * 1024 * 1024 }, (err, stdout) => {
+                // rg exits with code 1 = no matches (not an error); code 2+ = real error
+                if (err && (err as any).code !== 1) {
+                    reject(new Error("rg 실행 실패: " + err.message));
+                    return;
+                }
+                resolve(this._parseRgJson(stdout, dir));
+            });
+        });
+    }
+
+    private _parseRgJson(stdout: string, baseDir: string): VaultResult[] {
+        const fileMap = new Map<string, VaultResult>();
+        for (const line of stdout.split("\n")) {
+            if (!line.trim()) { continue; }
+            try {
+                const obj = JSON.parse(line);
+                if (obj.type !== "match") { continue; }
+                const filePath: string = obj.data.path.text;
+                const matchText: string = (obj.data.lines.text || "").trim();
+                if (!fileMap.has(filePath)) {
+                    const rel = filePath.startsWith(baseDir)
+                        ? filePath.slice(baseDir.length).replace(/^\//, "")
+                        : filePath;
+                    fileMap.set(filePath, {
+                        file: path.basename(filePath),
+                        relPath: rel,
+                        fullPath: filePath,
+                        matches: []
+                    });
+                }
+                const r = fileMap.get(filePath)!;
+                if (r.matches.length < 3) { r.matches.push(matchText); }
+            } catch {}
+        }
+        return Array.from(fileMap.values()).slice(0, 15);
+    }
+
     private _getNonce(): string {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
         return Array.from({ length: 32 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
@@ -442,6 +621,27 @@ JSON 형식으로 각 에이전트 결과를 반환하세요:
 
 <!-- 채팅 영역 -->
 <div class="chat" id="chatArea"></div>
+
+<!-- Vault 패널 -->
+<div class="vault-panel" id="vaultPanel">
+  <div class="vault-hdr">
+    <span class="vault-title">🧠 지식 신경망</span>
+    <button class="ibtn" id="vaultClose" title="닫기">✕</button>
+  </div>
+  <div class="vault-meta">
+    <span id="vaultPath" class="vault-path">로드 중...</span>
+    <span class="vault-sep">·</span>
+    <span id="vaultCount"></span>
+    <button class="vault-cfg-btn" id="vaultCfgBtn">경로 변경</button>
+  </div>
+  <div class="vault-search-row">
+    <input type="text" id="vaultSearchInput" placeholder="🔍 노트 검색..." class="vault-search-input">
+    <button id="vaultSearchBtn" class="vault-search-btn">검색</button>
+  </div>
+  <div id="vaultResults" class="vault-results">
+    <div class="vault-empty">검색어를 입력하세요</div>
+  </div>
+</div>
 
 <!-- 대시보드 영역 -->
 <div class="dash" id="dashArea">
