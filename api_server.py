@@ -16,12 +16,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from router import dispatch
+from skills_router import router as skills_router
 
 load_dotenv("/home/remotecommandcenter/ceviz/config/.env")
 
 CEVIZ_HOME = Path(os.environ.get("CEVIZ_HOME", Path.home() / "ceviz"))
 
 app = FastAPI(title="CEVIZ API", version="0.1.0")
+app.include_router(skills_router)
 
 # CORS 설정 (VS Code Extension 허용)
 app.add_middleware(
@@ -128,6 +130,30 @@ async def list_personas():
     files = list(personas_dir.glob("*.md"))
     files = [f for f in files if f.name != "PERSONA_SCHEMA.md"]
     return {"personas": [f.stem for f in files]}
+
+
+# ── Orchestration ──────────────────────────────────────────
+from fastapi.responses import StreamingResponse
+from orchestrator import orchestrate_stream
+
+
+class OrchRequest(BaseModel):
+    plan: str
+    model: str = "gemma3:1b"
+
+
+@app.post("/orchestrate")
+async def orchestrate(req: OrchRequest):
+    """멀티 에이전트 오케스트레이션 — SSE 스트리밍"""
+    return StreamingResponse(
+        orchestrate_stream(req.plan, req.model),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 # ── 실행 ──────────────────────────────────────────────────
