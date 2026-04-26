@@ -106,6 +106,9 @@ body{font-family:var(--vscode-font-family);font-size:12px;color:var(--vscode-for
 .cat-btn.on{background:var(--vscode-focusBorder);color:#fff;border-color:var(--vscode-focusBorder)}
 .skill-new-btn{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;border-radius:4px;font-size:10px;padding:3px 10px;cursor:pointer;white-space:nowrap;flex-shrink:0;font-family:var(--vscode-font-family)}
 .skill-new-btn:hover{background:var(--vscode-button-hoverBackground)}
+.skill-io-btns{display:flex;gap:3px;margin-left:auto}
+.skill-io-btn{background:none;color:var(--vscode-descriptionForeground);border:1px solid var(--vscode-panel-border);border-radius:4px;font-size:9px;padding:2px 7px;cursor:pointer;white-space:nowrap;font-family:var(--vscode-font-family)}
+.skill-io-btn:hover{color:var(--vscode-foreground);border-color:var(--vscode-focusBorder)}
 /* Skill form */
 .skill-form-wrap{background:var(--vscode-editor-background);border:1px solid var(--vscode-panel-border);border-radius:6px;margin-bottom:6px;flex-shrink:0}
 .skill-form-hdr{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--vscode-sideBarSectionHeader-background);border-bottom:1px solid var(--vscode-panel-border);border-radius:6px 6px 0 0}

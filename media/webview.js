@@ -156,6 +156,9 @@ window.addEventListener("message", e => {
         case "offlineStatus":
             handleOfflineStatus(m.online);
             break;
+        case "importResult":
+            showCtxToast((m.ok ? "✅ " : "❌ ") + m.msg);
+            break;
     }
 });
 
@@ -704,6 +707,8 @@ document.getElementById("skillBtn").onclick = () => {
     vscode.postMessage({ type: "getSkills" });
 };
 document.getElementById("skillNewBtn").onclick = () => showSkillForm(null);
+document.getElementById("skillExportBtn").onclick = () => vscode.postMessage({ type: "exportSkills" });
+document.getElementById("skillImportBtn").onclick = () => vscode.postMessage({ type: "importSkills" });
 document.getElementById("skillFormClose").onclick = closeSkillForm;
 document.getElementById("sfCancel").onclick = closeSkillForm;
 document.getElementById("sfSave").onclick = saveSkill;

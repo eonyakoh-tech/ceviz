@@ -272,6 +272,14 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                     await this._deleteSkill(msg.id);
                     break;
 
+                case "exportSkills":
+                    await this._exportSkills();
+                    break;
+
+                case "importSkills":
+                    await this._importSkills();
+                    break;
+
                 case "clearCodeContext":
                     // webview 측에서 코드 컨텍스트 해제 — 확장 측 상태 없음, no-op
                     break;
@@ -724,6 +732,44 @@ ${response}
         axios.delete(`${this._getUrl()}/skills/${id}`, { timeout: 5000 }).catch(() => {});
     }
 
+    private async _exportSkills() {
+        const uri = await vscode.window.showSaveDialog({
+            defaultUri: vscode.Uri.file(`ceviz-skills-${Date.now()}.json`),
+            filters: { "JSON": ["json"] },
+            title: "Skill 라이브러리 내보내기"
+        });
+        if (!uri) { return; }
+        const payload = { version: "1.0", exportedAt: new Date().toISOString(), skills: this._skills };
+        fs.writeFileSync(uri.fsPath, JSON.stringify(payload, null, 2), "utf8");
+        this._view?.webview.postMessage({ type: "importResult", ok: true, msg: `${this._skills.length}개 Skill 내보내기 완료 → ${path.basename(uri.fsPath)}` });
+    }
+
+    private async _importSkills() {
+        const uris = await vscode.window.showOpenDialog({
+            canSelectMany: false,
+            filters: { "JSON": ["json"] },
+            title: "Skill 라이브러리 가져오기"
+        });
+        if (!uris || uris.length === 0) { return; }
+        try {
+            const raw = fs.readFileSync(uris[0].fsPath, "utf8");
+            const parsed = JSON.parse(raw);
+            const incoming: Skill[] = Array.isArray(parsed) ? parsed : (parsed.skills || []);
+            let added = 0, updated = 0;
+            for (const skill of incoming) {
+                if (!skill.id || !skill.name) { continue; }
+                const idx = this._skills.findIndex(s => s.id === skill.id);
+                if (idx >= 0) { this._skills[idx] = skill; updated++; }
+                else { this._skills.push(skill); added++; }
+            }
+            this._context.globalState.update("ceviz.skills", this._skills);
+            this._view?.webview.postMessage({ type: "skillsSync", skills: this._skills });
+            this._view?.webview.postMessage({ type: "importResult", ok: true, msg: `가져오기 완료: ${added}개 추가, ${updated}개 업데이트` });
+        } catch (e: any) {
+            this._view?.webview.postMessage({ type: "importResult", ok: false, msg: "가져오기 실패: " + e.message });
+        }
+    }
+
     private _getVaultPath(): string {
         const raw = vscode.workspace.getConfiguration("ceviz").get<string>("vaultPath") || "";
         return raw.replace(/^~/, process.env.HOME || "");
@@ -1122,6 +1168,10 @@ ${response}
       <button class="cat-btn" data-cat="code">💻 코드</button>
       <button class="cat-btn" data-cat="research">🔍 리서치</button>
       <button class="cat-btn" data-cat="media">🎬 미디어</button>
+    </div>
+    <div class="skill-io-btns">
+      <button class="skill-io-btn" id="skillImportBtn" title="JSON에서 가져오기">↓ 가져오기</button>
+      <button class="skill-io-btn" id="skillExportBtn" title="JSON으로 내보내기">↑ 내보내기</button>
     </div>
     <button class="skill-new-btn" id="skillNewBtn">+ 추가</button>
   </div>
