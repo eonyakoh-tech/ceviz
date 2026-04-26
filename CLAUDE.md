@@ -38,7 +38,7 @@
 | 항목 | 내용 |
 |------|------|
 | 브랜치 | `extension-ui` |
-| 최신 Phase | Phase 10 완료 (2026-04-24) |
+| 최신 Phase | Phase 11 완료 (2026-04-25) |
 | 패키지 버전 | `ceviz-0.2.0` |
 | 백엔드 주소 | `100.69.155.43:8000` (기본값) |
 | 빌드 상태 | webpack 컴파일 정상 |
@@ -105,9 +105,10 @@
 - **파일(PN40)**: `~/ceviz/orchestrator.py`, `~/ceviz/api_server.py`
 - **파일(T480s)**: `src/panel.ts`, `media/webview.js`, `media/webview.css`
 
-### ⬜ Phase 11 — Diff / Patch 미리보기
-- **목표**: AI 응답에 포함된 코드 변경사항을 diff 형태로 인라인 렌더링, 1-클릭 적용
-- **예상 파일**: `media/webview.js`, `media/webview.css`
+### ✅ Phase 11 — Claude Code CLI 연동 (터미널 위임 방식)
+- **완료**: 2026-04-25
+- **내용**: 드롭다운 "Claude CLI" 카테고리, `_checkClaudeCli`(claude --version), `_streamClaudeCli`(cp.spawn + stdout 스트리밍, NO_COLOR, 60초 타임아웃, Stop 지원), `_handleCopilotCli` 교체, webview.js 스트리밍 버블(beginStreamMsg/appendStreamChunk/finalizeStreamMsg), `claudeStart`/`claudeChunk`/`claudeEnd` 메시지 프로토콜
+- **파일**: `src/panel.ts`, `media/webview.js`
 
 ### ⬜ Phase 12 — 오프라인 폴백 & 에러 복원력
 - **목표**: 백엔드 연결 실패 시 로컬 캐시 응답, 재연결 자동 재시도, 사용자 알림
@@ -139,7 +140,9 @@
 | 2026-04-24 | CLAUDE.md 자동 업데이트 규칙 설정 | CLAUDE.md 전면 재작성, Stop 훅 설정 완료 |
 | 2026-04-24 | Phase 9: 프로젝트 컨텍스트 자동 관리 | CONTEXT.md 생성·갱신, 모달 UI, 키워드 감지, 세션 복원, ceviz-0.2.0.vsix 재설치 완료 |
 | 2026-04-24 | Phase 10a: 파일 컨텍스트 주입 | 커맨드·메뉴·단축키 등록, 코드 미리보기 박스, 프롬프트 자동 첨부 완료 |
+| 2026-04-25 | Phase 11: Claude Code CLI 연동 (재구현) | gh copilot → claude CLI 교체, 스트리밍 버블 UI, claudeStart/Chunk/End 프로토콜, 빌드·패키징·재설치 완료 |
 | 2026-04-24 | Phase 10b: Soti-Skill 백엔드 통합 | PN40 orchestrator.py 생성, /orchestrate SSE 엔드포인트 추가·검증, Extension SSE 스트리밍, 실시간 에이전트 카드 UI, ceviz-0.2.0.vsix 재설치 완료 |
+| 2026-04-26 | 세션 재개 — Phase 11 미커밋 변경 확인, 다음 작업 결정 | |
 
 ---
 

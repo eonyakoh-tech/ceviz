@@ -143,6 +143,16 @@ window.addEventListener("message", e => {
         case "injectCode":
             setInjectedCode(m);
             break;
+        case "claudeStart":
+            hideThink();
+            beginStreamMsg();
+            break;
+        case "claudeChunk":
+            appendStreamChunk(m.text);
+            break;
+        case "claudeEnd":
+            finalizeStreamMsg(m.agent, m.engine, m.duration);
+            break;
     }
 });
 
@@ -202,6 +212,41 @@ function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage) {
     area.scrollTop = area.scrollHeight;
 }
 
+// ── CLAUDE CLI 스트리밍 버블 ───────────────────────────────────────────────
+let _streamDiv = null;
+let _streamBubble = null;
+
+function beginStreamMsg() {
+    const area = document.getElementById("chatArea");
+    _streamDiv = document.createElement("div");
+    _streamDiv.className = "msg assistant";
+    _streamBubble = document.createElement("div");
+    _streamBubble.className = "bubble";
+    _streamBubble.textContent = "";
+    _streamDiv.appendChild(_streamBubble);
+    area.appendChild(_streamDiv);
+    area.scrollTop = area.scrollHeight;
+}
+
+function appendStreamChunk(text) {
+    if (!_streamBubble) { return; }
+    _streamBubble.textContent += text;
+    const area = document.getElementById("chatArea");
+    area.scrollTop = area.scrollHeight;
+}
+
+function finalizeStreamMsg(agent, engine, duration) {
+    if (!_streamDiv) { return; }
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    const dStr = duration ? " · " + (duration / 1000).toFixed(1) + "s" : "";
+    meta.textContent = (agent || "Claude CLI") + (engine ? " · " + engine : "") + dStr;
+    _streamDiv.appendChild(meta);
+    _streamDiv = null;
+    _streamBubble = null;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function showThink() {
     const area = document.getElementById("chatArea");
     thinkEl = document.createElement("div");
@@ -221,13 +266,13 @@ function hideThink() {
 }
 
 function updateModeLabel() {
-    const modeNames = { local: "Local", cloud: "Cloud", hybrid: "Hybrid", copilot: "Copilot CLI" };
+    const modeNames = { local: "Local", cloud: "Cloud", hybrid: "Hybrid", copilot: "Claude CLI" };
     const modelInfo = {
-        "gemma3:1b":   { name: "Gemma 3 1B",   bg: "#1e3a5f", col: "#7ec8e3", ch: "✦" },
-        "gemma4:e2b":  { name: "Gemma 4 E2B",  bg: "#1e3a5f", col: "#7ec8e3", ch: "✦" },
-        "gemma4:e4b":  { name: "Gemma 4 E4B",  bg: "#1e3a5f", col: "#7ec8e3", ch: "✦" },
-        "claude":      { name: "Claude",        bg: "#2d1b4e", col: "#c586c0", ch: "✳" },
-        "copilot-cli": { name: "Copilot",       bg: "#1a3a2a", col: "#4ec9b0", ch: "⊡" }
+        "gemma3:1b":  { name: "Gemma 3 1B",  bg: "#1e3a5f", col: "#7ec8e3", ch: "✦" },
+        "gemma4:e2b": { name: "Gemma 4 E2B", bg: "#1e3a5f", col: "#7ec8e3", ch: "✦" },
+        "gemma4:e4b": { name: "Gemma 4 E4B", bg: "#1e3a5f", col: "#7ec8e3", ch: "✦" },
+        "claude":     { name: "Claude",       bg: "#2d1b4e", col: "#c586c0", ch: "✳" },
+        "claude-cli": { name: "Claude CLI",   bg: "#1a2a3e", col: "#569cd6", ch: "⊕" }
     };
     const mName = modeNames[mode] || "Hybrid";
     const m = modelInfo[model] || { name: model, bg: "#1e3a5f", col: "#7ec8e3", ch: "✦" };

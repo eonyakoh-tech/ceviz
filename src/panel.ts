@@ -61,6 +61,7 @@ export class CevizPanel implements vscode.WebviewViewProvider {
     private _skills: Skill[] = [];
     private _currentProject = "";
     private _orchStream?: NodeJS.ReadableStream;
+    private _copilotProcess?: cp.ChildProcess;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -214,6 +215,7 @@ export class CevizPanel implements vscode.WebviewViewProvider {
 
                 case "cancelPrompt":
                     this._abortController?.abort();
+                    try { this._copilotProcess?.kill(); } catch {}
                     break;
 
                 case "cancelOrch":
@@ -337,6 +339,19 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
 [Answer the user's actual question in English. Adjust vocabulary and sentence complexity to match their CEFR level.]`;
         }
 
+        // Copilot CLI 모드 — T480s 로컬 실행, PN40 불필요
+        if (this._mode === "copilot") {
+            session.messages.push({ role: "user", content: prompt });
+            if (session.messages.length === 1) {
+                session.title = prompt.slice(0, 28) + (prompt.length > 28 ? "..." : "");
+            }
+            this._context.globalState.update("ceviz.sessions", this._sessions);
+            this._view?.webview.postMessage({ type: "userMsg", content: prompt });
+            this._view?.webview.postMessage({ type: "thinking" });
+            await this._handleCopilotCli(prompt);
+            return;
+        }
+
         // Local 모드 고난도 감지
         if (this._mode === "local") {
             const hard = ["멀티모달","multimodal","고급 코드","복잡한 논리","딥러닝","아키텍처 설계"];
@@ -419,6 +434,113 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
             this._abortController = undefined;
         }
     }
+
+    // ── CLAUDE CODE CLI (터미널 위임 방식) ────────────────────────────────────
+
+    private _checkClaudeCli(): Promise<{ ok: boolean; msg?: string }> {
+        return new Promise((resolve) => {
+            cp.exec("claude --version", (err) => {
+                if (err) {
+                    resolve({
+                        ok: false,
+                        msg: "❌ Claude Code CLI가 설치되어 있지 않습니다.\n\n설치 방법:\n  npm install -g @anthropic-ai/claude-code\n\n설치 후 'claude --version' 으로 확인하세요."
+                    });
+                    return;
+                }
+                resolve({ ok: true });
+            });
+        });
+    }
+
+    private _streamClaudeCli(prompt: string) {
+        const startTime = Date.now();
+        // -p : print(non-interactive) 모드  --output-format text : 순수 텍스트 출력
+        const child = cp.spawn("claude", ["-p", prompt, "--output-format", "text"], {
+            env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0" }
+        });
+        this._copilotProcess = child;
+
+        let accumulated = "";
+        let started = false;
+        let settled = false;
+
+        const stripAnsi = (s: string) => s.replace(/\x1B\[[0-9;]*[mGKHFJA-Za-z]/g, "");
+
+        child.stdout.on("data", (chunk: Buffer) => {
+            const text = stripAnsi(chunk.toString());
+            if (!text) { return; }
+            accumulated += text;
+            if (!started) {
+                started = true;
+                // thinking 표시 해제 후 스트리밍 버블 시작
+                this._view?.webview.postMessage({ type: "claudeStart" });
+            }
+            this._view?.webview.postMessage({ type: "claudeChunk", text });
+        });
+
+        child.stderr.on("data", (chunk: Buffer) => {
+            const text = stripAnsi(chunk.toString()).trim();
+            // stderr 는 claude 내부 로그가 섞일 수 있어 무시
+            if (text) { console.log("CEVIZ claude stderr:", text.slice(0, 200)); }
+        });
+
+        const finish = (exitCode: number | null) => {
+            if (settled) { return; }
+            settled = true;
+            this._copilotProcess = undefined;
+            const duration = Date.now() - startTime;
+
+            if (!started) {
+                // 출력 없이 종료 — 오류 가능성
+                const errMsg = accumulated.trim() || (exitCode !== 0 ? `claude 종료 코드 ${exitCode}` : "(응답 없음)");
+                this._view?.webview.postMessage({ type: "assistantMsg", content: "❌ " + errMsg, agent: "system", tier: 0 });
+                return;
+            }
+
+            const finalText = accumulated.trim();
+            this._view?.webview.postMessage({ type: "claudeEnd", agent: "Claude CLI", engine: "claude-code", duration });
+
+            // 세션에 저장
+            const session = this._sessions.find(s => s.id === this._currentSessionId);
+            if (session) {
+                session.messages.push({ role: "assistant", content: finalText, agent: "Claude CLI", tier: 1, engine: "claude-code" });
+                this._context.globalState.update("ceviz.sessions", this._sessions);
+            }
+        };
+
+        child.on("close", (code) => finish(code));
+        child.on("error", (err) => {
+            if (!settled) {
+                settled = true;
+                this._copilotProcess = undefined;
+                this._view?.webview.postMessage({
+                    type: "assistantMsg",
+                    content: "❌ claude 실행 실패: " + err.message + "\n\n'which claude' 로 PATH를 확인하세요.",
+                    agent: "system", tier: 0
+                });
+            }
+        });
+
+        // 60초 타임아웃
+        setTimeout(() => {
+            if (!settled) {
+                try { child.kill(); } catch {}
+                finish(null);
+            }
+        }, 60000);
+    }
+
+    private async _handleCopilotCli(prompt: string) {
+        const check = await this._checkClaudeCli();
+        if (!check.ok) {
+            this._view?.webview.postMessage({ type: "assistantMsg", content: check.msg!, agent: "system", tier: 0 });
+            return;
+        }
+        // 스트리밍 시작 — 비동기, 결과는 postMessage로 전달
+        this._streamClaudeCli(prompt);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
 
     private async _learnFromCloud(response: string) {
         const prompt = `다음 Cloud AI의 응답 방식을 학습하고 내면화하세요.
@@ -988,9 +1110,9 @@ ${response}
         <div class="drop-sep"></div>
         <div class="drop-category">
           <span class="drop-cat-icon">⌨</span>
-          <span class="drop-cat-label">Copilot CLI</span>
+          <span class="drop-cat-label">Claude CLI</span>
         </div>
-        <div class="drop-item" data-mode="copilot" data-model="copilot-cli"><span class="drop-model-icon" style="background:#1a3a2a;color:#4ec9b0">⊡</span>Copilot</div>
+        <div class="drop-item" data-mode="copilot" data-model="claude-cli"><span class="drop-model-icon" style="background:#1a2a3e;color:#569cd6">⊕</span>Claude CLI</div>
         <div class="drop-sep"></div>
         <div class="drop-category">
           <span class="drop-cat-icon">☁</span>
