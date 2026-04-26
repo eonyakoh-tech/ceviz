@@ -38,7 +38,7 @@
 | 항목 | 내용 |
 |------|------|
 | 브랜치 | `extension-ui` |
-| 최신 Phase | Phase 12 완료 (2026-04-26) |
+| 최신 Phase | Phase 16 완료 (2026-04-26) |
 | 패키지 버전 | `ceviz-0.2.0` |
 | 백엔드 주소 | `100.69.155.43:8000` (기본값) |
 | 빌드 상태 | webpack 컴파일 정상 |
@@ -115,21 +115,25 @@
 - **내용**: `_isOnline` 상태 추적, 동적 폴링(온라인 15s/오프라인 5s), 응답 캐시(max 20, globalState 영속), 키워드 매칭 유사 응답 폴백(40% 임계값), 오프라인 배너 + 복구 토스트
 - **파일**: `src/panel.ts`, `media/webview.js`, `media/webview.css`
 
-### ⬜ Phase 13 — Skill 라이브러리 Import / Export
-- **목표**: Skill 세트를 JSON으로 내보내고 가져오기, Marketplace 공유 포맷 정의
-- **예상 파일**: `src/panel.ts`, `media/webview.js`
+### ✅ Phase 13 — Skill 라이브러리 Import / Export
+- **완료**: 2026-04-26
+- **내용**: `_exportSkills()`(showSaveDialog → JSON), `_importSkills()`(showOpenDialog → id 기반 upsert), Skill 탭 "↓ 가져오기" / "↑ 내보내기" 버튼, importResult 토스트
+- **파일**: `src/panel.ts`, `media/webview.js`, `media/webview.css`
 
-### ⬜ Phase 14 — 멀티 워크스페이스 지원
-- **목표**: 워크스페이스별 독립 세션·설정, 프로젝트 전환 시 컨텍스트 자동 복원
-- **예상 파일**: `src/extension.ts`, `src/panel.ts`
+### ✅ Phase 14 — 멀티 워크스페이스 지원
+- **완료**: 2026-04-26
+- **내용**: `_workspaceKey()` / `_sessionsKey()` 헬퍼, 세션 키 `ceviz.sessions.{wsKey}`로 격리, `onDidChangeWorkspaceFolders` 자동 세션 전환, 헤더 `.ws-badge` 워크스페이스 이름 표시
+- **파일**: `src/panel.ts`, `media/webview.js`, `media/webview.css`
 
-### ⬜ Phase 15 — 음성 입력 연동
-- **목표**: Web Speech API 또는 Whisper 로컬 STT로 음성 → 텍스트 입력 지원
-- **예상 파일**: `media/webview.js`, `media/webview.css`
+### ✅ Phase 15 — 음성 입력 연동
+- **완료**: 2026-04-26
+- **내용**: Web Speech API(`webkitSpeechRecognition`), 🎙 마이크 버튼, interimResults 실시간 미리보기, `englishMode` 연동(ko-KR/en-US), 미지원 환경 자동 비활성화
+- **파일**: `media/webview.js`, `media/webview.css`, `src/panel.ts`
 
-### ⬜ Phase 16 — VS Code Marketplace 배포
-- **목표**: publisher 등록, README/icon 정비, `vsce publish`, CI/CD 자동 릴리스
-- **예상 파일**: `package.json`, `README.md`, `.github/workflows/`
+### ✅ Phase 16 — VS Code Marketplace 배포 준비
+- **완료**: 2026-04-26
+- **내용**: `publisher: "eonyakoh"` 추가, README.md 정비, `.github/workflows/release.yml`(v* 태그 → VSIX 빌드 + GitHub Release 자동 생성, Marketplace publish 주석 처리)
+- **파일**: `package.json`, `README.md`, `.github/workflows/release.yml`
 
 ---
 
@@ -143,7 +147,7 @@
 | 2026-04-24 | Phase 10a: 파일 컨텍스트 주입 | 커맨드·메뉴·단축키 등록, 코드 미리보기 박스, 프롬프트 자동 첨부 완료 |
 | 2026-04-25 | Phase 11: Claude Code CLI 연동 (재구현) | gh copilot → claude CLI 교체, 스트리밍 버블 UI, claudeStart/Chunk/End 프로토콜, 빌드·패키징·재설치 완료 |
 | 2026-04-24 | Phase 10b: Soti-Skill 백엔드 통합 | PN40 orchestrator.py 생성, /orchestrate SSE 엔드포인트 추가·검증, Extension SSE 스트리밍, 실시간 에이전트 카드 UI, ceviz-0.2.0.vsix 재설치 완료 |
-| 2026-04-26 | 세션 재개 — Phase 11 미커밋 변경 확인, 다음 작업 결정 | Phase 11 커밋·패키징, 잡무(repository/LICENSE), Phase 12 완료 |
+| 2026-04-26 | 세션 재개 → Phase 13~16 순차 완료 | Phase 11 커밋, 잡무(repository/LICENSE), Phase 12~16 전체 구현·커밋·설치 완료 |
 
 ---
 
@@ -161,12 +165,8 @@
 
 - [x] Phase 9: 프로젝트 컨텍스트 자동 관리 완료
 - [x] Phase 10: 파일 컨텍스트 주입 완료
-- [x] Phase 11: Claude Code CLI 연동 완료
-- [x] Phase 12: 오프라인 폴백 & 에러 복원력 완료
-- [x] `.vscodeignore` 정비 완료
-- [x] `package.json` `repository` 필드 추가 완료
-- [x] `LICENSE` 파일 생성 완료
-- [ ] Phase 13~16: 미시작
+- [x] Phase 11 ~ Phase 16: 모두 완료
+- [ ] Marketplace 실제 배포: `VSCE_PAT` secret 설정 후 `release.yml` 주석 해제 → `git tag v0.2.0 && git push --tags`
 
 ---
 
