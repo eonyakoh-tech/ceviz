@@ -31,6 +31,8 @@ window.addEventListener("message", e => {
             document.getElementById("promptInput").placeholder = englishMode
                 ? "Type in any language — English tutor active" : "무엇을 만들어 드릴까요?";
             if (m.currentProject) { currentProject = m.currentProject; updateProjBar(); }
+            const wsBadge = document.getElementById("wsBadge");
+            if (wsBadge) { wsBadge.textContent = m.workspace ? "· " + m.workspace : ""; }
             break;
         case "serverStatus": {
             const ollamaOk = m.data && (m.data.ollama || m.data.ollama_running || m.data.ollama_status === "ok");

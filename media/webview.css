@@ -10,7 +10,8 @@ body{font-family:var(--vscode-font-family);font-size:12px;color:var(--vscode-for
 .ibtn.on{color:#fff;opacity:1;background:var(--vscode-focusBorder);border-color:var(--vscode-focusBorder);box-shadow:0 0 0 1px var(--vscode-focusBorder)}
 .ibtn.flash{animation:ibtnFlash .35s ease-out}
 @keyframes ibtnFlash{0%{background:var(--vscode-focusBorder);color:#fff;opacity:1;border-color:var(--vscode-focusBorder)}100%{background:none;color:var(--vscode-foreground);opacity:.7;border-color:transparent}}
-.status{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--vscode-descriptionForeground)}
+.status{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--vscode-descriptionForeground);flex-wrap:wrap}
+.ws-badge{color:var(--vscode-descriptionForeground);font-size:9px;opacity:.6;margin-left:auto}
 .dot{width:6px;height:6px;border-radius:50%;background:#c44;flex-shrink:0}
 .dot.ok{background:#4c4}
 .token-bar{display:none;margin-top:4px;padding:3px 6px;background:var(--vscode-inputValidation-infoBackground);border-radius:3px;font-size:10px;color:var(--vscode-foreground)}

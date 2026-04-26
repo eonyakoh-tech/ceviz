@@ -79,7 +79,7 @@ export class CevizPanel implements vscode.WebviewViewProvider {
         private readonly _extensionUri: vscode.Uri,
         private readonly _context: vscode.ExtensionContext
     ) {
-        this._sessions       = this._context.globalState.get("ceviz.sessions", []);
+        this._sessions       = this._context.globalState.get(this._sessionsKey(), []);
         this._skills         = this._context.globalState.get("ceviz.skills",   []);
         this._currentProject = this._context.globalState.get("ceviz.currentProject", "");
         this._responseCache  = this._context.globalState.get("ceviz.responseCache", []);
@@ -98,7 +98,7 @@ export class CevizPanel implements vscode.WebviewViewProvider {
         };
         this._sessions.push(s);
         this._currentSessionId = s.id;
-        this._context.globalState.update("ceviz.sessions", this._sessions);
+        this._context.globalState.update(this._sessionsKey(), this._sessions);
         return s;
     }
 
@@ -130,6 +130,18 @@ export class CevizPanel implements vscode.WebviewViewProvider {
         });
         // CEVIZ 패널이 보이지 않으면 포커스 이동
         vscode.commands.executeCommand("ceviz.chatView.focus");
+    }
+
+    private _workspaceKey(): string {
+        const folders = vscode.workspace.workspaceFolders;
+        if (folders && folders.length > 0) {
+            return folders[0].uri.fsPath.replace(/[^a-zA-Z0-9_-]/g, "_").slice(-40);
+        }
+        return "default";
+    }
+
+    private _sessionsKey(): string {
+        return `ceviz.sessions.${this._workspaceKey()}`;
     }
 
     private _getUrl(): string {
@@ -172,6 +184,7 @@ export class CevizPanel implements vscode.WebviewViewProvider {
     }
 
     private _sync() {
+        const wsName = vscode.workspace.workspaceFolders?.[0]?.name || "";
         this._view?.webview.postMessage({
             type: "sync",
             sessions: this._sessions,
@@ -181,7 +194,8 @@ export class CevizPanel implements vscode.WebviewViewProvider {
             cloudModel: this._cloudModel,
             englishMode: this._englishMode,
             totalTokens: this._totalTokens,
-            currentProject: this._currentProject
+            currentProject: this._currentProject,
+            workspace: wsName
         });
     }
 
@@ -195,6 +209,13 @@ export class CevizPanel implements vscode.WebviewViewProvider {
         webviewView.webview.html = this._html();
 
         this._startStatusPolling();
+
+        vscode.workspace.onDidChangeWorkspaceFolders(() => {
+            this._sessions = this._context.globalState.get(this._sessionsKey(), []);
+            if (this._sessions.length === 0) { this._createSession(); }
+            else { this._currentSessionId = this._sessions[this._sessions.length - 1].id; }
+            this._sync();
+        });
 
         webviewView.onDidChangeVisibility(() => {
             if (webviewView.visible) { this._checkServerStatus(); }
@@ -381,7 +402,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
             if (session.messages.length === 1) {
                 session.title = prompt.slice(0, 28) + (prompt.length > 28 ? "..." : "");
             }
-            this._context.globalState.update("ceviz.sessions", this._sessions);
+            this._context.globalState.update(this._sessionsKey(), this._sessions);
             this._view?.webview.postMessage({ type: "userMsg", content: prompt });
             this._view?.webview.postMessage({ type: "thinking" });
             await this._handleCopilotCli(prompt);
@@ -429,7 +450,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
             };
             session.messages.push(msg);
             this._lastCloudResponse = isCloud ? msg : null;
-            this._context.globalState.update("ceviz.sessions", this._sessions);
+            this._context.globalState.update(this._sessionsKey(), this._sessions);
             this._cacheResponse(prompt, d.result, d.agent, d.engine, d.tier);
 
             this._view?.webview.postMessage({
@@ -474,7 +495,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
                             engine: cached.engine
                         };
                         session.messages.push(cachedMsg);
-                        this._context.globalState.update("ceviz.sessions", this._sessions);
+                        this._context.globalState.update(this._sessionsKey(), this._sessions);
                         this._view?.webview.postMessage({
                             type: "assistantMsg",
                             content: cachedMsg.content,
@@ -604,7 +625,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
             const session = this._sessions.find(s => s.id === this._currentSessionId);
             if (session) {
                 session.messages.push({ role: "assistant", content: finalText, agent: "Claude CLI", tier: 1, engine: "claude-code" });
-                this._context.globalState.update("ceviz.sessions", this._sessions);
+                this._context.globalState.update(this._sessionsKey(), this._sessions);
             }
         };
 
@@ -1090,6 +1111,7 @@ ${response}
   <div class="status">
     <div class="dot" id="dot"></div>
     <span id="statusTxt">연결 중...</span>
+    <span class="ws-badge" id="wsBadge"></span>
   </div>
   <div class="token-bar" id="tokenBar">🔢 토큰 사용량: <span id="tokenCount">0</span> tokens</div>
   <div class="proj-bar" id="projBar" style="display:none">
