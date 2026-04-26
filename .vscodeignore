@@ -16,3 +16,9 @@ pn40_*.py
 scripts/**
 TUKON*
 CLAUDE.md
+00_KR_*
+00_TR_*
+tukon-website.html
+기능 설명_*.md
+Chat window design.md
+.claude/**
