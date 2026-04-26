@@ -38,7 +38,7 @@
 | 항목 | 내용 |
 |------|------|
 | 브랜치 | `extension-ui` |
-| 최신 Phase | Phase 11 완료 (2026-04-25) |
+| 최신 Phase | Phase 12 완료 (2026-04-26) |
 | 패키지 버전 | `ceviz-0.2.0` |
 | 백엔드 주소 | `100.69.155.43:8000` (기본값) |
 | 빌드 상태 | webpack 컴파일 정상 |
@@ -110,9 +110,10 @@
 - **내용**: 드롭다운 "Claude CLI" 카테고리, `_checkClaudeCli`(claude --version), `_streamClaudeCli`(cp.spawn + stdout 스트리밍, NO_COLOR, 60초 타임아웃, Stop 지원), `_handleCopilotCli` 교체, webview.js 스트리밍 버블(beginStreamMsg/appendStreamChunk/finalizeStreamMsg), `claudeStart`/`claudeChunk`/`claudeEnd` 메시지 프로토콜
 - **파일**: `src/panel.ts`, `media/webview.js`
 
-### ⬜ Phase 12 — 오프라인 폴백 & 에러 복원력
-- **목표**: 백엔드 연결 실패 시 로컬 캐시 응답, 재연결 자동 재시도, 사용자 알림
-- **예상 파일**: `src/panel.ts`
+### ✅ Phase 12 — 오프라인 폴백 & 에러 복원력
+- **완료**: 2026-04-26
+- **내용**: `_isOnline` 상태 추적, 동적 폴링(온라인 15s/오프라인 5s), 응답 캐시(max 20, globalState 영속), 키워드 매칭 유사 응답 폴백(40% 임계값), 오프라인 배너 + 복구 토스트
+- **파일**: `src/panel.ts`, `media/webview.js`, `media/webview.css`
 
 ### ⬜ Phase 13 — Skill 라이브러리 Import / Export
 - **목표**: Skill 세트를 JSON으로 내보내고 가져오기, Marketplace 공유 포맷 정의
@@ -142,7 +143,7 @@
 | 2026-04-24 | Phase 10a: 파일 컨텍스트 주입 | 커맨드·메뉴·단축키 등록, 코드 미리보기 박스, 프롬프트 자동 첨부 완료 |
 | 2026-04-25 | Phase 11: Claude Code CLI 연동 (재구현) | gh copilot → claude CLI 교체, 스트리밍 버블 UI, claudeStart/Chunk/End 프로토콜, 빌드·패키징·재설치 완료 |
 | 2026-04-24 | Phase 10b: Soti-Skill 백엔드 통합 | PN40 orchestrator.py 생성, /orchestrate SSE 엔드포인트 추가·검증, Extension SSE 스트리밍, 실시간 에이전트 카드 UI, ceviz-0.2.0.vsix 재설치 완료 |
-| 2026-04-26 | 세션 재개 — Phase 11 미커밋 변경 확인, 다음 작업 결정 | |
+| 2026-04-26 | 세션 재개 — Phase 11 미커밋 변경 확인, 다음 작업 결정 | Phase 11 커밋·패키징, 잡무(repository/LICENSE), Phase 12 완료 |
 
 ---
 
@@ -160,10 +161,12 @@
 
 - [x] Phase 9: 프로젝트 컨텍스트 자동 관리 완료
 - [x] Phase 10: 파일 컨텍스트 주입 완료
-- [ ] Phase 11~16: 미시작
-- [ ] `.vscodeignore` 정비 — `pn40_*.py`, TUKON 문서 등 불필요 파일 패키지 제외 필요
-- [ ] `package.json` `repository` 필드 누락 (vsce 패키징 경고)
-- [ ] `LICENSE` 파일 누락 (vsce 패키징 경고)
+- [x] Phase 11: Claude Code CLI 연동 완료
+- [x] Phase 12: 오프라인 폴백 & 에러 복원력 완료
+- [x] `.vscodeignore` 정비 완료
+- [x] `package.json` `repository` 필드 추가 완료
+- [x] `LICENSE` 파일 생성 완료
+- [ ] Phase 13~16: 미시작
 
 ---
 
