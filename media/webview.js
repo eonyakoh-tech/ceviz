@@ -1,5 +1,318 @@
 // @ts-nocheck
 console.log("CEVIZ: webview script loaded");
+
+// ── i18n ────────────────────────────────────────────────────────────────────
+const I18N = {
+    ko: {
+        brand:"🌰 나만의 AI",connecting:"연결 중...",connectedOllama:"PN40 연결됨 · Ollama ✓",
+        connected:"PN40 연결됨",offline:"서버 연결 안됨",sessions:"세션",thinking:"생각 중...",
+        inputPh:"무엇을 만들어 드릴까요?",inputPhEn:"모든 언어로 입력하세요 — 영어 튜터 활성",
+        offlineBanner:"📡 서버 오프라인 — 캐시 응답 사용 중",reconnected:"✅ 서버 연결 복구됨",
+        tabSoti:"🎛️ Soti",tabSkill:"⚡ Skill",
+        skillAll:"전체",skillGame:"🎮 게임",skillDoc:"📄 문서",skillCode:"💻 코드",
+        skillResearch:"🔍 리서치",skillMedia:"🎬 미디어",
+        skillNew:"+ 추가",skillImport:"↓ 가져오기",skillExport:"↑ 내보내기",
+        skillEmpty:"⚡ 스킬이 없습니다\n+ 추가 버튼으로 만들어보세요",
+        skillFormNew:"새 스킬",skillFormEdit:"스킬 편집",
+        labelName:"스킬 이름",labelCat:"카테고리",labelDesc:"설명",
+        labelTags:"태그 (쉼표로 구분)",labelPrompt:"AI 프롬프트 템플릿",
+        phName:"예: 게임 시나리오 작가",phDesc:"이 스킬이 하는 일을 간단히 설명",
+        phTags:"예: 게임, 스토리, 시나리오",phPrompt:"AI에게 전달할 시스템 프롬프트...",
+        cancel:"취소",save:"저장",
+        newChat:"＋ 새 채팅",continueIn:"계속하기",
+        modeLocal:"Local",modeCopilot:"Claude CLI",modeCloud:"Cloud",modeHybrid:"Hybrid",
+        vaultTitle:"🧠 지식 신경망",vaultCfg:"경로 변경",
+        vaultSearchPh:"🔍 노트 검색...",vaultBtn:"검색",vaultEmpty:"검색어를 입력하세요",
+        vaultLoading:"로드 중...",
+        projChange:"전환 ▸",projModalTitle:"📁 프로젝트",projNewPh:"새 프로젝트 이름...",projCreate:"+ 생성",
+        orchRun:"▶ 오케스트레이션 실행",orchStop:"■ Stop",orchAdd:"＋ 에이전트 추가",
+        orchDesc:"멀티 에이전트 팀 구성 계획을 입력하면 실시간으로 오케스트레이션합니다.",
+        tokenLabel:"🔢 토큰 사용량:",
+        ttlProject:"프로젝트 관리",ttlBrain:"지식 신경망 동기화",ttlSoti:"Soti-Skill 대시보드",
+        ttlSkillBtn:"Skill CRUD",ttlSettings:"AI 엔진 설정",ttlEnglish:"영어 튜터 모드",
+        ttlLang:"언어 선택",ttlMic:"음성 입력 (한국어/영어)",ttlStop:"전송 취소 (Stop)",
+        langSelectTitle:"언어 선택",langSelectHint:"사용할 언어를 선택하세요",langSave:"확인",
+    },
+    en: {
+        brand:"🌰 My AI",connecting:"Connecting...",connectedOllama:"PN40 Connected · Ollama ✓",
+        connected:"PN40 Connected",offline:"Server offline",sessions:"Sessions",thinking:"Thinking...",
+        inputPh:"What can I create for you?",inputPhEn:"Type in any language — English tutor active",
+        offlineBanner:"📡 Server offline — using cached response",reconnected:"✅ Server connection restored",
+        tabSoti:"🎛️ Soti",tabSkill:"⚡ Skill",
+        skillAll:"All",skillGame:"🎮 Game",skillDoc:"📄 Document",skillCode:"💻 Code",
+        skillResearch:"🔍 Research",skillMedia:"🎬 Media",
+        skillNew:"+ Add",skillImport:"↓ Import",skillExport:"↑ Export",
+        skillEmpty:"⚡ No skills yet\nUse + Add to create one",
+        skillFormNew:"New Skill",skillFormEdit:"Edit Skill",
+        labelName:"Skill Name",labelCat:"Category",labelDesc:"Description",
+        labelTags:"Tags (comma separated)",labelPrompt:"AI Prompt Template",
+        phName:"e.g. Game Scenario Writer",phDesc:"Brief description of what this skill does",
+        phTags:"e.g. game, story, scenario",phPrompt:"System prompt to send to AI...",
+        cancel:"Cancel",save:"Save",
+        newChat:"＋ New Chat Session",continueIn:"Continue In",
+        modeLocal:"Local",modeCopilot:"Claude CLI",modeCloud:"Cloud",modeHybrid:"Hybrid",
+        vaultTitle:"🧠 Knowledge Network",vaultCfg:"Change Path",
+        vaultSearchPh:"🔍 Search notes...",vaultBtn:"Search",vaultEmpty:"Enter a search term",
+        vaultLoading:"Loading...",
+        projChange:"Switch ▸",projModalTitle:"📁 Projects",projNewPh:"New project name...",projCreate:"+ Create",
+        orchRun:"▶ Run Orchestration",orchStop:"■ Stop",orchAdd:"＋ Add Agent",
+        orchDesc:"Enter a multi-agent team plan to orchestrate in real-time.",
+        tokenLabel:"🔢 Token usage:",
+        ttlProject:"Manage Projects",ttlBrain:"Sync Knowledge Network",ttlSoti:"Soti-Skill Dashboard",
+        ttlSkillBtn:"Skill CRUD",ttlSettings:"AI Engine Settings",ttlEnglish:"English Tutor Mode",
+        ttlLang:"Select Language",ttlMic:"Voice Input (KO/EN)",ttlStop:"Cancel (Stop)",
+        langSelectTitle:"Select Language",langSelectHint:"Choose your preferred language",langSave:"Confirm",
+    },
+    tr: {
+        brand:"🌰 AI Yaratıcım",connecting:"Bağlanıyor...",connectedOllama:"PN40 Bağlandı · Ollama ✓",
+        connected:"PN40 Bağlandı",offline:"Sunucu bağlantısı yok",sessions:"Oturumlar",thinking:"Düşünüyor...",
+        inputPh:"Sizin için ne oluşturabilirim?",inputPhEn:"Herhangi bir dilde yazın — İngilizce öğretmeni aktif",
+        offlineBanner:"📡 Sunucu çevrimdışı — önbellek yanıtı kullanılıyor",reconnected:"✅ Sunucu bağlantısı yeniden kuruldu",
+        tabSoti:"🎛️ Soti",tabSkill:"⚡ Beceri",
+        skillAll:"Tümü",skillGame:"🎮 Oyun",skillDoc:"📄 Belge",skillCode:"💻 Kod",
+        skillResearch:"🔍 Araştırma",skillMedia:"🎬 Medya",
+        skillNew:"+ Ekle",skillImport:"↓ İçe aktar",skillExport:"↑ Dışa aktar",
+        skillEmpty:"⚡ Henüz beceri yok\n+ Ekle ile oluşturun",
+        skillFormNew:"Yeni Beceri",skillFormEdit:"Beceriyi Düzenle",
+        labelName:"Beceri Adı",labelCat:"Kategori",labelDesc:"Açıklama",
+        labelTags:"Etiketler (virgülle ayırın)",labelPrompt:"AI Prompt Şablonu",
+        phName:"örn. Oyun Senaryo Yazarı",phDesc:"Bu becerinin ne yaptığını kısaca açıklayın",
+        phTags:"örn. oyun, hikaye, senaryo",phPrompt:"AI'ya gönderilecek sistem promptu...",
+        cancel:"İptal",save:"Kaydet",
+        newChat:"＋ Yeni Sohbet",continueIn:"Devam Et",
+        modeLocal:"Yerel",modeCopilot:"Claude CLI",modeCloud:"Bulut",modeHybrid:"Hibrit",
+        vaultTitle:"🧠 Bilgi Ağı",vaultCfg:"Yolu Değiştir",
+        vaultSearchPh:"🔍 Not ara...",vaultBtn:"Ara",vaultEmpty:"Bir arama terimi girin",
+        vaultLoading:"Yükleniyor...",
+        projChange:"Geçiş ▸",projModalTitle:"📁 Projeler",projNewPh:"Yeni proje adı...",projCreate:"+ Oluştur",
+        orchRun:"▶ Orkestrasyon Başlat",orchStop:"■ Durdur",orchAdd:"＋ Ajan Ekle",
+        orchDesc:"Gerçek zamanlı orkestrasyon için çok ajanlı takım planı girin.",
+        tokenLabel:"🔢 Token kullanımı:",
+        ttlProject:"Projeleri Yönet",ttlBrain:"Bilgi Ağını Senkronize Et",ttlSoti:"Soti-Skill Panosu",
+        ttlSkillBtn:"Beceri CRUD",ttlSettings:"AI Motor Ayarları",ttlEnglish:"İngilizce Öğretmeni",
+        ttlLang:"Dil Seç",ttlMic:"Sesli Giriş",ttlStop:"İptal (Durdur)",
+        langSelectTitle:"Dil Seçin",langSelectHint:"Tercih ettiğiniz dili seçin",langSave:"Onayla",
+    },
+    ar: {
+        brand:"🌰 إبداعاتي الذكية",connecting:"جارٍ الاتصال...",connectedOllama:"PN40 متصل · Ollama ✓",
+        connected:"PN40 متصل",offline:"الخادم غير متصل",sessions:"الجلسات",thinking:"يفكر...",
+        inputPh:"ماذا يمكنني أن أصنع لك؟",inputPhEn:"اكتب بأي لغة — المعلم الإنجليزي نشط",
+        offlineBanner:"📡 الخادم غير متصل — استخدام الاستجابة المخزنة",reconnected:"✅ تم استعادة اتصال الخادم",
+        tabSoti:"🎛️ Soti",tabSkill:"⚡ مهارة",
+        skillAll:"الكل",skillGame:"🎮 ألعاب",skillDoc:"📄 وثيقة",skillCode:"💻 كود",
+        skillResearch:"🔍 بحث",skillMedia:"🎬 وسائط",
+        skillNew:"+ إضافة",skillImport:"↓ استيراد",skillExport:"↑ تصدير",
+        skillEmpty:"⚡ لا توجد مهارات بعد\nاستخدم + إضافة لإنشاء واحدة",
+        skillFormNew:"مهارة جديدة",skillFormEdit:"تعديل المهارة",
+        labelName:"اسم المهارة",labelCat:"الفئة",labelDesc:"الوصف",
+        labelTags:"العلامات (مفصولة بفاصلة)",labelPrompt:"قالب موجّه الذكاء الاصطناعي",
+        phName:"مثال: كاتب سيناريو ألعاب",phDesc:"وصف موجز لما تفعله هذه المهارة",
+        phTags:"مثال: لعبة، قصة، سيناريو",phPrompt:"موجّه النظام للذكاء الاصطناعي...",
+        cancel:"إلغاء",save:"حفظ",
+        newChat:"＋ محادثة جديدة",continueIn:"المتابعة في",
+        modeLocal:"محلي",modeCopilot:"Claude CLI",modeCloud:"سحابي",modeHybrid:"هجين",
+        vaultTitle:"🧠 شبكة المعرفة",vaultCfg:"تغيير المسار",
+        vaultSearchPh:"🔍 بحث في الملاحظات...",vaultBtn:"بحث",vaultEmpty:"أدخل مصطلح بحث",
+        vaultLoading:"جارٍ التحميل...",
+        projChange:"تبديل ▸",projModalTitle:"📁 المشاريع",projNewPh:"اسم المشروع الجديد...",projCreate:"+ إنشاء",
+        orchRun:"▶ تشغيل التنسيق",orchStop:"■ إيقاف",orchAdd:"＋ إضافة وكيل",
+        orchDesc:"أدخل خطة فريق متعدد الوكلاء للتنسيق في الوقت الفعلي.",
+        tokenLabel:"🔢 استخدام الرموز:",
+        ttlProject:"إدارة المشاريع",ttlBrain:"مزامنة شبكة المعرفة",ttlSoti:"لوحة Soti-Skill",
+        ttlSkillBtn:"CRUD المهارات",ttlSettings:"إعدادات محرك الذكاء الاصطناعي",ttlEnglish:"معلم الإنجليزية",
+        ttlLang:"اختر اللغة",ttlMic:"الإدخال الصوتي",ttlStop:"إلغاء (إيقاف)",
+        langSelectTitle:"اختر اللغة",langSelectHint:"اختر لغتك المفضلة",langSave:"تأكيد",
+    },
+    fa: {
+        brand:"🌰 خلاقیت‌های هوش مصنوعی",connecting:"در حال اتصال...",connectedOllama:"PN40 متصل · Ollama ✓",
+        connected:"PN40 متصل",offline:"سرور آفلاین",sessions:"نشست‌ها",thinking:"در حال فکر...",
+        inputPh:"چه چیزی برای شما بسازم؟",inputPhEn:"به هر زبانی بنویسید — معلم انگلیسی فعال است",
+        offlineBanner:"📡 سرور آفلاین — استفاده از پاسخ کش‌شده",reconnected:"✅ اتصال سرور بازیابی شد",
+        tabSoti:"🎛️ سوتی",tabSkill:"⚡ مهارت",
+        skillAll:"همه",skillGame:"🎮 بازی",skillDoc:"📄 سند",skillCode:"💻 کد",
+        skillResearch:"🔍 تحقیق",skillMedia:"🎬 رسانه",
+        skillNew:"+ افزودن",skillImport:"↓ وارد کردن",skillExport:"↑ صادر کردن",
+        skillEmpty:"⚡ هنوز مهارتی وجود ندارد\nبا + افزودن بسازید",
+        skillFormNew:"مهارت جدید",skillFormEdit:"ویرایش مهارت",
+        labelName:"نام مهارت",labelCat:"دسته‌بندی",labelDesc:"توضیحات",
+        labelTags:"برچسب‌ها (با کاما جدا کنید)",labelPrompt:"قالب پرامپت هوش مصنوعی",
+        phName:"مثال: نویسنده سناریوی بازی",phDesc:"توضیح کوتاهی از کارکرد این مهارت",
+        phTags:"مثال: بازی، داستان، سناریو",phPrompt:"پرامپت سیستم برای هوش مصنوعی...",
+        cancel:"لغو",save:"ذخیره",
+        newChat:"＋ چت جدید",continueIn:"ادامه در",
+        modeLocal:"محلی",modeCopilot:"Claude CLI",modeCloud:"ابری",modeHybrid:"ترکیبی",
+        vaultTitle:"🧠 شبکه دانش",vaultCfg:"تغییر مسیر",
+        vaultSearchPh:"🔍 جستجوی یادداشت...",vaultBtn:"جستجو",vaultEmpty:"یک کلمه جستجو وارد کنید",
+        vaultLoading:"در حال بارگذاری...",
+        projChange:"تغییر ▸",projModalTitle:"📁 پروژه‌ها",projNewPh:"نام پروژه جدید...",projCreate:"+ ایجاد",
+        orchRun:"▶ اجرای هماهنگ‌سازی",orchStop:"■ توقف",orchAdd:"＋ افزودن عامل",
+        orchDesc:"برنامه تیم چندعاملی را برای هماهنگ‌سازی بلادرنگ وارد کنید.",
+        tokenLabel:"🔢 مصرف توکن:",
+        ttlProject:"مدیریت پروژه‌ها",ttlBrain:"همگام‌سازی شبکه دانش",ttlSoti:"داشبورد Soti-Skill",
+        ttlSkillBtn:"CRUD مهارت",ttlSettings:"تنظیمات موتور هوش مصنوعی",ttlEnglish:"معلم انگلیسی",
+        ttlLang:"انتخاب زبان",ttlMic:"ورودی صوتی",ttlStop:"لغو (توقف)",
+        langSelectTitle:"انتخاب زبان",langSelectHint:"زبان مورد نظر خود را انتخاب کنید",langSave:"تأیید",
+    },
+    ru: {
+        brand:"🌰 Мои ИИ-творения",connecting:"Подключение...",connectedOllama:"PN40 подключён · Ollama ✓",
+        connected:"PN40 подключён",offline:"Сервер недоступен",sessions:"Сессии",thinking:"Думаю...",
+        inputPh:"Что мне для вас создать?",inputPhEn:"Пишите на любом языке — репетитор английского активен",
+        offlineBanner:"📡 Сервер недоступен — используется кешированный ответ",reconnected:"✅ Соединение с сервером восстановлено",
+        tabSoti:"🎛️ Soti",tabSkill:"⚡ Навык",
+        skillAll:"Все",skillGame:"🎮 Игра",skillDoc:"📄 Документ",skillCode:"💻 Код",
+        skillResearch:"🔍 Исследование",skillMedia:"🎬 Медиа",
+        skillNew:"+ Добавить",skillImport:"↓ Импорт",skillExport:"↑ Экспорт",
+        skillEmpty:"⚡ Навыков нет\nИспользуйте + Добавить для создания",
+        skillFormNew:"Новый навык",skillFormEdit:"Редактировать навык",
+        labelName:"Название навыка",labelCat:"Категория",labelDesc:"Описание",
+        labelTags:"Теги (через запятую)",labelPrompt:"Шаблон промпта ИИ",
+        phName:"напр. Автор игровых сценариев",phDesc:"Краткое описание навыка",
+        phTags:"напр. игра, история, сценарий",phPrompt:"Системный промпт для ИИ...",
+        cancel:"Отмена",save:"Сохранить",
+        newChat:"＋ Новый чат",continueIn:"Продолжить в",
+        modeLocal:"Локальный",modeCopilot:"Claude CLI",modeCloud:"Облако",modeHybrid:"Гибрид",
+        vaultTitle:"🧠 База знаний",vaultCfg:"Изменить путь",
+        vaultSearchPh:"🔍 Поиск заметок...",vaultBtn:"Найти",vaultEmpty:"Введите поисковый запрос",
+        vaultLoading:"Загрузка...",
+        projChange:"Переключить ▸",projModalTitle:"📁 Проекты",projNewPh:"Название нового проекта...",projCreate:"+ Создать",
+        orchRun:"▶ Запустить оркестрацию",orchStop:"■ Стоп",orchAdd:"＋ Добавить агента",
+        orchDesc:"Введите план многоагентной команды для оркестрации в реальном времени.",
+        tokenLabel:"🔢 Использование токенов:",
+        ttlProject:"Управление проектами",ttlBrain:"Синхронизация базы знаний",ttlSoti:"Панель Soti-Skill",
+        ttlSkillBtn:"CRUD навыков",ttlSettings:"Настройки движка ИИ",ttlEnglish:"Репетитор английского",
+        ttlLang:"Выбор языка",ttlMic:"Голосовой ввод",ttlStop:"Отмена (Стоп)",
+        langSelectTitle:"Выбор языка",langSelectHint:"Выберите предпочитаемый язык",langSave:"Подтвердить",
+    },
+};
+
+let lang = "ko";
+function t(key) { return (I18N[lang] || I18N.ko)[key] ?? I18N.ko[key] ?? key; }
+
+function applyI18n(l) {
+    lang = l || "ko";
+    const rtl = lang === "ar" || lang === "fa";
+    document.documentElement.lang = lang;
+    document.body.dir = rtl ? "rtl" : "ltr";
+
+    const s = (id, key, attr) => {
+        const el = document.getElementById(id);
+        if (!el) { return; }
+        if (attr === "ph") { el.placeholder = t(key); }
+        else if (attr === "title") { el.title = t(key); }
+        else { el.textContent = t(key); }
+    };
+    const q = (sel, key, attr) => {
+        const el = document.querySelector(sel);
+        if (!el) { return; }
+        if (attr === "ph") { el.placeholder = t(key); }
+        else if (attr === "title") { el.title = t(key); }
+        else { el.textContent = t(key); }
+    };
+
+    // Header
+    q(".brand", "brand");
+    s("offlineBanner", "offlineBanner");
+    q(".proj-bar-change", "projChange");
+    s("projBtn", "ttlProject", "title");
+    s("brainBtn", "ttlBrain", "title");
+    s("soticBtn", "ttlSoti", "title");
+    s("skillBtn", "ttlSkillBtn", "title");
+    s("gearBtn", "ttlSettings", "title");
+    s("enBtn", "ttlEnglish", "title");
+    s("langBtn", "ttlLang", "title");
+    s("micBtn", "ttlMic", "title");
+    s("stopBtn", "ttlStop", "title");
+
+    // Session
+    q(".sess-label", "sessions");
+
+    // Tabs
+    s("dashTab", "tabSoti");
+    s("skillTab", "tabSkill");
+
+    // Input placeholder
+    s("promptInput", englishMode ? "inputPhEn" : "inputPh", "ph");
+
+    // Token bar (preserve count span)
+    const tb = document.getElementById("tokenBar");
+    if (tb) {
+        const cnt = (document.getElementById("tokenCount") || {}).textContent || "0";
+        tb.innerHTML = t("tokenLabel") + " <span id='tokenCount'>" + cnt + "</span> tokens";
+    }
+
+    // Vault
+    q(".vault-title", "vaultTitle");
+    s("vaultCfgBtn", "vaultCfg");
+    s("vaultSearchInput", "vaultSearchPh", "ph");
+    s("vaultSearchBtn", "vaultBtn");
+    q("#vaultResults .vault-empty", "vaultEmpty");
+
+    // Dashboard
+    s("orchRun", "orchRun");
+    s("orchStop", "orchStop");
+    s("orchAddAgent", "orchAdd");
+    q("#dashArea > div:nth-child(2)", "orchDesc");
+
+    // Skill category buttons
+    const catKeys = { all:"skillAll", game:"skillGame", document:"skillDoc",
+                      code:"skillCode", research:"skillResearch", media:"skillMedia" };
+    document.querySelectorAll(".cat-btn[data-cat]").forEach(btn => {
+        if (catKeys[btn.dataset.cat]) { btn.textContent = t(catKeys[btn.dataset.cat]); }
+    });
+
+    // Skill IO buttons + new
+    s("skillImportBtn", "skillImport");
+    s("skillExportBtn", "skillExport");
+    s("skillNewBtn", "skillNew");
+
+    // Skill form
+    s("sfLabelName", "labelName");
+    s("sfLabelCat", "labelCat");
+    s("sfLabelDesc", "labelDesc");
+    s("sfLabelTags", "labelTags");
+    s("sfLabelPrompt", "labelPrompt");
+    s("sfName", "phName", "ph");
+    s("sfDesc", "phDesc", "ph");
+    s("sfTags", "phTags", "ph");
+    s("sfPrompt", "phPrompt", "ph");
+    s("sfCancel", "cancel");
+    s("sfSave", "save");
+
+    // Skill select options
+    const optKeys = { game:"skillGame", document:"skillDoc", code:"skillCode",
+                      research:"skillResearch", media:"skillMedia" };
+    document.querySelectorAll("#sfCategory option").forEach(opt => {
+        if (optKeys[opt.value]) { opt.textContent = t(optKeys[opt.value]); }
+    });
+
+    // Skill empty
+    const se = document.querySelector(".skill-empty");
+    if (se) { se.innerHTML = t("skillEmpty").replace("\n", "<br>"); }
+
+    // Mode dropdown
+    q("#newChatItem > span:first-child", "newChat");
+    q(".drop-continue", "continueIn");
+    document.querySelectorAll("[data-i18n-cat]").forEach(el => {
+        const key = "mode" + el.dataset.i18nCat.charAt(0).toUpperCase() + el.dataset.i18nCat.slice(1);
+        el.textContent = t(key);
+    });
+
+    // Project modal
+    q("#projOverlay .proj-modal-hdr span", "projModalTitle");
+    s("projNewInput", "projNewPh", "ph");
+    s("projNewBtn", "projCreate");
+
+    // Language modal labels
+    s("langModalTitle", "langSelectTitle");
+    s("langModalHint", "langSelectHint");
+    s("langConfirm", "langSave");
+    // Mark selected lang option
+    document.querySelectorAll(".lang-opt").forEach(btn => {
+        btn.classList.toggle("lang-opt-sel", btn.dataset.lang === lang);
+    });
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 const vscode = acquireVsCodeApi();
 let mode = "hybrid", model = "gemma3:1b", englishMode = false;
 let sessions = [], curId = "", totalTokens = 0;
@@ -25,21 +338,21 @@ window.addEventListener("message", e => {
             sessions = m.sessions; curId = m.currentId;
             mode = m.mode; model = m.model;
             englishMode = m.englishMode; totalTokens = m.totalTokens;
+            applyI18n(m.language || lang);
             renderSessions(); renderChat(); updateModeLabel(); updateTokenBarVisibility();
             document.getElementById("enBtn").classList.toggle("on", englishMode);
             document.getElementById("enBadge").style.display = englishMode ? "inline" : "none";
-            document.getElementById("promptInput").placeholder = englishMode
-                ? "Type in any language — English tutor active" : "무엇을 만들어 드릴까요?";
             if (m.currentProject) { currentProject = m.currentProject; updateProjBar(); }
             const wsBadge = document.getElementById("wsBadge");
             if (wsBadge) { wsBadge.textContent = m.workspace ? "· " + m.workspace : ""; }
+            if (m.firstRun) { openLangModal(true); }
             break;
         case "serverStatus": {
             const ollamaOk = m.data && (m.data.ollama || m.data.ollama_running || m.data.ollama_status === "ok");
             const connected = !!m.data;
             document.getElementById("dot").classList.toggle("ok", connected);
             document.getElementById("statusTxt").textContent = ollamaOk
-                ? "PN40 연결됨 · Ollama ✓" : (connected ? "PN40 연결됨" : "서버 연결 안됨");
+                ? t("connectedOllama") : (connected ? t("connected") : t("offline"));
             break;
         }
         case "models":
@@ -306,7 +619,7 @@ function handleOfflineStatus(online) {
     if (!banner) { return; }
     if (online) {
         banner.classList.remove("show");
-        showCtxToast("✅ 서버 연결 복구됨");
+        showCtxToast(t("reconnected"));
     } else {
         banner.classList.add("show");
     }
@@ -405,7 +718,7 @@ function showSkillForm(id) {
     editingSkillId = id || null;
     const wrap = document.getElementById("skillFormWrap");
     wrap.style.display = "";
-    document.getElementById("skillFormTitle").textContent = id ? "스킬 편집" : "새 스킬";
+    document.getElementById("skillFormTitle").textContent = id ? t("skillFormEdit") : t("skillFormNew");
     if (id) {
         const sk = skills.find(s => s.id === id);
         if (!sk) { return; }
@@ -1144,4 +1457,42 @@ let _isListening = false;
         }
     };
 })();
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── 언어 선택 모달 ─────────────────────────────────────────────────────────────
+let _pendingLang = lang;
+let _isFirstRun = false;
+
+function openLangModal(firstRun) {
+    _isFirstRun = !!firstRun;
+    _pendingLang = lang;
+    applyI18n(lang); // refresh modal labels
+    document.getElementById("langOverlay").classList.add("show");
+}
+
+function closeLangModal() {
+    if (_isFirstRun) { return; } // cannot close without selecting on first run
+    document.getElementById("langOverlay").classList.remove("show");
+}
+
+document.querySelectorAll(".lang-opt").forEach(btn => {
+    btn.addEventListener("click", () => {
+        _pendingLang = btn.dataset.lang;
+        document.querySelectorAll(".lang-opt").forEach(b => b.classList.toggle("lang-opt-sel", b === btn));
+    });
+});
+
+document.getElementById("langConfirm").addEventListener("click", () => {
+    if (!_pendingLang) { return; }
+    vscode.postMessage({ type: "setLanguage", lang: _pendingLang });
+    applyI18n(_pendingLang);
+    document.getElementById("langOverlay").classList.remove("show");
+    _isFirstRun = false;
+});
+
+document.getElementById("langOverlay").addEventListener("click", e => {
+    if (e.target === document.getElementById("langOverlay")) { closeLangModal(); }
+});
+
+document.getElementById("langBtn").addEventListener("click", () => openLangModal(false));
 // ─────────────────────────────────────────────────────────────────────────────

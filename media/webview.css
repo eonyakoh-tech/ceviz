@@ -200,6 +200,29 @@ body{font-family:var(--vscode-font-family);font-size:12px;color:var(--vscode-for
 .ctx-toast{position:fixed;bottom:64px;left:50%;transform:translateX(-50%);background:var(--vscode-editor-background);color:var(--vscode-foreground);border:1px solid var(--vscode-focusBorder);border-radius:5px;padding:6px 14px;font-size:11px;z-index:9999;opacity:0;pointer-events:none;transition:opacity .3s;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis}
 .ctx-toast.show{opacity:1}
 
+/* ── 언어 선택 모달 ─────────────────────────────────────────────────────────── */
+.lang-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;align-items:center;justify-content:center}
+.lang-overlay.show{display:flex}
+.lang-modal{background:var(--vscode-editor-background);border:1px solid var(--vscode-panel-border);border-radius:10px;padding:22px 20px 18px;width:260px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.lang-modal-title{font-size:14px;font-weight:700;text-align:center;margin-bottom:4px}
+.lang-modal-hint{font-size:11px;color:var(--vscode-descriptionForeground);text-align:center;margin-bottom:14px}
+.lang-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:14px}
+.lang-opt{background:var(--vscode-input-background);color:var(--vscode-foreground);border:1px solid var(--vscode-panel-border);border-radius:6px;padding:8px 6px;cursor:pointer;font-size:12px;text-align:center;font-family:var(--vscode-font-family);transition:all .15s}
+.lang-opt:hover{border-color:var(--vscode-focusBorder);background:var(--vscode-list-hoverBackground)}
+.lang-opt.lang-opt-sel{border-color:var(--vscode-focusBorder);background:var(--vscode-list-activeSelectionBackground);color:var(--vscode-list-activeSelectionForeground);font-weight:700}
+.lang-confirm{width:100%;background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;border-radius:5px;padding:8px;cursor:pointer;font-size:12px;font-family:var(--vscode-font-family)}
+.lang-confirm:hover{background:var(--vscode-button-hoverBackground)}
+
+/* ── RTL 지원 (아랍어·페르시아어) ────────────────────────────────────────────── */
+body[dir="rtl"] .hdr-top{flex-direction:row-reverse}
+body[dir="rtl"] .icon-row{flex-direction:row-reverse}
+body[dir="rtl"] .sess-hdr{flex-direction:row-reverse}
+body[dir="rtl"] .skill-top{flex-direction:row-reverse}
+body[dir="rtl"] .inp-row{flex-direction:row-reverse}
+body[dir="rtl"] .sf-actions{flex-direction:row-reverse}
+body[dir="rtl"] .lang-grid{direction:rtl}
+body[dir="rtl"] .drop-menu{text-align:right}
+
 /* ── CODE CONTEXT ── */
 .code-ctx{display:none;margin:4px 0 2px;border:1px solid var(--vscode-focusBorder);border-radius:5px;overflow:hidden;flex-shrink:0;background:var(--vscode-editor-background)}
 .code-ctx.show{display:block}

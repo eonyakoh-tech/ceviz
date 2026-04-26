@@ -74,6 +74,7 @@ export class CevizPanel implements vscode.WebviewViewProvider {
     private _isOnline = false;
     private _responseCache: CacheEntry[] = [];
     private static readonly CACHE_MAX = 20;
+    private _language = "";
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -83,6 +84,7 @@ export class CevizPanel implements vscode.WebviewViewProvider {
         this._skills         = this._context.globalState.get("ceviz.skills",   []);
         this._currentProject = this._context.globalState.get("ceviz.currentProject", "");
         this._responseCache  = this._context.globalState.get("ceviz.responseCache", []);
+        this._language       = this._context.globalState.get("ceviz.language", "");
         if (this._sessions.length === 0) { this._createSession(); }
         else { this._currentSessionId = this._sessions[this._sessions.length - 1].id; }
     }
@@ -195,7 +197,9 @@ export class CevizPanel implements vscode.WebviewViewProvider {
             englishMode: this._englishMode,
             totalTokens: this._totalTokens,
             currentProject: this._currentProject,
-            workspace: wsName
+            workspace: wsName,
+            language: this._language || "ko",
+            firstRun: !this._language
         });
     }
 
@@ -291,6 +295,12 @@ export class CevizPanel implements vscode.WebviewViewProvider {
 
                 case "deleteSkill":
                     await this._deleteSkill(msg.id);
+                    break;
+
+                case "setLanguage":
+                    this._language = msg.lang;
+                    this._context.globalState.update("ceviz.language", msg.lang);
+                    this._sync();
                     break;
 
                 case "exportSkills":
@@ -1106,6 +1116,7 @@ ${response}
       <button class="ibtn" id="skillBtn" title="Skill CRUD">⚡</button>
       <button class="ibtn" id="gearBtn" title="AI 엔진 설정">⚙️</button>
       <button class="ibtn" id="enBtn" title="영어 튜터 모드">En</button>
+      <button class="ibtn" id="langBtn" title="언어 선택">🌐</button>
     </div>
   </div>
   <div class="status">
@@ -1204,11 +1215,11 @@ ${response}
     </div>
     <div class="skill-form">
       <div class="sf-field">
-        <label class="sf-label" for="sfName">스킬 이름 <span class="sf-req">*</span></label>
+        <label class="sf-label" for="sfName"><span id="sfLabelName">스킬 이름</span> <span class="sf-req">*</span></label>
         <input class="sf-input sf-name-input" type="text" id="sfName" placeholder="예: 게임 시나리오 작가">
       </div>
       <div class="sf-field">
-        <label class="sf-label" for="sfCategory">카테고리</label>
+        <label class="sf-label" for="sfCategory"><span id="sfLabelCat">카테고리</span></label>
         <select class="sf-input" id="sfCategory">
           <option value="game">🎮 게임</option>
           <option value="document">📄 문서</option>
@@ -1218,15 +1229,15 @@ ${response}
         </select>
       </div>
       <div class="sf-field">
-        <label class="sf-label" for="sfDesc">설명</label>
+        <label class="sf-label" for="sfDesc"><span id="sfLabelDesc">설명</span></label>
         <input class="sf-input" type="text" id="sfDesc" placeholder="이 스킬이 하는 일을 간단히 설명">
       </div>
       <div class="sf-field">
-        <label class="sf-label" for="sfTags">태그 (쉼표로 구분)</label>
+        <label class="sf-label" for="sfTags"><span id="sfLabelTags">태그 (쉼표로 구분)</span></label>
         <input class="sf-input" type="text" id="sfTags" placeholder="예: 게임, 스토리, 시나리오">
       </div>
       <div class="sf-field">
-        <label class="sf-label" for="sfPrompt">AI 프롬프트 템플릿</label>
+        <label class="sf-label" for="sfPrompt"><span id="sfLabelPrompt">AI 프롬프트 템플릿</span></label>
         <textarea class="sf-input sf-textarea" id="sfPrompt" rows="4" placeholder="AI에게 전달할 시스템 프롬프트..."></textarea>
       </div>
       <div class="sf-actions">
@@ -1270,7 +1281,7 @@ ${response}
         <div class="drop-continue">Continue In</div>
         <div class="drop-category">
           <span class="drop-cat-icon">🖥</span>
-          <span class="drop-cat-label">Local</span>
+          <span class="drop-cat-label" data-i18n-cat="local">Local</span>
         </div>
         <div class="drop-item" data-mode="local" data-model="gemma3:1b"><span class="drop-model-icon">✦</span>Gemma 3 1B</div>
         <div class="drop-item" data-mode="local" data-model="gemma4:e2b"><span class="drop-model-icon">✦</span>Gemma 4 E2B</div>
@@ -1278,19 +1289,19 @@ ${response}
         <div class="drop-sep"></div>
         <div class="drop-category">
           <span class="drop-cat-icon">⌨</span>
-          <span class="drop-cat-label">Claude CLI</span>
+          <span class="drop-cat-label" data-i18n-cat="copilot">Claude CLI</span>
         </div>
         <div class="drop-item" data-mode="copilot" data-model="claude-cli"><span class="drop-model-icon" style="background:#1a2a3e;color:#569cd6">⊕</span>Claude CLI</div>
         <div class="drop-sep"></div>
         <div class="drop-category">
           <span class="drop-cat-icon">☁</span>
-          <span class="drop-cat-label">Cloud</span>
+          <span class="drop-cat-label" data-i18n-cat="cloud">Cloud</span>
         </div>
         <div class="drop-item" data-mode="cloud" data-model="claude"><span class="drop-model-icon" style="background:#2d1b4e;color:#c586c0">✳</span>Claude</div>
         <div class="drop-sep"></div>
         <div class="drop-category">
           <span class="drop-cat-icon">🌐</span>
-          <span class="drop-cat-label">Hybrid</span>
+          <span class="drop-cat-label" data-i18n-cat="hybrid">Hybrid</span>
         </div>
         <div class="drop-item selected" data-mode="hybrid" data-model="gemma3:1b"><span class="drop-model-icon">✦</span>Gemma 3 1B</div>
         <div class="drop-item" data-mode="hybrid" data-model="gemma4:e2b"><span class="drop-model-icon">✦</span>Gemma 4 E2B</div>
@@ -1318,6 +1329,23 @@ ${response}
     </div>
   </div>
 </div>
+<!-- 언어 선택 모달 -->
+<div class="lang-overlay" id="langOverlay">
+  <div class="lang-modal">
+    <div class="lang-modal-title" id="langModalTitle">언어 선택</div>
+    <div class="lang-modal-hint" id="langModalHint">사용할 언어를 선택하세요</div>
+    <div class="lang-grid">
+      <button class="lang-opt" data-lang="ko">🇰🇷 한국어</button>
+      <button class="lang-opt" data-lang="en">🇺🇸 English</button>
+      <button class="lang-opt" data-lang="tr">🇹🇷 Türkçe</button>
+      <button class="lang-opt" data-lang="ar">🇸🇦 العربية</button>
+      <button class="lang-opt" data-lang="fa">🇮🇷 فارسی</button>
+      <button class="lang-opt" data-lang="ru">🇷🇺 Русский</button>
+    </div>
+    <button class="lang-confirm" id="langConfirm">확인</button>
+  </div>
+</div>
+
 <!-- 컨텍스트 업데이트 토스트 -->
 <div class="ctx-toast" id="ctxToast"></div>
 <script nonce="${nonce}" src="${scriptUri}"></script>
