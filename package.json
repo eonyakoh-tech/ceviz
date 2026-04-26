@@ -1,8 +1,9 @@
 {
   "name": "ceviz",
   "displayName": "CEVIZ",
-  "description": "Local Personal Hybrid AI",
+  "description": "Local Personal Hybrid AI — Local/Cloud/Hybrid AI chat in VS Code sidebar",
   "version": "0.2.0",
+  "publisher": "eonyakoh",
   "engines": { "vscode": "^1.80.0" },
   "categories": ["Other"],
   "activationEvents": [],
