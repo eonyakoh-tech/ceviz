@@ -1081,3 +1081,67 @@ document.getElementById("projNewInput").addEventListener("keydown", e => {
     if (e.key === "Enter") { createProject(); }
     if (e.key === "Escape") { closeProjModal(); }
 });
+
+// ── 음성 입력 (Web Speech API) ────────────────────────────────────────────────
+let _recognition = null;
+let _isListening = false;
+
+(function initSpeech() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const micBtn = document.getElementById("micBtn");
+    if (!SpeechRecognition) {
+        micBtn.title = "이 환경에서 음성 입력이 지원되지 않습니다";
+        micBtn.style.opacity = "0.3";
+        micBtn.disabled = true;
+        return;
+    }
+    _recognition = new SpeechRecognition();
+    _recognition.continuous = false;
+    _recognition.interimResults = true;
+
+    _recognition.onstart = () => {
+        _isListening = true;
+        micBtn.classList.add("mic-on");
+        micBtn.title = "듣는 중... (클릭하여 중지)";
+    };
+
+    _recognition.onresult = (e) => {
+        let interim = "", final = "";
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+            const t = e.results[i][0].transcript;
+            if (e.results[i].isFinal) { final += t; } else { interim += t; }
+        }
+        const inp = document.getElementById("promptInput");
+        const base = inp.dataset.speechBase || inp.value;
+        inp.value = base + (final || interim);
+        if (final) { inp.dataset.speechBase = ""; }
+        inp.style.height = "auto";
+        inp.style.height = Math.min(inp.scrollHeight, 120) + "px";
+    };
+
+    _recognition.onend = () => {
+        _isListening = false;
+        micBtn.classList.remove("mic-on");
+        micBtn.title = "음성 입력 (한국어/영어)";
+        const inp = document.getElementById("promptInput");
+        delete inp.dataset.speechBase;
+    };
+
+    _recognition.onerror = (e) => {
+        _isListening = false;
+        micBtn.classList.remove("mic-on");
+        if (e.error !== "aborted") { showCtxToast("🎙 음성 오류: " + e.error); }
+    };
+
+    micBtn.onclick = () => {
+        if (_isListening) {
+            _recognition.stop();
+        } else {
+            _recognition.lang = englishMode ? "en-US" : "ko-KR";
+            const inp = document.getElementById("promptInput");
+            inp.dataset.speechBase = inp.value;
+            _recognition.start();
+        }
+    };
+})();
+// ─────────────────────────────────────────────────────────────────────────────

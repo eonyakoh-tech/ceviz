@@ -1251,6 +1251,7 @@ ${response}
   </div>
   <div class="inp-row">
     <textarea class="prompt" id="promptInput" placeholder="무엇을 만들어 드릴까요?" rows="1"></textarea>
+    <button class="mic-btn" id="micBtn" title="음성 입력 (한국어/영어)">🎙</button>
     <button class="send" id="sendBtn">↑</button>
     <button class="stop-btn" id="stopBtn" title="전송 취소 (Stop)">■</button>
   </div>

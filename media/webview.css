@@ -72,6 +72,9 @@ body{font-family:var(--vscode-font-family);font-size:12px;color:var(--vscode-for
 .prompt:focus{border-color:var(--vscode-focusBorder)}
 .send{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;border-radius:4px;padding:5px 10px;cursor:pointer;font-size:14px;flex-shrink:0}
 .send:hover{background:var(--vscode-button-hoverBackground)}
+.mic-btn{background:none;border:1px solid var(--vscode-panel-border);color:var(--vscode-foreground);border-radius:4px;padding:4px 7px;cursor:pointer;font-size:13px;flex-shrink:0;opacity:.6;transition:all .15s}
+.mic-btn:hover{opacity:1;border-color:var(--vscode-focusBorder)}
+.mic-btn.mic-on{opacity:1;color:#f00;border-color:#f00;animation:stopPulse 1s infinite}
 .stop-btn{display:none;background:#b33;color:#fff;border:none;border-radius:4px;padding:5px 9px;cursor:pointer;font-size:13px;flex-shrink:0;animation:stopPulse 1s infinite}
 .stop-btn:hover{background:#d44}
 .stop-btn.visible{display:block}
