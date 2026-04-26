@@ -15,6 +15,8 @@ body{font-family:var(--vscode-font-family);font-size:12px;color:var(--vscode-for
 .dot.ok{background:#4c4}
 .token-bar{display:none;margin-top:4px;padding:3px 6px;background:var(--vscode-inputValidation-infoBackground);border-radius:3px;font-size:10px;color:var(--vscode-foreground)}
 .token-bar.show{display:block}
+.offline-banner{display:none;padding:4px 10px;background:#5a1515;color:#ff9090;font-size:10px;text-align:center;flex-shrink:0;letter-spacing:.2px}
+.offline-banner.show{display:block}
 
 .sess{padding:2px 8px 3px;border-bottom:1px solid var(--vscode-panel-border);flex-shrink:0}
 .sess-hdr{display:flex;align-items:center;gap:4px}

@@ -46,6 +46,15 @@ interface Project {
     lastActive: string;
 }
 
+interface CacheEntry {
+    prompt: string;
+    result: string;
+    agent?: string;
+    engine?: string;
+    tier?: number;
+    timestamp: number;
+}
+
 export class CevizPanel implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private _sessions: Session[] = [];
@@ -62,6 +71,9 @@ export class CevizPanel implements vscode.WebviewViewProvider {
     private _currentProject = "";
     private _orchStream?: NodeJS.ReadableStream;
     private _copilotProcess?: cp.ChildProcess;
+    private _isOnline = false;
+    private _responseCache: CacheEntry[] = [];
+    private static readonly CACHE_MAX = 20;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -70,6 +82,7 @@ export class CevizPanel implements vscode.WebviewViewProvider {
         this._sessions       = this._context.globalState.get("ceviz.sessions", []);
         this._skills         = this._context.globalState.get("ceviz.skills",   []);
         this._currentProject = this._context.globalState.get("ceviz.currentProject", "");
+        this._responseCache  = this._context.globalState.get("ceviz.responseCache", []);
         if (this._sessions.length === 0) { this._createSession(); }
         else { this._currentSessionId = this._sessions[this._sessions.length - 1].id; }
     }
@@ -126,21 +139,36 @@ export class CevizPanel implements vscode.WebviewViewProvider {
 
     private async _checkServerStatus() {
         const url = `${this._getUrl()}/status`;
-        console.log("CEVIZ: _checkServerStatus →", url);
         try {
             const r = await axios.get(url, { timeout: 5000 });
-            console.log("CEVIZ: server ok →", JSON.stringify(r.data).slice(0, 120));
+            const wasOnline = this._isOnline;
+            this._isOnline = true;
             this._view?.webview.postMessage({ type: "serverStatus", data: r.data });
+            if (!wasOnline) {
+                this._view?.webview.postMessage({ type: "offlineStatus", online: true });
+            }
         } catch (e: any) {
-            console.log("CEVIZ: server error →", e.message);
+            const wasOnline = this._isOnline;
+            this._isOnline = false;
             this._view?.webview.postMessage({ type: "serverStatus", data: null });
+            if (wasOnline) {
+                this._view?.webview.postMessage({ type: "offlineStatus", online: false });
+            }
         }
     }
 
+    private _scheduleNextPoll() {
+        if (this._statusTimer) { clearTimeout(this._statusTimer); }
+        const interval = this._isOnline ? 15000 : 5000;
+        this._statusTimer = setTimeout(async () => {
+            await this._checkServerStatus();
+            this._scheduleNextPoll();
+        }, interval);
+    }
+
     private _startStatusPolling() {
-        if (this._statusTimer) { clearInterval(this._statusTimer); }
-        this._checkServerStatus();
-        this._statusTimer = setInterval(() => this._checkServerStatus(), 15000);
+        if (this._statusTimer) { clearTimeout(this._statusTimer); }
+        this._checkServerStatus().then(() => this._scheduleNextPoll());
     }
 
     private _sync() {
@@ -394,6 +422,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
             session.messages.push(msg);
             this._lastCloudResponse = isCloud ? msg : null;
             this._context.globalState.update("ceviz.sessions", this._sessions);
+            this._cacheResponse(prompt, d.result, d.agent, d.engine, d.tier);
 
             this._view?.webview.postMessage({
                 type: "assistantMsg",
@@ -421,18 +450,81 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
                 session.messages.pop();
                 this._view?.webview.postMessage({ type: "requestCanceled" });
             } else {
-                this._view?.webview.postMessage({
-                    type: "assistantMsg",
-                    content: "❌ 오류: " + e.message,
-                    agent: "system", tier: 0
-                });
-                if (this._currentProject) {
-                    this._appendIssue(this._currentProject, e.message);
+                const isNetErr = !e.response && (
+                    ["ECONNREFUSED","ETIMEDOUT","ENOTFOUND","ENETUNREACH","ERR_NETWORK"].includes(e.code) ||
+                    e.message?.toLowerCase().includes("network") ||
+                    e.message?.toLowerCase().includes("connect")
+                );
+                if (isNetErr) {
+                    const cached = this._findCachedResponse(prompt);
+                    if (cached) {
+                        const cachedMsg: Message = {
+                            role: "assistant",
+                            content: cached.result + "\n\n_(📦 캐시 응답 · 오프라인)_",
+                            agent: cached.agent || "cache",
+                            tier: 0,
+                            engine: cached.engine
+                        };
+                        session.messages.push(cachedMsg);
+                        this._context.globalState.update("ceviz.sessions", this._sessions);
+                        this._view?.webview.postMessage({
+                            type: "assistantMsg",
+                            content: cachedMsg.content,
+                            agent: cachedMsg.agent,
+                            tier: 0,
+                            engine: cachedMsg.engine
+                        });
+                    } else {
+                        session.messages.pop();
+                        this._view?.webview.postMessage({
+                            type: "assistantMsg",
+                            content: "📡 서버 오프라인. 캐시된 응답이 없습니다.\n연결이 복구되면 자동으로 재시도할 수 있습니다.",
+                            agent: "system", tier: 0
+                        });
+                    }
+                } else {
+                    this._view?.webview.postMessage({
+                        type: "assistantMsg",
+                        content: "❌ 오류: " + e.message,
+                        agent: "system", tier: 0
+                    });
+                    if (this._currentProject) {
+                        this._appendIssue(this._currentProject, e.message);
+                    }
                 }
             }
         } finally {
             this._abortController = undefined;
         }
+    }
+
+    // ── 응답 캐시 (오프라인 폴백용) ───────────────────────────────────────────
+
+    private _cacheResponse(prompt: string, result: string, agent?: string, engine?: string, tier?: number) {
+        this._responseCache = this._responseCache.filter(e => e.prompt !== prompt);
+        this._responseCache.unshift({ prompt, result, agent, engine, tier, timestamp: Date.now() });
+        if (this._responseCache.length > CevizPanel.CACHE_MAX) {
+            this._responseCache = this._responseCache.slice(0, CevizPanel.CACHE_MAX);
+        }
+        this._context.globalState.update("ceviz.responseCache", this._responseCache);
+    }
+
+    private _findCachedResponse(prompt: string): CacheEntry | null {
+        const exact = this._responseCache.find(e => e.prompt === prompt);
+        if (exact) { return exact; }
+
+        const words = prompt.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+        if (words.length === 0) { return null; }
+
+        let best: CacheEntry | null = null;
+        let bestScore = 0;
+        for (const entry of this._responseCache) {
+            const ew = entry.prompt.toLowerCase().split(/\s+/);
+            const overlap = words.filter(w => ew.some(e => e.includes(w) || w.includes(e))).length;
+            const score = overlap / words.length;
+            if (score > bestScore && score >= 0.4) { bestScore = score; best = entry; }
+        }
+        return best;
     }
 
     // ── CLAUDE CODE CLI (터미널 위임 방식) ────────────────────────────────────
@@ -960,6 +1052,9 @@ ${response}
     <span class="proj-bar-change">전환 ▸</span>
   </div>
 </div>
+
+<!-- 오프라인 배너 -->
+<div class="offline-banner" id="offlineBanner">📡 서버 오프라인 — 캐시 응답 사용 중</div>
 
 <!-- 세션 -->
 <div class="sess">

@@ -153,6 +153,9 @@ window.addEventListener("message", e => {
         case "claudeEnd":
             finalizeStreamMsg(m.agent, m.engine, m.duration);
             break;
+        case "offlineStatus":
+            handleOfflineStatus(m.online);
+            break;
     }
 });
 
@@ -290,6 +293,17 @@ function updateTokenBarVisibility() {
         bar.classList.add("show");
     } else {
         bar.classList.remove("show");
+    }
+}
+
+function handleOfflineStatus(online) {
+    const banner = document.getElementById("offlineBanner");
+    if (!banner) { return; }
+    if (online) {
+        banner.classList.remove("show");
+        showCtxToast("✅ 서버 연결 복구됨");
+    } else {
+        banner.classList.add("show");
     }
 }
 
