@@ -575,6 +575,26 @@ window.addEventListener("message", e => {
             openModelMgr();
             break;
 
+        // Phase 20: 자가 진화
+        case "evoFilePicked":
+        case "evoAbsorbDone":
+        case "evoProposing":
+        case "evoPromptProposal":
+        case "evoPromptApplied":
+        case "evoPromptRolledBack":
+        case "evoDetecting":
+        case "evoModelDetected":
+        case "evoAutoRejected":
+        case "evoCodeProposal":
+        case "evoCompiling":
+        case "evoCodeApplied":
+        case "evoCodeCanceled":
+        case "evoCodeRolledBack":
+        case "evoHistory":
+        case "evoError":
+            handleEvoMessage(m);
+            break;
+
         case "rssFeeds":
             renderRssFeeds(m.feeds);
             break;
@@ -2041,6 +2061,316 @@ document.getElementById("rssFetchNowBtn").addEventListener("click", () => {
 document.getElementById("rssAckAllBtn").addEventListener("click", () => {
     vscode.postMessage({ type: "rssAckAll" });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── 자가 진화 시스템 (Phase 20) ────────────────────────────────────────────────
+
+let _evoPendingProposedText = "";
+let _evoPendingExplanation  = "";
+
+function openEvo() {
+    document.getElementById("evoOverlay").classList.add("show");
+    vscode.postMessage({ type: "evoGetHistory" });
+}
+
+function closeEvo() {
+    document.getElementById("evoOverlay").classList.remove("show");
+}
+
+function evoSwitchTab(tab) {
+    ["A","B","C","D"].forEach(t => {
+        document.getElementById("evoTab"  + t).classList.toggle("on", t === tab);
+        document.getElementById("evoPanel" + t).style.display = t === tab ? "" : "none";
+    });
+}
+
+function evoSetResult(elId, html, ok) {
+    const el = document.getElementById(elId);
+    if (!el) { return; }
+    el.innerHTML = '<span style="color:' + (ok ? "#4ec9b0" : "var(--vscode-errorForeground)") + '">' + html + '</span>';
+}
+
+// ── 탭 이벤트 ──────────────────────────────────────────────────────────────
+["A","B","C","D"].forEach(t => {
+    document.getElementById("evoTab" + t).addEventListener("click", () => evoSwitchTab(t));
+});
+
+document.getElementById("evoBtn").addEventListener("click", openEvo);
+document.getElementById("evoCloseBtn").addEventListener("click", closeEvo);
+document.getElementById("evoOverlay").addEventListener("click", e => {
+    if (e.target === document.getElementById("evoOverlay")) { closeEvo(); }
+});
+
+// ── A단계: RAG 흡수 ────────────────────────────────────────────────────────
+
+document.getElementById("evoPickFileBtn").addEventListener("click", () => {
+    vscode.postMessage({ type: "evoPickFile" });
+});
+
+document.getElementById("evoAbsorbBtn").addEventListener("click", () => {
+    const collection = document.getElementById("evoCollection").value;
+    const content    = document.getElementById("evoPreviewBody").textContent;
+    const filePath   = document.getElementById("evoPreviewFname").dataset.path || "";
+    document.getElementById("evoAbsorbBtn").disabled = true;
+    document.getElementById("evoAbsorbBtn").textContent = "학습 중...";
+    vscode.postMessage({ type: "evoAbsorb", content, filePath, collection });
+});
+
+// ── B단계: 시스템 프롬프트 ─────────────────────────────────────────────────
+
+document.getElementById("evoProposePromptBtn").addEventListener("click", () => {
+    document.getElementById("evoDiffArea").style.display = "none";
+    vscode.postMessage({ type: "evoProposePrompt" });
+    document.getElementById("evoProposePromptBtn").disabled = true;
+    document.getElementById("evoProposePromptBtn").textContent = "분석 중...";
+});
+
+document.getElementById("evoApplyPromptBtn").addEventListener("click", () => {
+    if (!_evoPendingProposedText) { return; }
+    vscode.postMessage({
+        type: "evoApplyPrompt",
+        proposedText: _evoPendingProposedText,
+        explanation: _evoPendingExplanation
+    });
+});
+
+document.getElementById("evoRejectPromptBtn").addEventListener("click", () => {
+    document.getElementById("evoDiffArea").style.display = "none";
+    _evoPendingProposedText = "";
+    evoSetResult("evoPromptResult", "거부됨.", false);
+});
+
+document.getElementById("evoRollbackPromptBtn").addEventListener("click", () => {
+    if (!confirm("이전 시스템 프롬프트로 롤백하시겠습니까?")) { return; }
+    vscode.postMessage({ type: "evoRollbackPrompt" });
+});
+
+// ── C단계: 모델 감지 ───────────────────────────────────────────────────────
+
+document.getElementById("evoDetectModelBtn").addEventListener("click", () => {
+    const text = document.getElementById("evoModelScanText").value.trim();
+    if (!text) { evoSetResult("evoModelList", "텍스트를 입력하세요.", false); return; }
+    document.getElementById("evoDetectModelBtn").disabled = true;
+    document.getElementById("evoDetectModelBtn").textContent = "감지 중...";
+    vscode.postMessage({ type: "evoDetectModel", text });
+});
+
+// ── D단계: 코드 수정 ───────────────────────────────────────────────────────
+
+document.getElementById("evoProposeCodeBtn").addEventListener("click", () => {
+    const oldCode     = document.getElementById("evoCodeOldText").value.trim();
+    const description = document.getElementById("evoCodeDescText").value.trim();
+    const targetFile  = document.getElementById("evoTargetFile").value;
+    if (!oldCode || !description) {
+        evoSetResult("evoCodeResult", "기존 코드와 설명을 모두 입력하세요.", false);
+        return;
+    }
+    document.getElementById("evoCodeProposalArea").style.display = "none";
+    document.getElementById("evoProposeCodeBtn").disabled = true;
+    document.getElementById("evoProposeCodeBtn").textContent = "제안 중...";
+    vscode.postMessage({ type: "evoProposeCode", oldCode, description, targetFile });
+});
+
+document.getElementById("evoApplyCodeBtn").addEventListener("click", () => {
+    const description = document.getElementById("evoCodeDescText").value.trim();
+    vscode.postMessage({ type: "evoApplyCode", description });
+});
+
+document.getElementById("evoRejectCodeBtn").addEventListener("click", () => {
+    document.getElementById("evoCodeProposalArea").style.display = "none";
+    evoSetResult("evoCodeResult", "거부됨.", false);
+});
+
+document.getElementById("evoRollbackCodeBtn").addEventListener("click", () => {
+    if (!confirm("extension-ui 브랜치로 복귀하시겠습니까?")) { return; }
+    vscode.postMessage({ type: "evoRollbackCode" });
+});
+
+document.getElementById("evoHistBtn").addEventListener("click", () => {
+    const hist = document.getElementById("evoHistContent");
+    if (hist.style.display === "none") {
+        hist.style.display = "";
+        document.getElementById("evoHistBtn").textContent = "📋 진화 이력 ▴";
+        vscode.postMessage({ type: "evoGetHistory" });
+    } else {
+        hist.style.display = "none";
+        document.getElementById("evoHistBtn").textContent = "📋 진화 이력 ▾";
+    }
+});
+
+// ── 진화 메시지 핸들러 (message 이벤트와 별개로 함수만 정의) ─────────────────
+
+function handleEvoMessage(m) {
+    switch (m.type) {
+        case "evoFilePicked":
+            {
+                const fname = document.getElementById("evoPreviewFname");
+                fname.textContent = m.filePath.split("/").pop() + " (" + (m.size / 1024).toFixed(1) + " KB)";
+                fname.dataset.path = m.filePath;
+                document.getElementById("evoPreviewBody").textContent = m.preview + (m.size > 600 ? "\n…" : "");
+                document.getElementById("evoFilePreview").style.display = "";
+                document.getElementById("evoAbsorbBtn").disabled = false;
+                document.getElementById("evoAbsorbBtn").textContent = "✅ 이 백서를 학습할까요?";
+                evoSetResult("evoAbsorbResult", "", true);
+            }
+            break;
+
+        case "evoAbsorbDone":
+            {
+                const note = m.fallback ? " (RAG 엔진 없음, 파일 저장)" : "";
+                evoSetResult("evoAbsorbResult",
+                    `✅ 학습 완료 — ${m.collection} 컬렉션, ${m.chunks}청크${note}`, true);
+                document.getElementById("evoFilePreview").style.display = "none";
+                document.getElementById("evoAbsorbBtn").disabled = false;
+                document.getElementById("evoAbsorbBtn").textContent = "✅ 이 백서를 학습할까요?";
+            }
+            break;
+
+        case "evoProposing":
+            break;
+
+        case "evoPromptProposal":
+            {
+                _evoPendingProposedText = m.proposedText;
+                _evoPendingExplanation  = m.explanation || "";
+                document.getElementById("evoDiff").textContent = m.proposedText;
+                document.getElementById("evoDiffExplain").textContent = m.explanation || "";
+                document.getElementById("evoDiffArea").style.display = "";
+                const curArea = document.getElementById("evoCurrentPromptArea");
+                if (m.current) {
+                    document.getElementById("evoCurrentPrompt").textContent = m.current;
+                    curArea.style.display = "";
+                } else {
+                    curArea.style.display = "none";
+                }
+                const btn = document.getElementById("evoProposePromptBtn");
+                btn.disabled = false; btn.textContent = "🔍 프롬프트 갱신 제안";
+            }
+            break;
+
+        case "evoPromptApplied":
+            {
+                document.getElementById("evoDiffArea").style.display = "none";
+                document.getElementById("evoCurrentPrompt").textContent = m.current;
+                document.getElementById("evoCurrentPromptArea").style.display = "";
+                evoSetResult("evoPromptResult",
+                    `✅ 프롬프트 적용됨 (이력 ${m.historyLen}개)`, true);
+                _evoPendingProposedText = "";
+            }
+            break;
+
+        case "evoPromptRolledBack":
+            {
+                if (m.current) {
+                    document.getElementById("evoCurrentPrompt").textContent = m.current;
+                    document.getElementById("evoCurrentPromptArea").style.display = "";
+                } else {
+                    document.getElementById("evoCurrentPromptArea").style.display = "none";
+                }
+                evoSetResult("evoPromptResult",
+                    `↩ 롤백 완료 (남은 이력 ${m.historyLen}개)`, true);
+            }
+            break;
+
+        case "evoDetecting":
+            break;
+
+        case "evoModelDetected":
+            {
+                const listEl = document.getElementById("evoModelList");
+                const btn    = document.getElementById("evoDetectModelBtn");
+                btn.disabled = false; btn.textContent = "🔍 모델 감지";
+                if (!m.models || m.models.length === 0) {
+                    listEl.innerHTML = '<div class="evo-desc">감지된 모델 없음</div>';
+                    return;
+                }
+                listEl.innerHTML = m.models.map(mo =>
+                    '<div class="evo-model-item">' +
+                        '<span class="evo-model-name">' + escapeHtml(mo.name) + '</span>' +
+                        '<span class="evo-model-size">≈' + (mo.size_gb_est || "?") + ' GB</span>' +
+                        '<button class="evo-install-btn" data-model="' + escapeHtml(mo.name) + '">' +
+                          '설치 마법사 →</button>' +
+                    '</div>'
+                ).join("");
+                listEl.querySelectorAll(".evo-install-btn").forEach(btn => {
+                    btn.addEventListener("click", () => {
+                        vscode.postMessage({ type: "evoTriggerInstall" });
+                        closeEvo();
+                    });
+                });
+            }
+            break;
+
+        case "evoAutoRejected":
+            {
+                const btn = document.getElementById("evoProposeCodeBtn");
+                btn.disabled = false; btn.textContent = "💡 코드 변경 제안";
+                evoSetResult("evoCodeResult",
+                    "🚫 자동 거부: " + escapeHtml(m.reason), false);
+            }
+            break;
+
+        case "evoCodeProposal":
+            {
+                const btn = document.getElementById("evoProposeCodeBtn");
+                btn.disabled = false; btn.textContent = "💡 코드 변경 제안";
+                document.getElementById("evoCodeDiff").textContent = m.newCode;
+                document.getElementById("evoCodeExplain").textContent = m.explanation || "";
+                document.getElementById("evoCodeProposalArea").style.display = "";
+                evoSetResult("evoCodeResult", "", true);
+            }
+            break;
+
+        case "evoCompiling":
+            evoSetResult("evoCodeResult", "⚙️ 컴파일 검증 중...", true);
+            break;
+
+        case "evoCodeApplied":
+            {
+                document.getElementById("evoCodeProposalArea").style.display = "none";
+                const branchInfo = document.getElementById("evoBranchInfo");
+                branchInfo.innerHTML =
+                    '브랜치: <code>' + escapeHtml(m.branch) + '</code><br>' +
+                    '파일: <code>' + escapeHtml(m.targetFile) + '</code>';
+                document.getElementById("evoBranchArea").style.display = "";
+                evoSetResult("evoCodeResult",
+                    "✅ 적용됨. 며칠 사용 후 main으로 머지하세요.", true);
+            }
+            break;
+
+        case "evoCodeCanceled":
+            evoSetResult("evoCodeResult", "취소됨.", false);
+            break;
+
+        case "evoCodeRolledBack":
+            document.getElementById("evoBranchArea").style.display = "none";
+            evoSetResult("evoCodeResult", "↩ extension-ui 복귀 완료", true);
+            break;
+
+        case "evoHistory":
+            document.getElementById("evoHistContent").textContent = m.content;
+            break;
+
+        case "evoError":
+            {
+                ["evoAbsorbResult","evoPromptResult","evoCodeResult"].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el && el.closest(".evo-panel").style.display !== "none") {
+                        evoSetResult(id, "❌ " + escapeHtml(m.msg), false);
+                    }
+                });
+                const evoModelList = document.getElementById("evoModelList");
+                if (evoModelList) { evoModelList.innerHTML = '<span style="color:var(--vscode-errorForeground)">❌ ' + escapeHtml(m.msg) + '</span>'; }
+                const btn = document.getElementById("evoProposeCodeBtn");
+                if (btn) { btn.disabled = false; btn.textContent = "💡 코드 변경 제안"; }
+                const propBtn = document.getElementById("evoProposePromptBtn");
+                if (propBtn) { propBtn.disabled = false; propBtn.textContent = "🔍 프롬프트 갱신 제안"; }
+                const detectBtn = document.getElementById("evoDetectModelBtn");
+                if (detectBtn) { detectBtn.disabled = false; detectBtn.textContent = "🔍 모델 감지"; }
+            }
+            break;
+    }
+}
 
 document.getElementById("rssIntervalSel").addEventListener("change", () => {
     const interval = document.getElementById("rssIntervalSel").value;

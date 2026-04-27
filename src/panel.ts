@@ -80,6 +80,15 @@ interface RssNotification {
     acked: boolean;
 }
 
+interface EvoRecord {
+    stage: "A" | "B" | "C" | "D";
+    date: string;
+    title: string;
+    detail: string;
+    applied: boolean;
+    branch?: string;
+}
+
 export class CevizPanel implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private _sessions: Session[] = [];
@@ -102,6 +111,12 @@ export class CevizPanel implements vscode.WebviewViewProvider {
     private _language = "";
     private _wizardInstallStream?: NodeJS.ReadableStream;
     private _rssPollTimer?: ReturnType<typeof setInterval>;
+    private _evoSystemPromptHistory: string[] = [];
+    private _evoLastAbsorbContent = "";
+    private _evoPendingNewCode = "";
+    private _evoPendingOldCode = "";
+    private _evoPendingTargetFile = "";
+    private _evoPendingBranch = "";
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -111,7 +126,8 @@ export class CevizPanel implements vscode.WebviewViewProvider {
         this._skills         = this._context.globalState.get("ceviz.skills",   []);
         this._currentProject = this._context.globalState.get("ceviz.currentProject", "");
         this._responseCache  = this._context.globalState.get("ceviz.responseCache", []);
-        this._language       = this._context.globalState.get("ceviz.language", "");
+        this._language                = this._context.globalState.get("ceviz.language", "");
+        this._evoSystemPromptHistory  = this._context.globalState.get("ceviz.evoPromptHistory", []);
         if (this._sessions.length === 0) { this._createSession(); }
         else { this._currentSessionId = this._sessions[this._sessions.length - 1].id; }
     }
@@ -472,6 +488,56 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                 case "rssUpdateSettings":
                     await this._rssUpdateSettings(msg.settings);
                     break;
+
+                // ── Phase 20: 자가 진화 ──────────────────────────────────
+
+                // A단계: RAG 흡수
+                case "evoPickFile":
+                    await this._evoPickFile();
+                    break;
+
+                case "evoAbsorb":
+                    await this._evoAbsorb(msg.content, msg.filePath, msg.collection);
+                    break;
+
+                // B단계: 시스템 프롬프트
+                case "evoProposePrompt":
+                    await this._evoProposePrompt();
+                    break;
+
+                case "evoApplyPrompt":
+                    await this._evoApplyPrompt(msg.proposedText, msg.explanation);
+                    break;
+
+                case "evoRollbackPrompt":
+                    await this._evoRollbackPrompt();
+                    break;
+
+                // C단계: 모델 감지
+                case "evoDetectModel":
+                    await this._evoDetectModel(msg.text);
+                    break;
+
+                case "evoTriggerInstall":
+                    this.openWizard();
+                    break;
+
+                // D단계: 코드 수정
+                case "evoProposeCode":
+                    await this._evoProposeCode(msg.oldCode, msg.description, msg.targetFile);
+                    break;
+
+                case "evoApplyCode":
+                    await this._evoApplyCode(msg.description);
+                    break;
+
+                case "evoRollbackCode":
+                    await this._evoRollbackCode();
+                    break;
+
+                case "evoGetHistory":
+                    await this._evoGetHistory();
+                    break;
             }
         });
     }
@@ -481,6 +547,13 @@ export class CevizPanel implements vscode.WebviewViewProvider {
         if (!session) { return; }
 
         let finalPrompt = prompt;
+        // A·B단계: 활성 진화 시스템 프롬프트를 모든 요청에 선행 주입
+        const evoPromptActive = this._evoSystemPromptHistory.length > 0
+            ? this._evoSystemPromptHistory[this._evoSystemPromptHistory.length - 1]
+            : "";
+        if (evoPromptActive && !this._englishMode) {
+            finalPrompt = `[시스템 컨텍스트 — 진화 학습 내용]\n${evoPromptActive}\n\n[사용자 요청]\n${prompt}`;
+        }
         if (this._englishMode) {
             finalPrompt = `You are an expert English tutor using the CEFR scale (A1→C2).
 
@@ -1188,6 +1261,369 @@ ${response}
         } catch {}
     }
 
+    // ── Phase 20: 자가 진화 ────────────────────────────────────────────────
+
+    private _evoGetSourcePath(): string {
+        const cfg = vscode.workspace.getConfiguration("ceviz").get<string>("projectSourcePath") || "";
+        return cfg.replace(/^~/, process.env.HOME || "")
+            || path.join(process.env.HOME || "", "ceviz-ui", "ceviz");
+    }
+
+    private _evoEvolutionMdPath(): string {
+        return path.join(this._evoGetSourcePath(), "EVOLUTION.md");
+    }
+
+    private _evoWriteHistory(rec: EvoRecord): void {
+        const mdPath = this._evoEvolutionMdPath();
+        const now = new Date().toLocaleString("ko-KR", { hour12: false });
+        const lines = [
+            `\n## [${now}] ${rec.stage}단계: ${rec.title}`,
+            `- **단계**: ${rec.stage}`,
+            `- **일시**: ${rec.date}`,
+            `- **내용**: ${rec.detail}`,
+            `- **적용**: ${rec.applied ? "✅ 적용됨" : "❌ 거부됨"}`,
+            ...(rec.branch ? [`- **브랜치**: \`${rec.branch}\``] : []),
+            "",
+        ].join("\n");
+        try { fs.appendFileSync(mdPath, lines, "utf8"); } catch {}
+    }
+
+    // A단계 ─────────────────────────────────────────────────────────────────
+
+    private async _evoPickFile(): Promise<void> {
+        const uris = await vscode.window.showOpenDialog({
+            canSelectMany: false,
+            filters: { "Markdown": ["md"] },
+            title: "RAG 학습할 기술 백서 .md 파일 선택"
+        });
+        if (!uris || uris.length === 0) { return; }
+        try {
+            const content = fs.readFileSync(uris[0].fsPath, "utf8");
+            this._evoLastAbsorbContent = content;
+            this._view?.webview.postMessage({
+                type: "evoFilePicked",
+                filePath: uris[0].fsPath,
+                preview: content.slice(0, 600),
+                size: content.length
+            });
+        } catch (e: any) {
+            this._view?.webview.postMessage({
+                type: "evoError", msg: "파일 읽기 실패: " + e.message
+            });
+        }
+    }
+
+    private async _evoAbsorb(content: string, filePath: string, collection: string): Promise<void> {
+        try {
+            const r = await axios.post(`${this._getUrl()}/evolution/absorb`,
+                { content, source_path: filePath, collection }, { timeout: 60000 });
+            const d = r.data;
+            this._view?.webview.postMessage({
+                type: "evoAbsorbDone",
+                chunks: d.chunks_added,
+                collection: d.collection,
+                fallback: !!d.fallback
+            });
+            this._evoWriteHistory({
+                stage: "A", date: new Date().toISOString(),
+                title: `RAG 흡수 — ${path.basename(filePath)}`,
+                detail: `컬렉션: ${collection}, 청크: ${d.chunks_added}`,
+                applied: true
+            });
+        } catch (e: any) {
+            this._view?.webview.postMessage({
+                type: "evoError", msg: "RAG 흡수 실패: " + (e.response?.data?.detail || e.message)
+            });
+        }
+    }
+
+    // B단계 ─────────────────────────────────────────────────────────────────
+
+    private async _evoProposePrompt(): Promise<void> {
+        if (!this._evoLastAbsorbContent) {
+            this._view?.webview.postMessage({
+                type: "evoError", msg: "먼저 A단계에서 백서를 학습하세요."
+            });
+            return;
+        }
+        this._view?.webview.postMessage({ type: "evoProposing" });
+        try {
+            const r = await axios.post(`${this._getUrl()}/evolution/propose-prompt`,
+                { content: this._evoLastAbsorbContent }, { timeout: 120000 });
+            this._view?.webview.postMessage({
+                type: "evoPromptProposal",
+                proposedText: r.data.proposed_addition,
+                explanation: r.data.explanation,
+                current: this._evoSystemPromptHistory[this._evoSystemPromptHistory.length - 1] || ""
+            });
+        } catch (e: any) {
+            this._view?.webview.postMessage({
+                type: "evoError", msg: "제안 실패: " + (e.response?.data?.detail || e.message)
+            });
+        }
+    }
+
+    private async _evoApplyPrompt(proposedText: string, explanation: string): Promise<void> {
+        this._evoSystemPromptHistory.push(proposedText);
+        await this._context.globalState.update("ceviz.evoPromptHistory", this._evoSystemPromptHistory);
+        this._view?.webview.postMessage({
+            type: "evoPromptApplied",
+            current: proposedText,
+            historyLen: this._evoSystemPromptHistory.length
+        });
+        this._evoWriteHistory({
+            stage: "B", date: new Date().toISOString(),
+            title: "시스템 프롬프트 갱신",
+            detail: `${explanation.slice(0, 120)} | 이력 ${this._evoSystemPromptHistory.length}개`,
+            applied: true
+        });
+        vscode.window.showInformationMessage(`CEVIZ 진화: 시스템 프롬프트 갱신됨 (이력 ${this._evoSystemPromptHistory.length}개)`);
+    }
+
+    private async _evoRollbackPrompt(): Promise<void> {
+        if (this._evoSystemPromptHistory.length === 0) {
+            this._view?.webview.postMessage({ type: "evoError", msg: "롤백할 이력이 없습니다." });
+            return;
+        }
+        const removed = this._evoSystemPromptHistory.pop()!;
+        await this._context.globalState.update("ceviz.evoPromptHistory", this._evoSystemPromptHistory);
+        const prev = this._evoSystemPromptHistory[this._evoSystemPromptHistory.length - 1] || "";
+        this._view?.webview.postMessage({
+            type: "evoPromptRolledBack",
+            current: prev,
+            historyLen: this._evoSystemPromptHistory.length
+        });
+        this._evoWriteHistory({
+            stage: "B", date: new Date().toISOString(),
+            title: "시스템 프롬프트 롤백",
+            detail: `이전 버전으로 복구됨 (남은 이력 ${this._evoSystemPromptHistory.length}개)`,
+            applied: true
+        });
+    }
+
+    // C단계 ─────────────────────────────────────────────────────────────────
+
+    private async _evoDetectModel(text: string): Promise<void> {
+        this._view?.webview.postMessage({ type: "evoDetecting" });
+        try {
+            const r = await axios.post(`${this._getUrl()}/evolution/detect-model`,
+                { content: text }, { timeout: 60000 });
+            this._view?.webview.postMessage({
+                type: "evoModelDetected",
+                models: r.data.models || []
+            });
+            if (r.data.models?.length > 0) {
+                this._evoWriteHistory({
+                    stage: "C", date: new Date().toISOString(),
+                    title: "모델 감지",
+                    detail: `발견: ${r.data.models.map((m: any) => m.name).join(", ")}`,
+                    applied: false
+                });
+            }
+        } catch (e: any) {
+            this._view?.webview.postMessage({
+                type: "evoError", msg: "감지 실패: " + e.message
+            });
+        }
+    }
+
+    // D단계 ─────────────────────────────────────────────────────────────────
+
+    private static readonly _EVO_FORBIDDEN: Array<{ re: RegExp; reason: string }> = [
+        { re: /\bcrypto\b|\bbcrypt\b|\bjwt\b/i,                    reason: "암호화/인증 코드" },
+        { re: /globalState\.(get|update)\b/,                       reason: "사용자 데이터(globalState)" },
+        { re: /\b_sessions\b|\b_responseCache\b/,                  reason: "세션/캐시 데이터" },
+        { re: /axios\.(get|post|put|delete|patch)\s*\(/,            reason: "외부 네트워크 호출" },
+        { re: /cp\.(exec|spawn|execFile)\s*\(/,                     reason: "셸 실행 코드" },
+        { re: /require\s*\(/,                                       reason: "require() 추가" },
+        { re: /process\.env\./,                                     reason: "환경 변수 접근" },
+        { re: /chromadb|ChromaClient|rag_engine/i,                  reason: "RAG/ChromaDB 핵심 로직" },
+        { re: /whisper|yt[-_]dlp/i,                                 reason: "Whisper/yt-dlp 로직" },
+        { re: /git\s+(push|reset|rebase|merge)\b/i,                 reason: "위험한 git 명령" },
+        { re: /_validate_url\b|_safe_path\b/,                       reason: "보안 검증 로직" },
+        { re: /vscode\.ExtensionContext\b/,                         reason: "Extension 컨텍스트 직접 참조" },
+    ];
+
+    private _evoCheckForbidden(newCode: string): string | null {
+        for (const { re, reason } of CevizPanel._EVO_FORBIDDEN) {
+            if (re.test(newCode)) { return `자동 거부: ${reason}`; }
+        }
+        return null;
+    }
+
+    private async _evoProposeCode(oldCode: string, description: string, targetFile: string): Promise<void> {
+        this._view?.webview.postMessage({ type: "evoProposing" });
+        try {
+            const r = await axios.post(`${this._getUrl()}/evolution/propose-code`,
+                { old_code: oldCode, description, target_file: targetFile },
+                { timeout: 180000 });
+            const { new_code, explanation } = r.data;
+
+            const forbidden = this._evoCheckForbidden(new_code);
+            if (forbidden) {
+                this._view?.webview.postMessage({ type: "evoAutoRejected", reason: forbidden });
+                this._evoWriteHistory({
+                    stage: "D", date: new Date().toISOString(),
+                    title: "코드 변경 자동 거부",
+                    detail: `${forbidden} — ${description.slice(0, 80)}`,
+                    applied: false
+                });
+                return;
+            }
+
+            this._evoPendingNewCode    = new_code;
+            this._evoPendingOldCode    = oldCode;
+            this._evoPendingTargetFile = targetFile;
+
+            this._view?.webview.postMessage({
+                type: "evoCodeProposal",
+                oldCode,
+                newCode: new_code,
+                explanation,
+                targetFile
+            });
+        } catch (e: any) {
+            this._view?.webview.postMessage({
+                type: "evoError", msg: "제안 실패: " + (e.response?.data?.detail || e.message)
+            });
+        }
+    }
+
+    private async _evoApplyCode(description: string): Promise<void> {
+        if (!this._evoPendingNewCode || !this._evoPendingTargetFile) {
+            this._view?.webview.postMessage({ type: "evoError", msg: "적용할 코드 제안이 없습니다." });
+            return;
+        }
+        const srcDir    = this._evoGetSourcePath();
+        const targetAbs = path.resolve(srcDir, this._evoPendingTargetFile);
+        const srcAbs    = path.resolve(srcDir);
+
+        // 경로 traversal 방지
+        if (!targetAbs.startsWith(srcAbs + path.sep)) {
+            this._view?.webview.postMessage({ type: "evoError", msg: "경로 검증 실패." });
+            return;
+        }
+
+        // 브랜치 이름 생성
+        const today  = new Date().toISOString().slice(0, 10);
+        const slug   = description.slice(0, 30).toLowerCase().replace(/[^a-z0-9가-힣]/g, "-");
+        const branch = `auto-evolution/${today}-${slug}`;
+        this._evoPendingBranch = branch;
+
+        const confirmed = await vscode.window.showWarningMessage(
+            `브랜치 "${branch}" 를 생성하고 코드를 변경합니다. 계속할까요?`,
+            { modal: true }, "변경 적용"
+        );
+        if (confirmed !== "변경 적용") {
+            this._view?.webview.postMessage({ type: "evoCodeCanceled" });
+            return;
+        }
+
+        try {
+            // 1. 브랜치 생성
+            await this._evoGit(srcDir, ["checkout", "-b", branch]);
+
+            // 2. 파일 수정
+            const original = fs.readFileSync(targetAbs, "utf8");
+            if (!original.includes(this._evoPendingOldCode)) {
+                throw new Error("기존 코드를 파일에서 찾을 수 없습니다. 코드를 다시 붙여넣어 주세요.");
+            }
+            const modified = original.replace(this._evoPendingOldCode, this._evoPendingNewCode);
+            fs.writeFileSync(targetAbs, modified, "utf8");
+
+            // 3. 컴파일 검증
+            this._view?.webview.postMessage({ type: "evoCompiling" });
+            const { ok, output } = await this._evoRunCompile(srcDir);
+            if (!ok) {
+                // 실패 → 복구
+                fs.writeFileSync(targetAbs, original, "utf8");
+                await this._evoGit(srcDir, ["checkout", "extension-ui"]);
+                throw new Error(`컴파일 실패:\n${output.slice(0, 400)}`);
+            }
+
+            // 4. 커밋
+            await this._evoGit(srcDir, ["add", this._evoPendingTargetFile]);
+            await this._evoGit(srcDir, ["commit", "-m",
+                `auto-evolution: ${description.slice(0, 72)}`]);
+
+            this._view?.webview.postMessage({
+                type: "evoCodeApplied",
+                branch,
+                targetFile: this._evoPendingTargetFile
+            });
+            this._evoWriteHistory({
+                stage: "D", date: new Date().toISOString(),
+                title: `코드 변경 적용 — ${this._evoPendingTargetFile}`,
+                detail: description.slice(0, 120),
+                applied: true,
+                branch
+            });
+            vscode.window.showInformationMessage(
+                `CEVIZ 진화: 브랜치 "${branch}" 생성됨. 며칠 사용 후 main으로 머지하세요.`
+            );
+        } catch (e: any) {
+            this._evoPendingBranch = "";
+            this._view?.webview.postMessage({
+                type: "evoError", msg: "코드 적용 실패: " + e.message
+            });
+            this._evoWriteHistory({
+                stage: "D", date: new Date().toISOString(),
+                title: "코드 변경 실패",
+                detail: e.message.slice(0, 120),
+                applied: false
+            });
+        }
+    }
+
+    private async _evoRollbackCode(): Promise<void> {
+        const srcDir = this._evoGetSourcePath();
+        try {
+            await this._evoGit(srcDir, ["checkout", "extension-ui"]);
+            const prevBranch = this._evoPendingBranch;
+            this._evoPendingBranch = "";
+            this._view?.webview.postMessage({ type: "evoCodeRolledBack" });
+            this._evoWriteHistory({
+                stage: "D", date: new Date().toISOString(),
+                title: "코드 롤백",
+                detail: `extension-ui 복귀 (이전 브랜치: ${prevBranch})`,
+                applied: true
+            });
+        } catch (e: any) {
+            this._view?.webview.postMessage({
+                type: "evoError", msg: "롤백 실패: " + e.message
+            });
+        }
+    }
+
+    private _evoGit(cwd: string, args: string[]): Promise<string> {
+        return new Promise((resolve, reject) => {
+            cp.execFile("git", args, { cwd, timeout: 30000 }, (err, stdout, stderr) => {
+                if (err) { reject(new Error(stderr.trim() || err.message)); }
+                else { resolve(stdout.trim()); }
+            });
+        });
+    }
+
+    private _evoRunCompile(cwd: string): Promise<{ ok: boolean; output: string }> {
+        return new Promise((resolve) => {
+            cp.exec("npm run compile", { cwd, timeout: 90000 }, (err, stdout, stderr) => {
+                resolve({ ok: !err, output: (stdout + stderr).trim() });
+            });
+        });
+    }
+
+    private async _evoGetHistory(): Promise<void> {
+        const mdPath = this._evoEvolutionMdPath();
+        try {
+            const content = fs.existsSync(mdPath)
+                ? fs.readFileSync(mdPath, "utf8")
+                : "(이력 없음)";
+            this._view?.webview.postMessage({ type: "evoHistory", content });
+        } catch (e: any) {
+            this._view?.webview.postMessage({ type: "evoHistory", content: `읽기 실패: ${e.message}` });
+        }
+    }
+
     // ── RSS 피드 ──────────────────────────────────────────────────────────────
 
     private _rssStartPolling() {
@@ -1418,6 +1854,7 @@ ${response}
       <button class="ibtn" id="gearBtn" title="AI 엔진 설정">⚙️</button>
       <button class="ibtn" id="enBtn" title="영어 튜터 모드">En</button>
       <button class="ibtn" id="langBtn" title="언어 선택">🌐</button>
+      <button class="ibtn" id="evoBtn" title="자가 진화 시스템">🧬</button>
     </div>
   </div>
   <div class="status">
@@ -1726,6 +2163,108 @@ ${response}
       <button class="lang-opt" data-lang="ru">🇷🇺 Русский</button>
     </div>
     <button class="lang-confirm" id="langConfirm">확인</button>
+  </div>
+</div>
+
+<!-- 자가 진화 시스템 오버레이 -->
+<div class="evo-overlay" id="evoOverlay">
+  <div class="evo-modal">
+    <div class="evo-hdr">
+      <span>🧬 CEVIZ 자가 진화 시스템</span>
+      <button class="evo-close-btn" id="evoCloseBtn">✕</button>
+    </div>
+    <!-- 단계 탭 -->
+    <div class="evo-tabs">
+      <button class="evo-tab on" id="evoTabA">A: RAG 학습</button>
+      <button class="evo-tab" id="evoTabB">B: 프롬프트</button>
+      <button class="evo-tab" id="evoTabC">C: 모델</button>
+      <button class="evo-tab evo-tab-danger" id="evoTabD">D: 코드</button>
+    </div>
+    <!-- A: RAG 흡수 -->
+    <div class="evo-panel" id="evoPanelA">
+      <p class="evo-desc">기술 백서 .md를 ChromaDB에 학습합니다. 다음 답변부터 자동 반영됩니다.</p>
+      <div class="evo-row">
+        <span class="evo-label">컬렉션:</span>
+        <select class="evo-select" id="evoCollection">
+          <option value="general">general (범용)</option>
+          <option value="game_dev">game_dev (게임 개발)</option>
+          <option value="english">english (영어 학습)</option>
+        </select>
+      </div>
+      <button class="evo-action-btn" id="evoPickFileBtn">📄 .md 파일 선택</button>
+      <div class="evo-file-preview" id="evoFilePreview" style="display:none">
+        <div class="evo-preview-fname" id="evoPreviewFname"></div>
+        <pre class="evo-preview-body" id="evoPreviewBody"></pre>
+        <button class="evo-confirm-btn" id="evoAbsorbBtn">✅ 이 백서를 학습할까요?</button>
+      </div>
+      <div class="evo-result" id="evoAbsorbResult"></div>
+    </div>
+    <!-- B: 시스템 프롬프트 -->
+    <div class="evo-panel" id="evoPanelB" style="display:none">
+      <p class="evo-desc">최근 학습한 백서에서 새 기법을 추출하여 AI 프롬프트에 추가할 내용을 제안합니다.</p>
+      <button class="evo-action-btn" id="evoProposePromptBtn">🔍 프롬프트 갱신 제안</button>
+      <div id="evoDiffArea" style="display:none">
+        <div class="evo-diff-label">추가 제안 내용:</div>
+        <pre class="evo-diff" id="evoDiff"></pre>
+        <div class="evo-diff-explain" id="evoDiffExplain"></div>
+        <div class="evo-action-row">
+          <button class="evo-reject-btn" id="evoRejectPromptBtn">거부</button>
+          <button class="evo-confirm-btn" id="evoApplyPromptBtn">✅ 승인 및 적용</button>
+        </div>
+      </div>
+      <div id="evoCurrentPromptArea" style="display:none">
+        <div class="evo-label">현재 적용된 프롬프트:</div>
+        <pre class="evo-current" id="evoCurrentPrompt"></pre>
+        <button class="evo-rollback-btn" id="evoRollbackPromptBtn">↩ 롤백</button>
+      </div>
+      <div class="evo-result" id="evoPromptResult"></div>
+    </div>
+    <!-- C: 모델 감지 -->
+    <div class="evo-panel" id="evoPanelC" style="display:none">
+      <p class="evo-desc">백서 내용에서 언급된 새 모델을 감지하고 설치 마법사를 연결합니다.</p>
+      <textarea class="evo-textarea" id="evoModelScanText"
+        placeholder="백서 내용 또는 '이 모델 설치하고 싶다: qwen3:8b' 등 자유 입력..."></textarea>
+      <button class="evo-action-btn" id="evoDetectModelBtn">🔍 모델 감지</button>
+      <div class="evo-model-list" id="evoModelList"></div>
+    </div>
+    <!-- D: 코드 수정 -->
+    <div class="evo-panel" id="evoPanelD" style="display:none">
+      <div class="evo-danger-notice">
+        ⚠️ 가장 위험한 단계 — 브랜치 생성 후 코드가 직접 변경됩니다.<br>
+        자동 거부: 보안 코드 · 네트워크 호출 · globalState · package.json · git 위험 명령
+      </div>
+      <div class="evo-row">
+        <span class="evo-label">대상:</span>
+        <select class="evo-select" id="evoTargetFile">
+          <option value="media/webview.js">media/webview.js (UI 로직)</option>
+          <option value="media/webview.css">media/webview.css (스타일)</option>
+        </select>
+      </div>
+      <textarea class="evo-textarea" id="evoCodeOldText"
+        placeholder="수정할 기존 코드 붙여넣기 (정확히 일치해야 합니다)..."></textarea>
+      <textarea class="evo-textarea" id="evoCodeDescText"
+        placeholder="변경 목표: 무엇을 어떻게 수정할지..."></textarea>
+      <button class="evo-action-btn" id="evoProposeCodeBtn">💡 코드 변경 제안</button>
+      <div id="evoCodeProposalArea" style="display:none">
+        <div class="evo-diff-label">제안된 변경 코드:</div>
+        <pre class="evo-diff" id="evoCodeDiff"></pre>
+        <div class="evo-diff-explain" id="evoCodeExplain"></div>
+        <div class="evo-action-row">
+          <button class="evo-reject-btn" id="evoRejectCodeBtn">거부</button>
+          <button class="evo-warn-btn" id="evoApplyCodeBtn">⚠️ 브랜치 생성 후 적용</button>
+        </div>
+      </div>
+      <div id="evoBranchArea" style="display:none">
+        <div class="evo-branch-info" id="evoBranchInfo"></div>
+        <button class="evo-rollback-btn" id="evoRollbackCodeBtn">↩ extension-ui 브랜치로 복귀</button>
+      </div>
+      <div class="evo-result" id="evoCodeResult"></div>
+    </div>
+    <!-- 이력 -->
+    <div class="evo-history-sec">
+      <button class="evo-hist-btn" id="evoHistBtn">📋 진화 이력 ▾</button>
+      <pre class="evo-hist-content" id="evoHistContent" style="display:none"></pre>
+    </div>
   </div>
 </div>
 

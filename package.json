@@ -68,6 +68,11 @@
           "type": "string",
           "default": "",
           "description": "Obsidian Vault 로컬 경로 (예: ~/Jaccanim_VCOU/Obsidian_Mock/)"
+        },
+        "ceviz.projectSourcePath": {
+          "type": "string",
+          "default": "",
+          "description": "CEVIZ 소스 코드 루트 경로 (D단계 자가 진화용, 예: ~/ceviz-ui/ceviz)"
         }
       }
     }
