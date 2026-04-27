@@ -31,7 +31,8 @@
       { "command": "ceviz.newSession",        "title": "CEVIZ: New Session" },
       { "command": "ceviz.toggleEnglish",     "title": "CEVIZ: Toggle English Mode" },
       { "command": "ceviz.openDashboard",     "title": "CEVIZ: Open Soti-Skill Dashboard" },
-      { "command": "ceviz.injectSelection",   "title": "CEVIZ: 선택 코드 질문하기" }
+      { "command": "ceviz.injectSelection",   "title": "CEVIZ: 선택 코드 질문하기" },
+      { "command": "ceviz.setupWizard",       "title": "CEVIZ: 설치 마법사 실행" }
     ],
     "menus": {
       "editor/context": [

@@ -16,6 +16,9 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('ceviz.openDashboard', () => provider.openDashboard())
     );
     context.subscriptions.push(
+        vscode.commands.registerCommand('ceviz.setupWizard', () => provider.openWizard())
+    );
+    context.subscriptions.push(
         vscode.commands.registerCommand('ceviz.injectSelection', () => {
             const editor = vscode.window.activeTextEditor;
             if (!editor || editor.selection.isEmpty) {

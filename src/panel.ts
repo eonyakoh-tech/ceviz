@@ -77,6 +77,7 @@ export class CevizPanel implements vscode.WebviewViewProvider {
     private _responseCache: CacheEntry[] = [];
     private static readonly CACHE_MAX = 20;
     private _language = "";
+    private _wizardInstallStream?: NodeJS.ReadableStream;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -118,6 +119,10 @@ export class CevizPanel implements vscode.WebviewViewProvider {
 
     public openDashboard() {
         this._view?.webview.postMessage({ type: "openDashboard" });
+    }
+
+    public openWizard() {
+        this._view?.webview.postMessage({ type: "openWizard" });
     }
 
     public injectCodeContext(ctx: { code: string; fileName: string; language: string; lineStart: number; lineEnd: number }) {
@@ -386,6 +391,30 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                         { timeout: 5000 }).catch(() => {});
                     break;
                 }
+
+                case "wizardGetInfo":
+                    await this._wizardGetInfo();
+                    break;
+
+                case "wizardInstallModel":
+                    this._wizardInstallModel(msg.name);
+                    break;
+
+                case "wizardCancelInstall":
+                    (this._wizardInstallStream as any)?.destroy();
+                    this._wizardInstallStream = undefined;
+                    this._view?.webview.postMessage({
+                        type: "wizardInstallError", name: "", msg: "사용자가 취소했습니다."
+                    });
+                    break;
+
+                case "wizardDeleteModel":
+                    await this._wizardDeleteModel(msg.name);
+                    break;
+
+                case "openModelManager":
+                    await this._wizardGetInfo();
+                    break;
             }
         });
     }
@@ -1102,6 +1131,92 @@ ${response}
         } catch {}
     }
 
+    // ── 마법사 & 모델 관리 ────────────────────────────────────────────────────
+
+    private async _wizardGetInfo() {
+        try {
+            const [statusRes, modelsRes] = await Promise.allSettled([
+                axios.get(`${this._getUrl()}/status`, { timeout: 8000 }),
+                axios.get(`${this._getUrl()}/models`, { timeout: 8000 })
+            ]);
+            const serverOk = statusRes.status === "fulfilled";
+            if (!serverOk) {
+                const reason = (statusRes as PromiseRejectedResult).reason;
+                this._view?.webview.postMessage({
+                    type: "wizardInfo", ok: false,
+                    error: reason?.message || "PN40 연결 실패"
+                });
+                return;
+            }
+            const modelsList: string[] = [];
+            if (modelsRes.status === "fulfilled") {
+                const raw: any[] = modelsRes.value.data.models || [];
+                for (const m of raw) {
+                    if (typeof m === "string") { modelsList.push(m); }
+                    else if (m && typeof m.name === "string") { modelsList.push(m.name); }
+                }
+            }
+            this._view?.webview.postMessage({
+                type: "wizardInfo", ok: true, installedModels: modelsList
+            });
+        } catch (e: any) {
+            this._view?.webview.postMessage({
+                type: "wizardInfo", ok: false, error: e.message
+            });
+        }
+    }
+
+    private async _wizardInstallModel(name: string) {
+        this._view?.webview.postMessage({
+            type: "wizardInstallProgress", data: { status: "연결 중..." }
+        });
+        try {
+            const response = await axios.post(
+                `${this._getUrl()}/models/pull`,
+                { name },
+                { responseType: "stream", timeout: 1800000 }
+            );
+            this._wizardInstallStream = response.data;
+            let buffer = "";
+            response.data.on("data", (chunk: Buffer) => {
+                buffer += chunk.toString();
+                const lines = buffer.split("\n");
+                buffer = lines.pop() ?? "";
+                for (const line of lines) {
+                    if (!line.startsWith("data: ")) { continue; }
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        this._view?.webview.postMessage({ type: "wizardInstallProgress", data });
+                    } catch {}
+                }
+            });
+            await new Promise<void>((resolve, reject) => {
+                response.data.on("end", resolve);
+                response.data.on("error", (e: Error) => {
+                    if ((e as any).code !== "ERR_STREAM_DESTROYED") { reject(e); }
+                    else { resolve(); }
+                });
+            });
+            this._view?.webview.postMessage({ type: "wizardInstallDone", name });
+        } catch (e: any) {
+            this._view?.webview.postMessage({ type: "wizardInstallError", name, msg: e.message });
+        } finally {
+            this._wizardInstallStream = undefined;
+        }
+    }
+
+    private async _wizardDeleteModel(name: string) {
+        try {
+            await axios.delete(`${this._getUrl()}/models/delete`, {
+                data: { name },
+                timeout: 30000
+            });
+            this._view?.webview.postMessage({ type: "wizardDeleteDone", name });
+        } catch (e: any) {
+            this._view?.webview.postMessage({ type: "wizardDeleteError", name, msg: e.message });
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
 
     private _getNonce(): string {
@@ -1377,6 +1492,96 @@ ${response}
       <button class="lang-opt" data-lang="ru">🇷🇺 Русский</button>
     </div>
     <button class="lang-confirm" id="langConfirm">확인</button>
+  </div>
+</div>
+
+<!-- 설치 마법사 오버레이 -->
+<div class="wiz-overlay" id="wizOverlay">
+  <div class="wiz-modal">
+    <div class="wiz-hdr">
+      <span>🌰 CEVIZ 설치 마법사</span>
+      <button class="wiz-close-btn" id="wizCloseBtn">✕</button>
+    </div>
+    <div class="wiz-step-bar">
+      <div class="wiz-dot active" id="wizDot1"></div>
+      <div class="wiz-line"></div>
+      <div class="wiz-dot" id="wizDot2"></div>
+      <div class="wiz-line"></div>
+      <div class="wiz-dot" id="wizDot3"></div>
+      <div class="wiz-line"></div>
+      <div class="wiz-dot" id="wizDot4"></div>
+      <div class="wiz-line"></div>
+      <div class="wiz-dot" id="wizDot5"></div>
+    </div>
+    <!-- Step 1: 환영 -->
+    <div class="wiz-step" id="wizStep1">
+      <div class="wiz-step-title">환영합니다!</div>
+      <div class="wiz-step-desc">PN40 AI 환경을 단계별로 설정합니다.<br>시작 전 PN40이 켜져 있는지 확인하세요.</div>
+      <div class="wiz-nav"><button class="wiz-btn-primary" id="wizStartBtn">시작하기 →</button></div>
+    </div>
+    <!-- Step 2: 서버 확인 -->
+    <div class="wiz-step" id="wizStep2" style="display:none">
+      <div class="wiz-step-title">🔌 서버 연결 확인</div>
+      <div class="wiz-conn-row">
+        <div class="wiz-spin" id="wizConnSpin"></div>
+        <span class="wiz-conn-msg" id="wizConnMsg">PN40 연결 중...</span>
+      </div>
+      <div class="wiz-inst-section" id="wizInstalledSection" style="display:none">
+        <div class="wiz-inst-label">현재 설치된 모델:</div>
+        <div class="wiz-inst-chips" id="wizInstalledChips"></div>
+      </div>
+      <div class="wiz-nav">
+        <button class="wiz-btn-sec" id="wizStep2Back">← 이전</button>
+        <button class="wiz-btn-sec" id="wizStep2Retry" style="display:none">↻ 재시도</button>
+        <button class="wiz-btn-primary" id="wizStep2Next" disabled>다음 →</button>
+      </div>
+    </div>
+    <!-- Step 3: 모델 선택 -->
+    <div class="wiz-step" id="wizStep3" style="display:none">
+      <div class="wiz-step-title">📦 모델 선택</div>
+      <button class="wiz-rec-btn" id="wizRecBtn">⭐ 권장 조합 선택</button>
+      <div class="wiz-model-list" id="wizModelList"></div>
+      <div class="wiz-nav">
+        <button class="wiz-btn-sec" id="wizStep3Back">← 이전</button>
+        <button class="wiz-btn-primary" id="wizStep3Next">설치 시작 →</button>
+      </div>
+    </div>
+    <!-- Step 4: 설치 진행 -->
+    <div class="wiz-step" id="wizStep4" style="display:none">
+      <div class="wiz-step-title">⬇ 모델 설치 중...</div>
+      <div class="wiz-inst-list" id="wizInstallList"></div>
+      <div class="wiz-nav">
+        <button class="wiz-btn-sec" id="wizStep4Cancel">취소</button>
+      </div>
+    </div>
+    <!-- Step 5: 완료 -->
+    <div class="wiz-step" id="wizStep5" style="display:none">
+      <div class="wiz-step-title">✅ 설치 완료!</div>
+      <div class="wiz-complete-list" id="wizCompleteList"></div>
+      <div class="wiz-restart-warn">
+        <span>⚠️</span>
+        <span>VS Code 재시작을 권장합니다.<br><small>Ctrl+Shift+P &rarr; &quot;Reload Window&quot;</small></span>
+      </div>
+      <div class="wiz-nav">
+        <button class="wiz-btn-sec" id="wizModelMgrBtn">📦 모델 관리</button>
+        <button class="wiz-btn-primary" id="wizDoneBtn">마침</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- 모델 관리 오버레이 -->
+<div class="modelmgr-overlay" id="modelMgrOverlay">
+  <div class="modelmgr-modal">
+    <div class="modelmgr-hdr">
+      <span>📦 설치된 모델 관리</span>
+      <button class="modelmgr-close-btn" id="modelMgrCloseBtn">✕</button>
+    </div>
+    <div class="modelmgr-body" id="modelMgrBody">
+      <div class="modelmgr-loading">로드 중...</div>
+    </div>
+    <div class="modelmgr-footer">
+      <button class="modelmgr-wiz-link" id="modelMgrWizBtn">🧙 설치 마법사 다시 실행</button>
+    </div>
   </div>
 </div>
 

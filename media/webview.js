@@ -477,6 +477,103 @@ window.addEventListener("message", e => {
         case "ragStats":
             updateRagStats(m.stats);
             break;
+
+        case "wizardInfo":
+            {
+                const spinEl  = document.getElementById("wizConnSpin");
+                const msgEl   = document.getElementById("wizConnMsg");
+                if (m.ok) {
+                    _wizInstalledModels = m.installedModels || [];
+                    if (spinEl) { spinEl.classList.add("hidden"); }
+                    if (msgEl) {
+                        msgEl.textContent = "✅ PN40 연결됨 · " + _wizInstalledModels.length + "개 모델 설치됨";
+                        msgEl.style.color = "#4ec9b0";
+                    }
+                    const secEl   = document.getElementById("wizInstalledSection");
+                    const chipsEl = document.getElementById("wizInstalledChips");
+                    if (secEl && chipsEl) {
+                        chipsEl.innerHTML = _wizInstalledModels
+                            .map(im => '<span class="wiz-inst-chip">' + im + '</span>').join("");
+                        secEl.style.display = _wizInstalledModels.length > 0 ? "" : "none";
+                    }
+                    const nextEl = document.getElementById("wizStep2Next");
+                    if (nextEl) { nextEl.disabled = false; }
+                    renderModelMgrList(_wizInstalledModels);
+                } else {
+                    if (spinEl) { spinEl.classList.add("hidden"); }
+                    if (msgEl) {
+                        msgEl.textContent = "❌ 연결 실패: " + (m.error || "알 수 없는 오류");
+                        msgEl.style.color = "var(--vscode-errorForeground)";
+                    }
+                    const retryEl = document.getElementById("wizStep2Retry");
+                    if (retryEl) { retryEl.style.display = ""; }
+                }
+            }
+            break;
+
+        case "wizardInstallProgress":
+            {
+                const name = _wizInstallQueue[_wizInstallIdx];
+                if (!name) { break; }
+                const sid      = _wizSafeId(name);
+                const statusEl = document.getElementById("wizInstStatus_" + sid);
+                const fillEl   = document.getElementById("wizProgFill_"   + sid);
+                if (statusEl) { statusEl.textContent = m.data.status || ""; }
+                if (fillEl && m.data.total && m.data.completed) {
+                    const pct = Math.round(m.data.completed / m.data.total * 100);
+                    fillEl.style.width = Math.min(pct, 100) + "%";
+                }
+            }
+            break;
+
+        case "wizardInstallDone":
+            {
+                const name = _wizInstallQueue[_wizInstallIdx];
+                if (name) {
+                    const sid      = _wizSafeId(name);
+                    const statusEl = document.getElementById("wizInstStatus_" + sid);
+                    const fillEl   = document.getElementById("wizProgFill_"   + sid);
+                    if (statusEl) { statusEl.textContent = "✅ 완료"; statusEl.style.color = "#4ec9b0"; }
+                    if (fillEl)   { fillEl.style.width = "100%"; }
+                }
+                _wizInstallIdx++;
+                wizInstallNext();
+            }
+            break;
+
+        case "wizardInstallError":
+            {
+                const name = _wizInstallQueue[_wizInstallIdx];
+                if (name) {
+                    const sid      = _wizSafeId(name);
+                    const statusEl = document.getElementById("wizInstStatus_" + sid);
+                    if (statusEl) {
+                        statusEl.textContent = "❌ " + (m.msg || "설치 실패");
+                        statusEl.style.color = "var(--vscode-errorForeground)";
+                    }
+                }
+                _wizInstallIdx++;
+                wizInstallNext();
+            }
+            break;
+
+        case "wizardDeleteDone":
+            showCtxToast("✅ 모델 삭제 완료: " + m.name);
+            vscode.postMessage({ type: "wizardGetInfo" });
+            break;
+
+        case "wizardDeleteError":
+            showCtxToast("❌ 삭제 실패: " + (m.msg || m.name));
+            vscode.postMessage({ type: "wizardGetInfo" });
+            break;
+
+        case "openWizard":
+            openWizard();
+            break;
+
+        case "openModelManager":
+            openModelMgr();
+            break;
     }
 });
 
@@ -1533,4 +1630,223 @@ document.getElementById("langOverlay").addEventListener("click", e => {
 });
 
 document.getElementById("langBtn").addEventListener("click", () => openLangModal(false));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── 설치 마법사 & 모델 관리 ──────────────────────────────────────────────────
+
+const WIZARD_MODELS = [
+    { name: "gemma3:1b",        size: "815MB",  label: "Gemma 3 1B",       tag: "빠름 · 기본값",   rec: false },
+    { name: "gemma3:4b",        size: "2.5GB",  label: "Gemma 3 4B",       tag: "권장 ⭐",          rec: true  },
+    { name: "gemma3:12b",       size: "7.4GB",  label: "Gemma 3 12B",      tag: "고성능",           rec: false },
+    { name: "gemma3:27b",       size: "15GB",   label: "Gemma 3 27B",      tag: "최고 성능",        rec: false },
+    { name: "nomic-embed-text", size: "274MB",  label: "nomic-embed-text", tag: "RAG 필수",         rec: true,
+      tooltip: "RAG 육성 시스템 작동에 필수" },
+    { name: "qwen2.5:3b",       size: "2.0GB",  label: "Qwen 2.5 3B",      tag: "다국어",           rec: false },
+    { name: "llama3.2:3b",      size: "2.0GB",  label: "Llama 3.2 3B",     tag: "영어 강함",        rec: false },
+];
+
+let _wizInstalledModels = [];
+let _wizInstallQueue    = [];
+let _wizInstallIdx      = 0;
+
+function _wizSafeId(name) { return name.replace(/[^a-zA-Z0-9]/g, "_"); }
+
+function wizGoTo(step) {
+    for (let i = 1; i <= 5; i++) {
+        const stepEl = document.getElementById("wizStep" + i);
+        const dotEl  = document.getElementById("wizDot"  + i);
+        if (stepEl) { stepEl.style.display = (i === step) ? "" : "none"; }
+        if (dotEl) {
+            dotEl.classList.toggle("active", i === step);
+            dotEl.classList.toggle("done",   i < step);
+        }
+    }
+}
+
+function openWizard() {
+    document.getElementById("wizOverlay").classList.add("show");
+    wizGoTo(1);
+    _wizInstallQueue = [];
+    _wizInstallIdx   = 0;
+}
+
+function closeWizard() {
+    document.getElementById("wizOverlay").classList.remove("show");
+}
+
+function wizCheckServer() {
+    const spinEl  = document.getElementById("wizConnSpin");
+    const msgEl   = document.getElementById("wizConnMsg");
+    const nextEl  = document.getElementById("wizStep2Next");
+    const retryEl = document.getElementById("wizStep2Retry");
+    const secEl   = document.getElementById("wizInstalledSection");
+    spinEl.classList.remove("hidden");
+    msgEl.textContent = "PN40 연결 중...";
+    msgEl.style.color = "";
+    nextEl.disabled = true;
+    retryEl.style.display = "none";
+    secEl.style.display = "none";
+    vscode.postMessage({ type: "wizardGetInfo" });
+}
+
+function wizRenderModelList() {
+    const listEl = document.getElementById("wizModelList");
+    listEl.innerHTML = WIZARD_MODELS.map(m => {
+        const installed = _wizInstalledModels.some(im =>
+            im === m.name || im.startsWith(m.name + ":"));
+        const tooltipAttr = m.tooltip ? ' title="' + m.tooltip + '"' : "";
+        return '<label class="wiz-model-item"' + tooltipAttr + '>' +
+            '<input type="checkbox" class="wiz-model-cb" data-model="' + m.name + '"' +
+            (installed ? " checked" : "") + '>' +
+            '<div class="wiz-model-info">' +
+              '<span class="wiz-model-name">' + m.label + '</span>' +
+              '<span class="wiz-model-size">' + m.size + '</span>' +
+            '</div>' +
+            '<div class="wiz-model-badges">' +
+              '<span class="wiz-model-tag' + (m.rec ? " rec" : "") + '">' + m.tag + '</span>' +
+              (installed ? '<span class="wiz-inst-badge">✓ 설치됨</span>' : "") +
+            '</div>' +
+        '</label>';
+    }).join("");
+}
+
+function wizRenderInstallList() {
+    const listEl = document.getElementById("wizInstallList");
+    listEl.innerHTML = _wizInstallQueue.map(name => {
+        const sid = _wizSafeId(name);
+        return '<div class="wiz-inst-item" id="wizInstItem_' + sid + '">' +
+            '<div class="wiz-inst-name">' + name + '</div>' +
+            '<div class="wiz-inst-status" id="wizInstStatus_' + sid + '">대기 중...</div>' +
+            '<div class="wiz-prog-bar"><div class="wiz-prog-fill" id="wizProgFill_' + sid + '" style="width:0%"></div></div>' +
+        '</div>';
+    }).join("");
+}
+
+function wizInstallNext() {
+    if (_wizInstallIdx >= _wizInstallQueue.length) {
+        wizGoTo(5);
+        renderWizCompleteList();
+        return;
+    }
+    const name     = _wizInstallQueue[_wizInstallIdx];
+    const sid      = _wizSafeId(name);
+    const statusEl = document.getElementById("wizInstStatus_" + sid);
+    if (statusEl) { statusEl.textContent = "시작 중..."; }
+    vscode.postMessage({ type: "wizardInstallModel", name });
+}
+
+function renderWizCompleteList() {
+    const listEl = document.getElementById("wizCompleteList");
+    if (_wizInstallQueue.length === 0) {
+        listEl.innerHTML = '<div class="wiz-complete-note">선택한 모델이 이미 모두 설치되어 있습니다.</div>';
+    } else {
+        listEl.innerHTML = '<div class="wiz-complete-note">설치 작업 완료:</div>' +
+            _wizInstallQueue.map(m => '<div class="wiz-complete-item">✅ ' + m + '</div>').join("");
+    }
+}
+
+// ── 모델 관리 ─────────────────────────────────────────────────────────────────
+
+function openModelMgr() {
+    document.getElementById("modelMgrOverlay").classList.add("show");
+    document.getElementById("modelMgrBody").innerHTML = '<div class="modelmgr-loading">로드 중...</div>';
+    vscode.postMessage({ type: "wizardGetInfo" });
+}
+
+function closeModelMgr() {
+    document.getElementById("modelMgrOverlay").classList.remove("show");
+}
+
+function renderModelMgrList(models) {
+    const bodyEl = document.getElementById("modelMgrBody");
+    if (!bodyEl) { return; }
+    if (!models || models.length === 0) {
+        bodyEl.innerHTML = '<div class="modelmgr-empty">설치된 모델이 없습니다</div>';
+        return;
+    }
+    bodyEl.innerHTML = models.map(m =>
+        '<div class="modelmgr-item">' +
+            '<span class="modelmgr-name">' + m + '</span>' +
+            '<button class="modelmgr-del-btn" data-model="' + m + '" title="삭제">🗑</button>' +
+        '</div>'
+    ).join("");
+    bodyEl.querySelectorAll(".modelmgr-del-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            if (!confirm('"' + btn.dataset.model + '" 모델을 삭제하시겠습니까?\n(이 작업은 되돌릴 수 없습니다)')) { return; }
+            btn.disabled = true;
+            btn.textContent = "...";
+            vscode.postMessage({ type: "wizardDeleteModel", name: btn.dataset.model });
+        });
+    });
+}
+
+// ── 이벤트 바인딩 ──────────────────────────────────────────────────────────────
+
+document.getElementById("wizCloseBtn").addEventListener("click", closeWizard);
+document.getElementById("wizOverlay").addEventListener("click", e => {
+    if (e.target === document.getElementById("wizOverlay")) { closeWizard(); }
+});
+
+// Step 1
+document.getElementById("wizStartBtn").addEventListener("click", () => {
+    wizGoTo(2);
+    wizCheckServer();
+});
+
+// Step 2
+document.getElementById("wizStep2Back").addEventListener("click",  () => wizGoTo(1));
+document.getElementById("wizStep2Retry").addEventListener("click", wizCheckServer);
+document.getElementById("wizStep2Next").addEventListener("click",  () => {
+    wizGoTo(3);
+    wizRenderModelList();
+});
+
+// Step 3
+document.getElementById("wizStep3Back").addEventListener("click", () => wizGoTo(2));
+document.getElementById("wizRecBtn").addEventListener("click", () => {
+    document.querySelectorAll(".wiz-model-cb").forEach(cb => {
+        const m = WIZARD_MODELS.find(mo => mo.name === cb.dataset.model);
+        cb.checked = !!(m && m.rec);
+    });
+});
+document.getElementById("wizStep3Next").addEventListener("click", () => {
+    _wizInstallQueue = [];
+    document.querySelectorAll(".wiz-model-cb:checked").forEach(cb => {
+        const name = cb.dataset.model;
+        const alreadyInstalled = _wizInstalledModels.some(im =>
+            im === name || im.startsWith(name + ":"));
+        if (!alreadyInstalled) { _wizInstallQueue.push(name); }
+    });
+    if (_wizInstallQueue.length === 0) {
+        wizGoTo(5);
+        renderWizCompleteList();
+        return;
+    }
+    wizGoTo(4);
+    wizRenderInstallList();
+    _wizInstallIdx = 0;
+    wizInstallNext();
+});
+
+// Step 4
+document.getElementById("wizStep4Cancel").addEventListener("click", () => {
+    vscode.postMessage({ type: "wizardCancelInstall" });
+});
+
+// Step 5
+document.getElementById("wizDoneBtn").addEventListener("click",    closeWizard);
+document.getElementById("wizModelMgrBtn").addEventListener("click", () => {
+    closeWizard();
+    openModelMgr();
+});
+
+// 모델 관리
+document.getElementById("modelMgrCloseBtn").addEventListener("click", closeModelMgr);
+document.getElementById("modelMgrOverlay").addEventListener("click", e => {
+    if (e.target === document.getElementById("modelMgrOverlay")) { closeModelMgr(); }
+});
+document.getElementById("modelMgrWizBtn").addEventListener("click", () => {
+    closeModelMgr();
+    openWizard();
+});
 // ─────────────────────────────────────────────────────────────────────────────
