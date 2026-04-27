@@ -11,6 +11,8 @@ interface Message {
     tier?: number;
     engine?: string;
     tokenUsage?: number;
+    ragDocs?: number;
+    domain?: string;
 }
 
 interface Session {
@@ -236,6 +238,21 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                         const r = await axios.get(`${this._getUrl()}/models`, { timeout: 5000 });
                         this._view?.webview.postMessage({ type: "models", list: r.data.models });
                     } catch {}
+                    // RAG 통계 (있으면 전송, 없으면 무시)
+                    try {
+                        const rs = await axios.get(`${this._getUrl()}/rag/stats`, { timeout: 3000 });
+                        this._view?.webview.postMessage({ type: "ragStats", stats: rs.data });
+                    } catch {}
+                    break;
+
+                case "ragReset":
+                    try {
+                        await axios.post(`${this._getUrl()}/rag/reset`, { domain: msg.domain }, { timeout: 5000 });
+                        const rs = await axios.get(`${this._getUrl()}/rag/stats`, { timeout: 3000 });
+                        this._view?.webview.postMessage({ type: "ragStats", stats: rs.data });
+                    } catch (e: any) {
+                        this._view?.webview.postMessage({ type: "importResult", ok: false, msg: "RAG 초기화 실패: " + e.message });
+                    }
                     break;
 
                 case "sendPrompt":
@@ -449,6 +466,8 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
             const isCloud = d.tier === 2;
             const tokenEstimate = isCloud ? Math.floor(finalPrompt.length / 4 + d.result.length / 4) : 0;
             if (isCloud) { this._totalTokens += tokenEstimate; }
+            const ragDocs: number = d.rag_docs || 0;
+            const domain: string  = d.domain  || "";
 
             const msg: Message = {
                 role: "assistant",
@@ -456,7 +475,9 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
                 agent: d.agent,
                 tier: d.tier,
                 engine: d.engine,
-                tokenUsage: isCloud ? tokenEstimate : undefined
+                tokenUsage: isCloud ? tokenEstimate : undefined,
+                ragDocs: ragDocs || undefined,
+                domain:  domain  || undefined
             };
             session.messages.push(msg);
             this._lastCloudResponse = isCloud ? msg : null;
@@ -471,7 +492,9 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
                 engine: d.engine,
                 isCloud,
                 tokenUsage: isCloud ? tokenEstimate : null,
-                totalTokens: this._totalTokens
+                totalTokens: this._totalTokens,
+                ragDocs,
+                domain
             });
             // 프로젝트 컨텍스트 자동 업데이트
             if (this._currentProject) {
@@ -1173,6 +1196,17 @@ ${response}
   </div>
   <div id="vaultResults" class="vault-results">
     <div class="vault-empty">검색어를 입력하세요</div>
+  </div>
+  <!-- RAG 통계 -->
+  <div class="rag-stats" id="ragStatsBox" style="display:none">
+    <div class="rag-stats-title">📊 RAG 육성 현황</div>
+    <div class="rag-stats-grid" id="ragStatsGrid"></div>
+    <div class="rag-reset-row">
+      <span style="font-size:10px;opacity:.6">컬렉션 초기화:</span>
+      <button class="rag-reset-btn" data-domain="game_dev">game_dev</button>
+      <button class="rag-reset-btn" data-domain="english">english</button>
+      <button class="rag-reset-btn" data-domain="general">general</button>
+    </div>
   </div>
 </div>
 

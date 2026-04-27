@@ -370,7 +370,7 @@ window.addEventListener("message", e => {
             break;
         case "assistantMsg":
             hideThink();
-            appendMsg("assistant", m.content, m.agent, m.tier, m.engine, m.isCloud, m.tokenUsage);
+            appendMsg("assistant", m.content, m.agent, m.tier, m.engine, m.isCloud, m.tokenUsage, m.ragDocs, m.domain);
             if (m.isCloud && m.tokenUsage) {
                 totalTokens = m.totalTokens || totalTokens;
                 document.getElementById("tokenCount").textContent = totalTokens;
@@ -474,6 +474,9 @@ window.addEventListener("message", e => {
         case "importResult":
             showCtxToast((m.ok ? "✅ " : "❌ ") + m.msg);
             break;
+        case "ragStats":
+            updateRagStats(m.stats);
+            break;
     }
 });
 
@@ -494,10 +497,10 @@ function renderChat() {
     area.innerHTML = "";
     const s = sessions.find(x => x.id === curId);
     if (!s) { return; }
-    s.messages.forEach(m => appendMsg(m.role, m.content, m.agent, m.tier, m.engine, m.tier === 2, m.tokenUsage));
+    s.messages.forEach(m => appendMsg(m.role, m.content, m.agent, m.tier, m.engine, m.tier === 2, m.tokenUsage, m.ragDocs, m.domain));
 }
 
-function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage) {
+function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage, ragDocs, domain) {
     const area = document.getElementById("chatArea");
     const div = document.createElement("div");
     div.className = "msg " + role;
@@ -518,8 +521,19 @@ function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage) {
     if (role === "assistant") {
         const meta = document.createElement("div");
         meta.className = "meta";
-        meta.textContent = (agent || "") + (tier !== undefined ? " · Tier" + tier : "") + (engine ? " · " + engine : "") + (tokenUsage ? " · ~" + tokenUsage + " tokens" : "");
+        let metaTxt = (agent || "")
+            + (tier !== undefined ? " · Tier" + tier : "")
+            + (engine ? " · " + engine : "")
+            + (tokenUsage ? " · ~" + tokenUsage + " tokens" : "");
+        if (ragDocs > 0) {
+            const domainLabel = domain ? ` (${domain})` : "";
+            metaTxt += ` · 📚 ${ragDocs}개 기억${domainLabel}`;
+        }
+        meta.textContent = metaTxt;
         div.appendChild(meta);
+        if (ragDocs > 0) {
+            div.classList.add("rag-hit");
+        }
         if (isCloud && content) {
             const lb = document.createElement("button");
             lb.className = "learn-btn";
@@ -612,6 +626,29 @@ function updateTokenBarVisibility() {
     } else {
         bar.classList.remove("show");
     }
+}
+
+function updateRagStats(stats) {
+    const box  = document.getElementById("ragStatsBox");
+    const grid = document.getElementById("ragStatsGrid");
+    if (!box || !grid || !stats || stats.error) { return; }
+    box.style.display = "block";
+    const domains = { game_dev: "🎮 game_dev", english: "🇺🇸 english", general: "💬 general" };
+    grid.innerHTML = Object.entries(domains).map(([key, label]) => {
+        const n = stats[key] ?? 0;
+        const bar = Math.min(100, n * 2);
+        return `<div class="rag-stat-row">
+            <span class="rag-stat-label">${label}</span>
+            <div class="rag-bar-wrap"><div class="rag-bar" style="width:${bar}%"></div></div>
+            <span class="rag-stat-count">${n}개</span>
+        </div>`;
+    }).join("");
+    document.querySelectorAll(".rag-reset-btn").forEach(btn => {
+        btn.onclick = () => {
+            if (!confirm(`'${btn.dataset.domain}' 컬렉션을 초기화하시겠습니까?`)) { return; }
+            vscode.postMessage({ type: "ragReset", domain: btn.dataset.domain });
+        };
+    });
 }
 
 function handleOfflineStatus(online) {
@@ -865,6 +902,7 @@ document.getElementById("brainBtn").onclick = () => {
     document.getElementById("brainBtn").classList.add("on");
     vaultOpen = true;
     vscode.postMessage({ type: "vaultGetInfo" });
+    vscode.postMessage({ type: "ready" }); // RAG 통계 포함 재조회
     setTimeout(() => document.getElementById("vaultSearchInput").focus(), 80);
 };
 

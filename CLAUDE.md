@@ -38,7 +38,7 @@
 | 항목 | 내용 |
 |------|------|
 | 브랜치 | `extension-ui` |
-| 최신 Phase | Phase 16 + i18n 완료 (2026-04-26) |
+| 최신 Phase | RAG 육성 시스템 완료 (2026-04-27) |
 | 패키지 버전 | `ceviz-0.2.0` |
 | 백엔드 주소 | `100.69.155.43:8000` (기본값) |
 | 빌드 상태 | webpack 컴파일 정상 |
@@ -167,6 +167,7 @@
 - [x] Phase 10: 파일 컨텍스트 주입 완료
 - [x] Phase 11 ~ Phase 16: 모두 완료
 - [ ] Marketplace 실제 배포: `VSCE_PAT` secret 설정 후 `release.yml` 주석 해제 → `git tag v0.2.0 && git push --tags`
+- [ ] RAG 육성 시스템 PN40 배포: `cp engine.py ~/ceviz/ && pip install chromadb && python pn40_rag_patch.py` 후 api_server.py 수동 패치
 
 ---
 
