@@ -38,7 +38,7 @@
 | 항목 | 내용 |
 |------|------|
 | 브랜치 | `extension-ui` |
-| 최신 Phase | Phase 17 설치 마법사 완료 (2026-04-27) |
+| 최신 Phase | Phase 18 RSS 수집 시스템 구현 (2026-04-27) |
 | 패키지 버전 | `ceviz-0.2.0` |
 | 백엔드 주소 | `100.69.155.43:8000` (기본값) |
 | 빌드 상태 | webpack 컴파일 정상 |
@@ -135,6 +135,14 @@
 - **내용**: `publisher: "eonyakoh"` 추가, README.md 정비, `.github/workflows/release.yml`(v* 태그 → VSIX 빌드 + GitHub Release 자동 생성, Marketplace publish 주석 처리)
 - **파일**: `package.json`, `README.md`, `.github/workflows/release.yml`
 
+### 🔄 Phase 18 — RSS Feed 자동 수집 + Obsidian 저장
+- **상태**: 진행 중 (2026-04-27)
+- **아키텍처**: PN40 systemd user timer → rss_worker.py → vault_sync/ → Syncthing → T480s Vault
+- **T480s Extension**: 📡 RSS 탭(4번째), 구독 CRUD, 즉시 갱신, 2분 알림 폴링, .md 파일 열기
+- **PN40 스크립트**: `pn40_rss_router.py`(FastAPI), `pn40_rss_worker.py`(수집+whisper큐), `pn40_rss_setup.sh`(systemd)
+- **보안**: URL http(s) 검증, yt-dlp 인자 배열 실행, 경로 traversal 차단, 임시파일 finally 삭제, LLM 프롬프트 격리
+- **파일**: `src/panel.ts`, `media/webview.js`, `media/webview.css`, `pn40_rss_router.py`, `pn40_rss_worker.py`, `pn40_rss_setup.sh`
+
 ### ✅ Phase 17 — 통합 설치 마법사 & 모델 관리
 - **완료**: 2026-04-27
 - **내용**: 5단계 설치 마법사 오버레이 UI (서버 확인→모델 선택→설치 진행→완료), 권장 조합 자동 체크(gemma3:4b+nomic-embed-text), nomic-embed-text "RAG 필수" 툴팁, 설치 완료 화면 "VS Code 재시작 권장" 안내, 모델 관리 오버레이(삭제·"마법사 다시 실행" 링크), `ceviz.setupWizard` 커맨드, PN40 `/models/pull` SSE + `/models/delete` 프록시 라우터
@@ -154,6 +162,7 @@
 | 2026-04-24 | Phase 10b: Soti-Skill 백엔드 통합 | PN40 orchestrator.py 생성, /orchestrate SSE 엔드포인트 추가·검증, Extension SSE 스트리밍, 실시간 에이전트 카드 UI, ceviz-0.2.0.vsix 재설치 완료 |
 | 2026-04-26 | 세션 재개 → Phase 13~16 순차 완료 | Phase 11 커밋, 잡무(repository/LICENSE), Phase 12~16 전체 구현·커밋·설치 완료 |
 | 2026-04-27 | Phase 17: 설치 마법사 & 모델 관리 | 5단계 마법사 오버레이, 모델 관리 overlay, wizardGetInfo/Install/Delete 핸들러, PN40 패치스크립트, 빌드·패키징 완료 |
+| 2026-04-27 | Phase 18: RSS Feed 자동 수집 + Obsidian 저장 | RSS 탭 UI, 구독 CRUD, 2분 알림 폴링, rss_router/worker/setup 스크립트, 빌드·패키징 완료 |
 
 ---
 

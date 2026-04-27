@@ -574,6 +574,38 @@ window.addEventListener("message", e => {
         case "openModelManager":
             openModelMgr();
             break;
+
+        case "rssFeeds":
+            renderRssFeeds(m.feeds);
+            break;
+
+        case "rssNotifications":
+            renderRssNotifications(m.notifications, m.total);
+            break;
+
+        case "rssFeedSaved":
+            rssCloseForm();
+            showCtxToast("✅ 구독이 추가되었습니다.");
+            break;
+
+        case "rssFetchStatus":
+            {
+                const btn = document.getElementById("rssFetchNowBtn");
+                if (m.status === "running") {
+                    if (btn) { btn.disabled = true; btn.textContent = "⏳ 수집 중..."; }
+                } else if (m.status === "triggered") {
+                    showCtxToast("✅ PN40 수집 시작됨 — 약 30초 후 확인하세요.");
+                    if (btn) { btn.disabled = false; btn.textContent = "↻ 지금 갱신"; }
+                } else {
+                    showCtxToast("❌ 갱신 실패: " + (m.msg || "오류"));
+                    if (btn) { btn.disabled = false; btn.textContent = "↻ 지금 갱신"; }
+                }
+            }
+            break;
+
+        case "rssError":
+            showCtxToast("❌ RSS 오류: " + (m.msg || "알 수 없는 오류"));
+            break;
     }
 });
 
@@ -789,12 +821,15 @@ function switchTab(tab) {
     const isChat  = tab === "chat";
     const isDash  = tab === "dash";
     const isSkill = tab === "skill";
+    const isRss   = tab === "rss";
     document.getElementById("chatTab").classList.toggle("on", isChat);
     document.getElementById("dashTab").classList.toggle("on", isDash);
     document.getElementById("skillTab").classList.toggle("on", isSkill);
+    document.getElementById("rssTab").classList.toggle("on", isRss);
     document.getElementById("chatArea").style.display = isChat ? "flex" : "none";
     document.getElementById("dashArea").classList.toggle("show", isDash);
     document.getElementById("skillArea").classList.toggle("show", isSkill);
+    document.getElementById("rssArea").classList.toggle("show", isRss);
     document.getElementById("soticBtn").classList.toggle("on", isDash);
     document.getElementById("skillBtn").classList.toggle("on", isSkill);
 }
@@ -942,6 +977,11 @@ document.getElementById("newSessBtn").onclick = () => vscode.postMessage({ type:
 document.getElementById("chatTab").onclick = () => switchTab("chat");
 document.getElementById("dashTab").onclick = () => switchTab("dash");
 document.getElementById("skillTab").onclick = () => { switchTab("skill"); vscode.postMessage({ type: "getSkills" }); };
+document.getElementById("rssTab").onclick = () => {
+    switchTab("rss");
+    vscode.postMessage({ type: "rssGetFeeds" });
+    vscode.postMessage({ type: "rssGetNotifications" });
+};
 document.getElementById("soticBtn").onclick = () => switchTab("dash");
 document.getElementById("stopBtn").onclick = () => vscode.postMessage({ type: "cancelPrompt" });
 document.getElementById("newChatItem").onclick = () => { vscode.postMessage({ type: "newSession" }); closeDropdown(); };
@@ -992,8 +1032,10 @@ document.getElementById("brainBtn").onclick = () => {
     document.getElementById("chatTab").classList.add("on");
     document.getElementById("dashTab").classList.remove("on");
     document.getElementById("skillTab").classList.remove("on");
+    document.getElementById("rssTab").classList.remove("on");
     document.getElementById("dashArea").classList.remove("show");
     document.getElementById("skillArea").classList.remove("show");
+    document.getElementById("rssArea").classList.remove("show");
     document.getElementById("chatArea").style.display = "none";
     document.getElementById("vaultPanel").classList.add("show");
     document.getElementById("brainBtn").classList.add("on");
@@ -1848,5 +1890,146 @@ document.getElementById("modelMgrOverlay").addEventListener("click", e => {
 document.getElementById("modelMgrWizBtn").addEventListener("click", () => {
     closeModelMgr();
     openWizard();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── RSS 피드 ─────────────────────────────────────────────────────────────────
+
+const PLATFORM_ICON = { youtube: "🎬", reddit: "💬", blog: "📝" };
+
+function renderRssFeeds(feeds) {
+    const listEl = document.getElementById("rssFeedList");
+    if (!feeds || feeds.length === 0) {
+        listEl.innerHTML = '<div class="rss-empty">구독 중인 피드가 없습니다.<br>+ 구독 추가로 시작하세요.</div>';
+        return;
+    }
+    listEl.innerHTML = feeds.map(f => {
+        const icon = PLATFORM_ICON[f.platform] || "📡";
+        const lastFetched = f.lastFetched
+            ? new Date(f.lastFetched).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
+            : "미갱신";
+        return '<div class="rss-feed-item">' +
+            '<span class="rss-feed-icon">' + icon + '</span>' +
+            '<div class="rss-feed-info">' +
+              '<div class="rss-feed-name">' + escapeHtml(f.name || f.url) + '</div>' +
+              '<div class="rss-feed-meta">' + escapeHtml(f.platform) + ' · ' + lastFetched + '</div>' +
+            '</div>' +
+            '<div class="rss-feed-actions">' +
+              '<span class="rss-interval-chip">' + f.interval + '</span>' +
+              '<button class="rss-del-btn" data-id="' + f.id + '" title="구독 해제">✕</button>' +
+            '</div>' +
+        '</div>';
+    }).join("");
+    listEl.querySelectorAll(".rss-del-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            if (!confirm('"' + btn.closest(".rss-feed-item").querySelector(".rss-feed-name").textContent + '" 구독을 해제하시겠습니까?\n(수집된 .md 파일은 유지됩니다)')) { return; }
+            vscode.postMessage({ type: "rssDeleteFeed", id: btn.dataset.id });
+        });
+    });
+}
+
+function renderRssNotifications(notifs, total) {
+    const badge  = document.getElementById("rssNotifBadge");
+    const sec    = document.getElementById("rssNotifSection");
+    const listEl = document.getElementById("rssNotifList");
+    const label  = document.getElementById("rssNotifLabel");
+
+    if (!notifs || notifs.length === 0) {
+        if (badge)  { badge.style.display = "none"; }
+        if (sec)    { sec.style.display = "none"; }
+        return;
+    }
+    if (badge)  { badge.textContent = total; badge.style.display = ""; }
+    if (label)  { label.textContent = "새 항목 " + total + "개"; }
+    if (sec)    { sec.style.display = ""; }
+    if (!listEl) { return; }
+
+    listEl.innerHTML = notifs.slice(0, 10).map(n =>
+        '<div class="rss-notif-item" data-path="' + escapeHtml(n.relPath) + '">' +
+            '<span class="rss-notif-src">' + escapeHtml(n.feedName || "RSS") + '</span>' +
+            '<span class="rss-notif-title">' + escapeHtml(n.title) + '</span>' +
+            '<span class="rss-notif-open" title="VS Code에서 열기">📂</span>' +
+        '</div>'
+    ).join("");
+
+    listEl.querySelectorAll(".rss-notif-item").forEach(row => {
+        row.addEventListener("click", () => {
+            vscode.postMessage({ type: "rssOpenFile", relPath: row.dataset.path });
+        });
+    });
+}
+
+function escapeHtml(str) {
+    return String(str || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+
+function rssOpenForm() {
+    document.getElementById("rssFormWrap").style.display = "";
+    document.getElementById("rssFeedUrl").value = "";
+    document.getElementById("rssFeedName").value = "";
+    document.getElementById("rssFormNote").textContent = "";
+    document.getElementById("rssFeedUrl").focus();
+}
+
+function rssCloseForm() {
+    document.getElementById("rssFormWrap").style.display = "none";
+    document.getElementById("rssFormSave").disabled = false;
+    document.getElementById("rssFormSave").textContent = "구독 시작";
+}
+
+// ── RSS 이벤트 바인딩 ────────────────────────────────────────────────────────
+
+document.getElementById("rssAddBtn").addEventListener("click", rssOpenForm);
+document.getElementById("rssFormClose").addEventListener("click", rssCloseForm);
+document.getElementById("rssFormCancel").addEventListener("click", rssCloseForm);
+
+document.getElementById("rssPlatform").addEventListener("change", () => {
+    const plat = document.getElementById("rssPlatform").value;
+    const note = document.getElementById("rssFormNote");
+    if (plat === "youtube") {
+        note.textContent = "예: https://youtube.com/@channelname  또는  https://youtube.com/channel/UCxxx";
+    } else if (plat === "reddit") {
+        note.textContent = "예: https://www.reddit.com/r/MachineLearning/.rss";
+    } else {
+        note.textContent = "RSS/Atom 피드 URL을 직접 입력하세요.";
+    }
+});
+
+document.getElementById("rssFormSave").addEventListener("click", () => {
+    const url  = document.getElementById("rssFeedUrl").value.trim();
+    const name = document.getElementById("rssFeedName").value.trim();
+    const plat = document.getElementById("rssPlatform").value;
+    const note = document.getElementById("rssFormNote");
+    const sel  = document.getElementById("rssIntervalSel");
+    const interval = sel ? sel.value : "1h";
+
+    if (!url) { note.textContent = "❌ URL을 입력하세요."; return; }
+    if (!/^https?:\/\//i.test(url)) {
+        note.textContent = "❌ http(s) URL만 허용됩니다.";
+        return;
+    }
+    const saveBtn = document.getElementById("rssFormSave");
+    saveBtn.disabled = true;
+    saveBtn.textContent = "저장 중...";
+    note.textContent = "";
+    vscode.postMessage({ type: "rssAddFeed", platform: plat, url, name, interval });
+});
+
+document.getElementById("rssFetchNowBtn").addEventListener("click", () => {
+    vscode.postMessage({ type: "rssFetchNow" });
+});
+
+document.getElementById("rssAckAllBtn").addEventListener("click", () => {
+    vscode.postMessage({ type: "rssAckAll" });
+});
+
+document.getElementById("rssIntervalSel").addEventListener("change", () => {
+    const interval = document.getElementById("rssIntervalSel").value;
+    vscode.postMessage({ type: "rssUpdateSettings", settings: { interval } });
+    showCtxToast("✅ 갱신 주기 변경됨: " + interval + " — PN40 timer에 반영해주세요.");
 });
 // ─────────────────────────────────────────────────────────────────────────────

@@ -57,6 +57,28 @@ interface CacheEntry {
     timestamp: number;
 }
 
+interface RssFeed {
+    id: string;
+    platform: "youtube" | "reddit" | "blog";
+    url: string;
+    name: string;
+    interval: "15m" | "1h" | "3h" | "24h";
+    enabled: boolean;
+    lastFetched?: string;
+    lastEntryId?: string;
+    createdAt: string;
+}
+
+interface RssNotification {
+    id: string;
+    feedId: string;
+    feedName: string;
+    title: string;
+    relPath: string;
+    createdAt: string;
+    acked: boolean;
+}
+
 export class CevizPanel implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private _sessions: Session[] = [];
@@ -78,6 +100,7 @@ export class CevizPanel implements vscode.WebviewViewProvider {
     private static readonly CACHE_MAX = 20;
     private _language = "";
     private _wizardInstallStream?: NodeJS.ReadableStream;
+    private _rssPollTimer?: ReturnType<typeof setInterval>;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -220,6 +243,7 @@ export class CevizPanel implements vscode.WebviewViewProvider {
         webviewView.webview.html = this._html();
 
         this._startStatusPolling();
+        this._rssStartPolling();
 
         vscode.workspace.onDidChangeWorkspaceFolders(() => {
             this._sessions = this._context.globalState.get(this._sessionsKey(), []);
@@ -414,6 +438,38 @@ export class CevizPanel implements vscode.WebviewViewProvider {
 
                 case "openModelManager":
                     await this._wizardGetInfo();
+                    break;
+
+                case "rssGetFeeds":
+                    await this._rssGetFeeds();
+                    break;
+
+                case "rssAddFeed":
+                    await this._rssAddFeed(msg.platform, msg.url, msg.name, msg.interval);
+                    break;
+
+                case "rssDeleteFeed":
+                    await this._rssDeleteFeed(msg.id);
+                    break;
+
+                case "rssFetchNow":
+                    await this._rssFetchNow();
+                    break;
+
+                case "rssGetNotifications":
+                    await this._rssGetNotifications();
+                    break;
+
+                case "rssAckAll":
+                    await this._rssAckAll();
+                    break;
+
+                case "rssOpenFile":
+                    await this._rssOpenFile(msg.relPath);
+                    break;
+
+                case "rssUpdateSettings":
+                    await this._rssUpdateSettings(msg.settings);
                     break;
             }
         });
@@ -1131,6 +1187,112 @@ ${response}
         } catch {}
     }
 
+    // ── RSS 피드 ──────────────────────────────────────────────────────────────
+
+    private _rssStartPolling() {
+        if (this._rssPollTimer) { clearInterval(this._rssPollTimer); }
+        this._rssPollTimer = setInterval(() => {
+            if (this._isOnline) { this._rssGetNotifications(); }
+        }, 120000);
+    }
+
+    private async _rssGetFeeds() {
+        try {
+            const r = await axios.get(`${this._getUrl()}/rss/feeds`, { timeout: 5000 });
+            this._view?.webview.postMessage({ type: "rssFeeds", feeds: r.data.feeds || [] });
+        } catch (e: any) {
+            this._view?.webview.postMessage({ type: "rssFeeds", feeds: [], error: e.message });
+        }
+    }
+
+    private async _rssAddFeed(platform: string, url: string, name: string, interval: string) {
+        try {
+            await axios.post(`${this._getUrl()}/rss/feeds`,
+                { platform, url, name, interval }, { timeout: 10000 });
+            await this._rssGetFeeds();
+            this._view?.webview.postMessage({ type: "rssFeedSaved" });
+        } catch (e: any) {
+            this._view?.webview.postMessage({
+                type: "rssError",
+                msg: (e.response?.data?.detail) || e.message
+            });
+        }
+    }
+
+    private async _rssDeleteFeed(id: string) {
+        try {
+            await axios.delete(`${this._getUrl()}/rss/feeds/${encodeURIComponent(id)}`,
+                { timeout: 5000 });
+            await this._rssGetFeeds();
+        } catch (e: any) {
+            this._view?.webview.postMessage({
+                type: "rssError",
+                msg: (e.response?.data?.detail) || e.message
+            });
+        }
+    }
+
+    private async _rssFetchNow() {
+        this._view?.webview.postMessage({ type: "rssFetchStatus", status: "running" });
+        try {
+            await axios.post(`${this._getUrl()}/rss/fetch/now`, {}, { timeout: 10000 });
+            this._view?.webview.postMessage({ type: "rssFetchStatus", status: "triggered" });
+            setTimeout(() => { if (this._isOnline) { this._rssGetNotifications(); } }, 30000);
+        } catch (e: any) {
+            this._view?.webview.postMessage({
+                type: "rssFetchStatus", status: "error", msg: e.message
+            });
+        }
+    }
+
+    private async _rssGetNotifications() {
+        try {
+            const r = await axios.get(`${this._getUrl()}/rss/notifications`, { timeout: 5000 });
+            this._view?.webview.postMessage({
+                type: "rssNotifications",
+                notifications: r.data.notifications || [],
+                total: r.data.total || 0
+            });
+        } catch {}
+    }
+
+    private async _rssAckAll() {
+        try {
+            await axios.post(`${this._getUrl()}/rss/notifications/ack`, null, { timeout: 5000 });
+            await this._rssGetNotifications();
+        } catch (e: any) {
+            this._view?.webview.postMessage({ type: "rssError", msg: e.message });
+        }
+    }
+
+    private async _rssOpenFile(relPath: string) {
+        const vaultPath = this._getVaultPath();
+        if (!vaultPath) {
+            vscode.window.showWarningMessage(
+                "CEVIZ: Vault 경로 미설정 — ceviz.vaultPath 설정을 확인하세요.");
+            return;
+        }
+        const fullPath = path.resolve(path.join(vaultPath, relPath));
+        const vaultResolved = path.resolve(vaultPath);
+        if (!fullPath.startsWith(vaultResolved + path.sep) && fullPath !== vaultResolved) {
+            vscode.window.showErrorMessage("CEVIZ: 유효하지 않은 파일 경로입니다.");
+            return;
+        }
+        try {
+            await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(fullPath));
+        } catch (e: any) {
+            vscode.window.showErrorMessage(`CEVIZ: 파일 열기 실패 — ${e.message}`);
+        }
+    }
+
+    private async _rssUpdateSettings(settings: Record<string, string>) {
+        try {
+            await axios.put(`${this._getUrl()}/rss/settings`, settings, { timeout: 5000 });
+        } catch (e: any) {
+            this._view?.webview.postMessage({ type: "rssError", msg: e.message });
+        }
+    }
+
     // ── 마법사 & 모델 관리 ────────────────────────────────────────────────────
 
     private async _wizardGetInfo() {
@@ -1288,6 +1450,7 @@ ${response}
   <button class="tab on" id="chatTab">💬 Chat</button>
   <button class="tab" id="dashTab">🎛️ Soti</button>
   <button class="tab" id="skillTab">⚡ Skill</button>
+  <button class="tab" id="rssTab">📡 RSS</button>
 </div>
 
 <!-- 채팅 영역 -->
@@ -1397,6 +1560,61 @@ ${response}
   </div>
   <div class="skill-list" id="skillList">
     <div class="skill-empty">⚡ 스킬이 없습니다<br>+ 추가 버튼으로 만들어보세요</div>
+  </div>
+</div>
+
+<!-- RSS 피드 영역 -->
+<div class="rss-area" id="rssArea">
+  <div class="rss-hdr">
+    <span class="rss-hdr-title">📡 RSS 피드 구독</span>
+    <div class="rss-hdr-right">
+      <span class="rss-badge" id="rssNotifBadge" style="display:none">0</span>
+      <button class="rss-add-btn" id="rssAddBtn">+ 구독 추가</button>
+    </div>
+  </div>
+  <div class="rss-ctrl-row">
+    <span class="rss-ctrl-label">PN40 갱신 주기:</span>
+    <select class="rss-interval-sel" id="rssIntervalSel">
+      <option value="15m">15분</option>
+      <option value="1h" selected>1시간</option>
+      <option value="3h">3시간</option>
+      <option value="24h">하루 1회</option>
+    </select>
+    <button class="rss-fetch-btn" id="rssFetchNowBtn" title="PN40에 즉시 갱신 요청">↻ 지금 갱신</button>
+  </div>
+  <!-- 구독 추가 폼 -->
+  <div class="rss-form-wrap" id="rssFormWrap" style="display:none">
+    <div class="rss-form-hdr">
+      <span>새 피드 구독</span>
+      <button class="rss-form-close-btn" id="rssFormClose">✕</button>
+    </div>
+    <div class="rss-form-body">
+      <select class="rss-input" id="rssPlatform">
+        <option value="youtube">🎬 YouTube</option>
+        <option value="reddit">💬 Reddit</option>
+        <option value="blog">📝 Blog</option>
+      </select>
+      <input class="rss-input" type="url" id="rssFeedUrl"
+        placeholder="YouTube: https://youtube.com/@channel" autocomplete="off" spellcheck="false">
+      <input class="rss-input" type="text" id="rssFeedName" placeholder="구독 이름 (예: AI 뉴스채널)">
+      <div class="rss-form-note" id="rssFormNote"></div>
+      <div class="rss-form-actions">
+        <button class="rss-cancel-btn" id="rssFormCancel">취소</button>
+        <button class="rss-save-btn" id="rssFormSave">구독 시작</button>
+      </div>
+    </div>
+  </div>
+  <!-- 새 피드 알림 -->
+  <div class="rss-notif-section" id="rssNotifSection" style="display:none">
+    <div class="rss-notif-hdr">
+      <span id="rssNotifLabel">새 항목</span>
+      <button class="rss-ack-btn" id="rssAckAllBtn">모두 확인 ✓</button>
+    </div>
+    <div class="rss-notif-list" id="rssNotifList"></div>
+  </div>
+  <!-- 구독 목록 -->
+  <div class="rss-feed-list" id="rssFeedList">
+    <div class="rss-empty">구독 중인 피드가 없습니다.<br>+ 구독 추가로 시작하세요.</div>
   </div>
 </div>
 
