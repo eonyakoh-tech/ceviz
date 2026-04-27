@@ -1,10 +1,12 @@
 """
-engine.py — CEVIZ RAG 육성 엔진
+rag_engine.py — CEVIZ RAG 육성 엔진
 ChromaDB (벡터 DB) + nomic-embed-text (Ollama) 기반
-도메인 격리된 3개 컬렉션: game_dev / english / general
+3개 도메인 격리 컬렉션: game_dev / english / general
 
-배포 위치: ~/ceviz/engine.py (PN40)
-의존성:   pip install chromadb requests
+PN40 (Celeron N4000) 최적화:
+  - 임베딩 타임아웃 300s (모델 스왑 포함)
+  - 실패 시 자동 재시도 2회 (10s 간격)
+  - 저장은 비동기 백그라운드 (메인 응답 지연 없음)
 """
 
 from __future__ import annotations
@@ -21,9 +23,11 @@ import requests
 OLLAMA_URL  = os.getenv("CEVIZ_OLLAMA_URL",  "http://localhost:11434")
 EMBED_MODEL = os.getenv("CEVIZ_EMBED_MODEL", "nomic-embed-text")
 CHROMA_PATH = os.path.expanduser(os.getenv("CEVIZ_CHROMA_PATH", "~/ceviz/chromadb"))
-TOP_K       = int(os.getenv("CEVIZ_RAG_TOP_K", "3"))
-# cosine distance ≤ (1 - RELEVANCE) 인 문서만 사용
-RELEVANCE   = float(os.getenv("CEVIZ_RAG_RELEVANCE", "0.40"))
+TOP_K       = int(os.getenv("CEVIZ_RAG_TOP_K",     "3"))
+RELEVANCE   = float(os.getenv("CEVIZ_RAG_RELEVANCE","0.40"))
+EMBED_TIMEOUT = int(os.getenv("CEVIZ_EMBED_TIMEOUT", "300"))   # PN40 모델 스왑 고려
+EMBED_RETRY   = int(os.getenv("CEVIZ_EMBED_RETRY",   "2"))     # 재시도 횟수
+EMBED_RETRY_WAIT = int(os.getenv("CEVIZ_EMBED_RETRY_WAIT", "10"))  # 재시도 대기(s)
 
 # ── 도메인 분류 키워드 ────────────────────────────────────────────────────────
 _DOMAIN_KW: dict[str, list[str]] = {
@@ -49,7 +53,7 @@ _DOMAIN_KW: dict[str, list[str]] = {
         "tutor", "lesson", "학습", "practice", "연습",
         "sentence", "문장", "expression", "paragraph",
         "accent", "fluency", "native", "correction", "교정",
-        "conversation", "대화", "dialogue", "native speaker",
+        "conversation", "대화", "dialogue",
     ],
 }
 
@@ -59,14 +63,13 @@ DOMAINS = ("game_dev", "english", "general")
 # ── ChromaDB 초기화 ──────────────────────────────────────────────────────────
 def _init_chroma():
     try:
-        import chromadb  # noqa: PLC0415 (lazy import)
+        import chromadb
         os.makedirs(CHROMA_PATH, exist_ok=True)
         client = chromadb.PersistentClient(path=CHROMA_PATH)
         cols: dict = {}
         for name in DOMAINS:
             cols[name] = client.get_or_create_collection(
-                name,
-                metadata={"hnsw:space": "cosine"},
+                name, metadata={"hnsw:space": "cosine"}
             )
         print(f"[RAG] ChromaDB 초기화 완료 → {CHROMA_PATH}")
         print(f"[RAG] 현재 문서 수: { {n: c.count() for n, c in cols.items()} }")
@@ -82,39 +85,41 @@ def _init_chroma():
 _chroma_client, _cols = _init_chroma()
 
 
-# ── 임베딩 ───────────────────────────────────────────────────────────────────
+# ── 임베딩 (재시도 포함) ──────────────────────────────────────────────────────
 def _embed_sync(text: str) -> Optional[list[float]]:
-    """nomic-embed-text 동기 호출 (최대 4000자)."""
-    try:
-        r = requests.post(
-            f"{OLLAMA_URL}/api/embeddings",
-            json={"model": EMBED_MODEL, "prompt": text[:4000]},
-            timeout=30,
-        )
-        r.raise_for_status()
-        emb = r.json().get("embedding")
-        if not emb:
-            print("[RAG] 임베딩 응답이 비어있음")
-        return emb
-    except requests.exceptions.ConnectionError:
-        print(f"[RAG] Ollama 연결 실패 → {OLLAMA_URL}")
-        return None
-    except Exception as e:
-        print(f"[RAG] 임베딩 오류: {e}")
-        return None
+    """nomic-embed-text 동기 호출. 실패 시 EMBED_RETRY 회 재시도."""
+    for attempt in range(1 + EMBED_RETRY):
+        try:
+            r = requests.post(
+                f"{OLLAMA_URL}/api/embeddings",
+                json={"model": EMBED_MODEL, "prompt": text[:4000]},
+                timeout=EMBED_TIMEOUT,
+            )
+            r.raise_for_status()
+            emb = r.json().get("embedding")
+            if emb:
+                return emb
+            print(f"[RAG] 임베딩 응답 비어있음 (시도 {attempt+1})")
+        except requests.exceptions.Timeout:
+            print(f"[RAG] 임베딩 타임아웃 {EMBED_TIMEOUT}s (시도 {attempt+1}/{1+EMBED_RETRY})")
+        except requests.exceptions.ConnectionError:
+            print(f"[RAG] Ollama 연결 실패 → {OLLAMA_URL} (시도 {attempt+1})")
+        except Exception as e:
+            print(f"[RAG] 임베딩 오류: {e} (시도 {attempt+1})")
+
+        if attempt < EMBED_RETRY:
+            import time
+            time.sleep(EMBED_RETRY_WAIT)
+
+    return None
 
 
 async def _embed(text: str) -> Optional[list[float]]:
-    """비동기 래퍼 — asyncio.to_thread으로 블로킹 방지."""
     return await asyncio.to_thread(_embed_sync, text)
 
 
 # ── 도메인 분류 ──────────────────────────────────────────────────────────────
 def classify_domain(text: str) -> str:
-    """
-    텍스트 내 키워드 빈도 기반 도메인 자동 분류.
-    반환: "game_dev" | "english" | "general"
-    """
     lower = text.lower()
     scores = {
         d: sum(1 for kw in kws if kw in lower)
@@ -131,20 +136,16 @@ async def save_conversation(
     domain: Optional[str] = None,
     extra: Optional[dict] = None,
 ) -> bool:
-    """
-    user + assistant 대화 쌍을 해당 도메인 컬렉션에 저장.
-    domain=None이면 user_msg + assistant_msg 기반으로 자동 분류.
-    """
     if not _cols:
         return False
 
     domain = domain or classify_domain(f"{user_msg} {assistant_msg}")
     col = _cols.get(domain, _cols["general"])
 
-    # 저장 텍스트: 질문+답변 결합 (검색 정확도 향상)
     doc = f"[질문] {user_msg}\n[답변] {assistant_msg}"
     emb = await _embed(doc)
     if emb is None:
+        print(f"[RAG] 저장 실패 — 임베딩 불가 (domain={domain})")
         return False
 
     meta = {
@@ -164,7 +165,7 @@ async def save_conversation(
         print(f"[RAG] 저장 완료 → domain={domain}, 총 {col.count()}개")
         return True
     except Exception as e:
-        print(f"[RAG] 저장 실패: {e}")
+        print(f"[RAG] ChromaDB 저장 실패: {e}")
         return False
 
 
@@ -174,25 +175,12 @@ async def search_context(
     domain: Optional[str] = None,
     n: int = TOP_K,
 ) -> tuple[str, int]:
-    """
-    query와 가장 유사한 과거 대화를 검색하여 프롬프트 컨텍스트 반환.
-
-    도메인 격리 규칙:
-      - game_dev 질문 → game_dev 컬렉션만 검색
-      - english 질문  → english 컬렉션만 검색
-      - general 질문  → general 컬렉션만 검색
-      (관련 없는 도메인 기억 주입 방지)
-
-    반환: (컨텍스트_문자열, 사용된_문서_수)
-    컨텍스트가 없으면 ("", 0) 반환.
-    """
     if not _cols:
         return "", 0
 
     domain = domain or classify_domain(query)
     col = _cols.get(domain, _cols["general"])
 
-    # 빈 컬렉션 조기 반환
     try:
         count = col.count()
     except Exception:
@@ -216,14 +204,9 @@ async def search_context(
 
     docs  = res.get("documents",  [[]])[0]
     dists = res.get("distances",  [[]])[0]
-
-    # 유사도 필터 (cosine distance 기준: 낮을수록 유사)
     threshold = 1.0 - RELEVANCE
-    relevant = [
-        doc for doc, dist in zip(docs, dists)
-        if dist <= threshold
-    ]
 
+    relevant = [doc for doc, dist in zip(docs, dists) if dist <= threshold]
     if not relevant:
         return "", 0
 
@@ -240,19 +223,17 @@ async def search_context(
 
 # ── 유틸리티 ────────────────────────────────────────────────────────────────
 def get_stats() -> dict:
-    """컬렉션별 저장 문서 수."""
     if not _cols:
         return {"error": "ChromaDB 미초기화"}
     return {name: col.count() for name, col in _cols.items()}
 
 
 async def reset_collection(domain: str) -> bool:
-    """특정 도메인 컬렉션 초기화 (전체 삭제 후 재생성)."""
     if not _chroma_client or domain not in _cols:
         return False
     try:
+        import chromadb
         _chroma_client.delete_collection(domain)
-        import chromadb  # noqa: PLC0415
         _cols[domain] = _chroma_client.get_or_create_collection(
             domain, metadata={"hnsw:space": "cosine"}
         )
