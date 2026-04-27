@@ -1908,6 +1908,7 @@ function renderRssFeeds(feeds) {
         const lastFetched = f.lastFetched
             ? new Date(f.lastFetched).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
             : "미갱신";
+        const isWp = f.mode === "whitepaper";
         return '<div class="rss-feed-item">' +
             '<span class="rss-feed-icon">' + icon + '</span>' +
             '<div class="rss-feed-info">' +
@@ -1916,6 +1917,9 @@ function renderRssFeeds(feeds) {
             '</div>' +
             '<div class="rss-feed-actions">' +
               '<span class="rss-interval-chip">' + f.interval + '</span>' +
+              '<span class="rss-mode-chip' + (isWp ? ' wp' : '') + '">' +
+                (isWp ? '📋' : '📄') +
+              '</span>' +
               '<button class="rss-del-btn" data-id="' + f.id + '" title="구독 해제">✕</button>' +
             '</div>' +
         '</div>';
@@ -2007,6 +2011,9 @@ document.getElementById("rssFormSave").addEventListener("click", () => {
     const sel  = document.getElementById("rssIntervalSel");
     const interval = sel ? sel.value : "1h";
 
+    const modeRadio = document.querySelector('input[name="rssFeedMode"]:checked');
+    const mode = modeRadio ? modeRadio.value : "summary";
+
     if (!url) { note.textContent = "❌ URL을 입력하세요."; return; }
     if (!/^https?:\/\//i.test(url)) {
         note.textContent = "❌ http(s) URL만 허용됩니다.";
@@ -2016,7 +2023,15 @@ document.getElementById("rssFormSave").addEventListener("click", () => {
     saveBtn.disabled = true;
     saveBtn.textContent = "저장 중...";
     note.textContent = "";
-    vscode.postMessage({ type: "rssAddFeed", platform: plat, url, name, interval });
+    vscode.postMessage({ type: "rssAddFeed", platform: plat, url, name, interval, mode });
+});
+
+// 기술 백서 선택 시 안내 표시
+document.querySelectorAll('input[name="rssFeedMode"]').forEach(radio => {
+    radio.addEventListener("change", () => {
+        const noteEl = document.getElementById("rssModeNote");
+        if (noteEl) { noteEl.style.display = radio.value === "whitepaper" ? "" : "none"; }
+    });
 });
 
 document.getElementById("rssFetchNowBtn").addEventListener("click", () => {

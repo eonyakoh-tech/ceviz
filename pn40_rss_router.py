@@ -93,6 +93,7 @@ class FeedCreate(BaseModel):
     url: str
     name: str = ""
     interval: Literal["15m", "1h", "3h", "24h"] = "1h"
+    mode: Literal["summary", "whitepaper"] = "summary"
 
     @field_validator("url")
     @classmethod
@@ -137,6 +138,7 @@ def add_feed(req: FeedCreate):
         "url": req.url,
         "name": req.name or req.url[:50],
         "interval": req.interval,
+        "mode": req.mode,
         "enabled": True,
         "lastFetched": None,
         "lastEntryId": "",

@@ -63,6 +63,7 @@ interface RssFeed {
     url: string;
     name: string;
     interval: "15m" | "1h" | "3h" | "24h";
+    mode: "summary" | "whitepaper";
     enabled: boolean;
     lastFetched?: string;
     lastEntryId?: string;
@@ -445,7 +446,7 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                     break;
 
                 case "rssAddFeed":
-                    await this._rssAddFeed(msg.platform, msg.url, msg.name, msg.interval);
+                    await this._rssAddFeed(msg.platform, msg.url, msg.name, msg.interval, msg.mode);
                     break;
 
                 case "rssDeleteFeed":
@@ -1205,10 +1206,10 @@ ${response}
         }
     }
 
-    private async _rssAddFeed(platform: string, url: string, name: string, interval: string) {
+    private async _rssAddFeed(platform: string, url: string, name: string, interval: string, mode = "summary") {
         try {
             await axios.post(`${this._getUrl()}/rss/feeds`,
-                { platform, url, name, interval }, { timeout: 10000 });
+                { platform, url, name, interval, mode }, { timeout: 10000 });
             await this._rssGetFeeds();
             this._view?.webview.postMessage({ type: "rssFeedSaved" });
         } catch (e: any) {
@@ -1597,6 +1598,21 @@ ${response}
       <input class="rss-input" type="url" id="rssFeedUrl"
         placeholder="YouTube: https://youtube.com/@channel" autocomplete="off" spellcheck="false">
       <input class="rss-input" type="text" id="rssFeedName" placeholder="구독 이름 (예: AI 뉴스채널)">
+      <div class="rss-mode-row">
+        <label class="rss-mode-opt">
+          <input type="radio" name="rssFeedMode" value="summary" checked>
+          <span class="rss-mode-label">📄 일반 요약</span>
+          <span class="rss-mode-sub">빠름</span>
+        </label>
+        <label class="rss-mode-opt">
+          <input type="radio" name="rssFeedMode" value="whitepaper">
+          <span class="rss-mode-label">📋 기술 백서</span>
+          <span class="rss-mode-sub">고품질 · 느림</span>
+        </label>
+      </div>
+      <div class="rss-form-note" id="rssModeNote" style="display:none">
+        설치된 모델 중 최대 크기 자동 선택 · 항목당 2~5분 소요
+      </div>
       <div class="rss-form-note" id="rssFormNote"></div>
       <div class="rss-form-actions">
         <button class="rss-cancel-btn" id="rssFormCancel">취소</button>

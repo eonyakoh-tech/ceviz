@@ -350,17 +350,23 @@ def _write_md(vault_sync: Path, platform: str, title: str,
 def _process_entry(feed: dict, entry: dict, cfg: dict) -> Optional[str]:
     """
     단일 RSS 항목을 처리하여 .md 파일 생성.
+    feed["mode"] == "whitepaper" 이면 기술 백서 파이프라인을 사용.
     반환: vault 내 상대 경로 (Whisper 대기 또는 실패 시 None).
     """
     vault_sync   = Path(cfg["vault_sync_path"])
     ollama_url   = cfg["ollama_url"]
     ollama_model = cfg["ollama_model"]
     platform     = feed["platform"]
+    feed_mode    = feed.get("mode", "summary")   # "summary" | "whitepaper"
 
     title     = (entry.get("title") or "제목 없음").strip()
     link      = entry.get("link", "")
     published = (entry.get("published") or "")[:10]
     author    = entry.get("author") or feed.get("name", "")
+    duration  = entry.get("itunes_duration", "")
+
+    # ── 콘텐츠 추출 (플랫폼 공통) ────────────────────────────────────────
+    content = ""
 
     if platform == "youtube":
         if not _validate_url(link):
@@ -374,52 +380,88 @@ def _process_entry(feed: dict, entry: dict, cfg: dict) -> Optional[str]:
                 link, feed["id"],
                 entry.get("id") or link,
                 {"title": title, "link": link, "published": published,
-                 "author": author, "feed_id": feed["id"]},
+                 "author": author, "feed_id": feed["id"],
+                 "mode": feed_mode, "duration": duration},
             )
             return None
+        content = subs
 
-        summary = _summarize(subs, title, "YouTube", ollama_url, ollama_model)
+    elif platform == "reddit":
+        raw = entry.get("summary") or entry.get("description") or ""
+        content = re.sub(r"<[^>]+>", "", raw).strip()
+
+    else:  # blog
+        raw = ""
+        if entry.get("content"):
+            raw = entry["content"][0].get("value", "")
+        if not raw:
+            raw = entry.get("summary") or ""
+        content = re.sub(r"<[^>]+>", "", raw).strip()
+
+    content = re.sub(r"\s{2,}", " ", content)
+
+    # ── 기술 백서 모드 ────────────────────────────────────────────────────
+    if feed_mode == "whitepaper":
+        try:
+            from pn40_rss_whitepaper import generate_whitepaper  # type: ignore
+        except ImportError:
+            log.error("pn40_rss_whitepaper.py 가 ~/ceviz/ 에 없습니다. 일반 요약으로 대체합니다.")
+            feed_mode = "summary"
+        else:
+            log.info("  [백서 모드] '%s'", title[:60])
+            fm = {
+                "source": platform,
+                "channel" if platform == "youtube" else "site": author,
+                "url": link,
+                "published": published,
+                "processed": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "mode": "whitepaper",
+                "duration": duration,
+            }
+            body = generate_whitepaper(
+                content=content,
+                title=title,
+                source_type=platform,
+                url=link,
+                published=published,
+                duration=duration,
+                ollama_url=ollama_url,
+                model=None,   # 자동 선택
+            )
+            return _write_md(vault_sync, platform, title, fm, body)
+
+    # ── 일반 요약 모드 ────────────────────────────────────────────────────
+    summary = _summarize(content, title, platform, ollama_url, ollama_model)
+
+    if platform == "youtube":
         fm = {
             "source": "youtube",
             "channel": author,
             "url": link,
             "published": published,
             "processed": datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "duration": entry.get("itunes_duration", ""),
+            "duration": duration,
+            "mode": "summary",
         }
         body = f"# {title}\n\n"
         if summary:
             body += summary + "\n\n"
-        body += "## 자막 원문\n\n" + subs[:4000] + "\n"
-        return _write_md(vault_sync, "youtube", title, fm, body)
-
-    # Reddit / Blog: RSS 본문 직접 사용
-    if platform == "reddit":
-        raw = entry.get("summary") or entry.get("description") or ""
+        body += "## 자막 원문\n\n" + content[:4000] + "\n"
     else:
-        raw = ""
-        if entry.get("content"):
-            raw = entry["content"][0].get("value", "")
-        if not raw:
-            raw = entry.get("summary") or ""
+        fm = {
+            "source": platform,
+            "site": feed.get("name", ""),
+            "url": link,
+            "published": published,
+            "processed": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "mode": "summary",
+        }
+        body = f"# {title}\n\n"
+        if summary:
+            body += summary + "\n\n"
+        if content:
+            body += "## 원문\n\n" + content[:4000] + "\n"
 
-    # HTML 태그 제거
-    text = re.sub(r"<[^>]+>", "", raw).strip()
-    text = re.sub(r"\s{2,}", " ", text)
-
-    summary = _summarize(text, title, platform, ollama_url, ollama_model)
-    fm = {
-        "source": platform,
-        "site": feed.get("name", ""),
-        "url": link,
-        "published": published,
-        "processed": datetime.now().strftime("%Y-%m-%d %H:%M"),
-    }
-    body = f"# {title}\n\n"
-    if summary:
-        body += summary + "\n\n"
-    if text:
-        body += "## 원문\n\n" + text[:4000] + "\n"
     return _write_md(vault_sync, platform, title, fm, body)
 
 # ── Whisper 큐 처리 ───────────────────────────────────────────────────────

@@ -414,3 +414,13 @@ body[dir="rtl"] .drop-menu{text-align:right}
 .rss-interval-chip{font-size:9px;background:var(--vscode-badge-background);color:var(--vscode-badge-foreground);border-radius:3px;padding:1px 5px}
 .rss-del-btn{background:none;border:none;cursor:pointer;font-size:12px;padding:2px 4px;border-radius:2px;opacity:.5;color:var(--vscode-foreground)}
 .rss-del-btn:hover{opacity:1;background:var(--vscode-inputValidation-errorBackground,#5a1d1d)}
+/* 처리 모드 선택 */
+.rss-mode-row{display:flex;gap:8px;flex-wrap:wrap}
+.rss-mode-opt{display:flex;align-items:center;gap:4px;cursor:pointer;padding:4px 8px;border-radius:4px;border:1px solid var(--vscode-widget-border);background:var(--vscode-input-background);font-size:11px}
+.rss-mode-opt:has(input:checked){border-color:var(--vscode-focusBorder);background:var(--vscode-inputOption-activeBackground)}
+.rss-mode-opt input{margin:0;cursor:pointer}
+.rss-mode-label{font-weight:500}
+.rss-mode-sub{font-size:9px;color:var(--vscode-descriptionForeground)}
+/* 모드 배지 (피드 목록) */
+.rss-mode-chip{font-size:11px;flex-shrink:0;opacity:.7}
+.rss-mode-chip.wp{opacity:1}
