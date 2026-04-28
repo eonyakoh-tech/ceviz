@@ -1732,8 +1732,12 @@ const WIZARD_MODELS = [
     { name: "gemma3:27b",       size: "15GB",   label: "Gemma 3 27B",      tag: "최고 성능",        rec: false },
     { name: "nomic-embed-text", size: "274MB",  label: "nomic-embed-text", tag: "RAG 필수",         rec: true,
       tooltip: "RAG 육성 시스템 작동에 필수" },
-    { name: "qwen2.5:3b",       size: "2.0GB",  label: "Qwen 2.5 3B",      tag: "다국어",           rec: false },
-    { name: "llama3.2:3b",      size: "2.0GB",  label: "Llama 3.2 3B",     tag: "영어 강함",        rec: false },
+    { name: "qwen2.5:3b",            size: "2.0GB",  label: "Qwen 2.5 3B",           tag: "다국어",                  rec: false },
+    { name: "llama3.2:3b",           size: "2.0GB",  label: "Llama 3.2 3B",          tag: "영어 강함",               rec: false },
+    { name: "qwen2.5-coder:1.5b",   size: "986MB",  label: "Qwen2.5-Coder 1.5B",    tag: "💻 코딩 특화 · PN40 권장", rec: false,
+      tooltip: "코드 생성·리뷰·디버깅에 최적화. 경량으로 PN40 서버 전용 권장." },
+    { name: "qwen2.5-coder:3b",     size: "1.9GB",  label: "Qwen2.5-Coder 3B",      tag: "💻 코딩 특화 · T480s 권장", rec: false,
+      tooltip: "코드 생성·리뷰·디버깅에 최적화. T480s 클라이언트 로컬 실행 권장." },
 ];
 
 let _wizInstalledModels = [];

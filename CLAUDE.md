@@ -42,6 +42,8 @@
 | 패키지 버전 | `ceviz-0.2.0` |
 | 백엔드 주소 | `100.69.155.43:8000` (기본값) |
 | 빌드 상태 | webpack 컴파일 정상 |
+| PN40 모델 | gemma3:1b · gemma4:e2b/e4b · nomic-embed-text · **qwen2.5-coder:1.5b** (2026-04-28 신규) |
+| T480s 모델 | llama3.1:8b · **qwen2.5-coder:3b** (2026-04-28 신규) |
 
 ---
 
