@@ -89,6 +89,233 @@ interface EvoRecord {
     branch?: string;
 }
 
+// ── Phase 22: Multi-Cloud AI Domain Routing — 인터페이스 ────────────────────
+
+interface DomainKeyword {
+    word: string;
+    weight: number;   // 1.0 = 정확 일치, 0.5 = 부분 일치
+    learned: boolean; // 사용자 선택으로 자동 추가된 키워드
+}
+
+interface DomainConfig {
+    key: string;          // 고유 영어 식별자 (예: "coding")
+    displayName: string;  // 한국어 표시명 (예: "코딩")
+    enabled: boolean;
+    isBuiltin: boolean;   // true = 비활성만 가능, 삭제 불가
+    keywords: DomainKeyword[];
+    modelMapping: {
+        anthropic: string; // Claude 모델 id
+        gemini: string;    // Gemini 모델 id
+    };
+}
+
+interface TokenUsageRecord {
+    date: string;      // YYYY-MM-DD
+    provider: "anthropic" | "gemini";
+    model: string;
+    inputTokens: number;
+    outputTokens: number;
+    costUsd: number;
+}
+
+interface ApiKeyStatus {
+    provider: "anthropic" | "gemini";
+    isSet: boolean;
+    isValid: boolean | null; // null = 미검증
+    lastValidated?: string;  // ISO datetime
+}
+
+interface AIRequest {
+    prompt: string;
+    model: string;
+    maxTokens?: number;
+    systemPrompt?: string;
+}
+
+interface AIResponse {
+    content: string;
+    inputTokens: number;
+    outputTokens: number;
+    model: string;
+    provider: "anthropic" | "gemini";
+    costUsd: number;
+}
+
+interface ClassifyResult {
+    domain: string;
+    confidence: number;
+    alternatives: Array<{ domain: string; confidence: number }>;
+}
+
+// ── Phase 22: AI 어댑터 추상 계층 ────────────────────────────────────────────
+
+abstract class BaseAIAdapter {
+    abstract readonly provider: "anthropic" | "gemini";
+    protected abstract readonly pricingTable: Record<string, [number, number]>;
+
+    abstract chat(request: AIRequest, apiKey: string): Promise<AIResponse>;
+    abstract validateKey(apiKey: string): Promise<boolean>;
+    abstract listModels(apiKey: string): Promise<string[]>;
+
+    protected calculateCost(model: string, input: number, output: number): number {
+        const p = this.pricingTable[model];
+        if (!p) { return 0; }
+        return (input / 1_000_000) * p[0] + (output / 1_000_000) * p[1];
+    }
+
+    maskKey(key: string): string {
+        if (!key || key.length < 8) { return "***"; }
+        return `${key.slice(0, 7)}***${key.slice(-4)}`;
+    }
+}
+
+class AnthropicAdapter extends BaseAIAdapter {
+    readonly provider = "anthropic" as const;
+    private static readonly BASE = "https://api.anthropic.com";
+
+    protected readonly pricingTable: Record<string, [number, number]> = {
+        "claude-opus-4-7":   [15,  75],
+        "claude-opus-4-6":   [15,  75],
+        "claude-sonnet-4-6": [ 3,  15],
+        "claude-haiku-4-5":  [ 1,   5],
+    };
+
+    async chat(req: AIRequest, apiKey: string): Promise<AIResponse> {
+        const body: Record<string, unknown> = {
+            model:      req.model,
+            max_tokens: req.maxTokens ?? 4096,
+            messages:   [{ role: "user", content: req.prompt }],
+        };
+        if (req.systemPrompt) { body.system = req.systemPrompt; }
+
+        const resp = await axios.post(`${AnthropicAdapter.BASE}/v1/messages`, body, {
+            headers: {
+                "x-api-key":         apiKey,
+                "anthropic-version": "2023-06-01",
+                "content-type":      "application/json",
+            },
+            timeout: 120_000,
+        });
+
+        const inputTokens:  number = resp.data.usage?.input_tokens  ?? 0;
+        const outputTokens: number = resp.data.usage?.output_tokens ?? 0;
+        const content:      string = resp.data.content?.[0]?.text   ?? "";
+        return {
+            content, inputTokens, outputTokens,
+            model:    req.model,
+            provider: "anthropic",
+            costUsd:  this.calculateCost(req.model, inputTokens, outputTokens),
+        };
+    }
+
+    async validateKey(apiKey: string): Promise<boolean> {
+        try {
+            await axios.post(
+                `${AnthropicAdapter.BASE}/v1/messages`,
+                { model: "claude-haiku-4-5", max_tokens: 1, messages: [{ role: "user", content: "hi" }] },
+                {
+                    headers: {
+                        "x-api-key":         apiKey,
+                        "anthropic-version": "2023-06-01",
+                        "content-type":      "application/json",
+                    },
+                    timeout: 10_000,
+                }
+            );
+            return true;
+        } catch (e: any) {
+            return e.response?.status === 429; // rate-limited = 유효한 키
+        }
+    }
+
+    async listModels(apiKey: string): Promise<string[]> {
+        try {
+            const resp = await axios.get(`${AnthropicAdapter.BASE}/v1/models`, {
+                headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+                timeout: 10_000,
+            });
+            return (resp.data.data ?? []).map((m: any) => m.id as string);
+        } catch {
+            return Object.keys(this.pricingTable);
+        }
+    }
+}
+
+class GeminiAdapter extends BaseAIAdapter {
+    readonly provider = "gemini" as const;
+    private static readonly BASE = "https://generativelanguage.googleapis.com";
+
+    protected readonly pricingTable: Record<string, [number, number]> = {
+        "gemini-2.5-pro":   [1.25,  5.00],
+        "gemini-2.5-flash": [0.15,  0.60],
+        "gemini-2.0-flash": [0.075, 0.30],
+        "gemini-1.5-pro":   [1.25,  5.00],
+        "gemini-1.5-flash": [0.075, 0.30],
+    };
+
+    private static readonly SAFETY_SETTINGS = [
+        { category: "HARM_CATEGORY_HARASSMENT",        threshold: "BLOCK_ONLY_HIGH" },
+        { category: "HARM_CATEGORY_HATE_SPEECH",       threshold: "BLOCK_ONLY_HIGH" },
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
+    ];
+
+    async chat(req: AIRequest, apiKey: string): Promise<AIResponse> {
+        const body: Record<string, unknown> = {
+            contents:         [{ role: "user", parts: [{ text: req.prompt }] }],
+            generationConfig: { maxOutputTokens: req.maxTokens ?? 4096 },
+            safetySettings:   GeminiAdapter.SAFETY_SETTINGS,
+        };
+        if (req.systemPrompt) {
+            body.systemInstruction = { parts: [{ text: req.systemPrompt }] };
+        }
+
+        const resp = await axios.post(
+            `${GeminiAdapter.BASE}/v1beta/models/${req.model}:generateContent?key=${apiKey}`,
+            body,
+            { timeout: 120_000 }
+        );
+
+        const candidate              = resp.data.candidates?.[0];
+        const content:      string   = candidate?.content?.parts?.[0]?.text ?? "";
+        const usageMeta              = resp.data.usageMetadata ?? {};
+        const inputTokens:  number   = usageMeta.promptTokenCount     ?? 0;
+        const outputTokens: number   = usageMeta.candidatesTokenCount ?? 0;
+        return {
+            content, inputTokens, outputTokens,
+            model:    req.model,
+            provider: "gemini",
+            costUsd:  this.calculateCost(req.model, inputTokens, outputTokens),
+        };
+    }
+
+    async validateKey(apiKey: string): Promise<boolean> {
+        try {
+            const resp = await axios.get(
+                `${GeminiAdapter.BASE}/v1beta/models?key=${apiKey}`,
+                { timeout: 10_000 }
+            );
+            return Array.isArray(resp.data.models);
+        } catch {
+            return false;
+        }
+    }
+
+    async listModels(apiKey: string): Promise<string[]> {
+        try {
+            const resp = await axios.get(
+                `${GeminiAdapter.BASE}/v1beta/models?key=${apiKey}`,
+                { timeout: 10_000 }
+            );
+            return (resp.data.models ?? [])
+                .map((m: any) => (m.name as string).replace("models/", ""))
+                .filter((id: string) => id.startsWith("gemini-"));
+        } catch {
+            return Object.keys(this.pricingTable);
+        }
+    }
+}
+
 export class CevizPanel implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private _sessions: Session[] = [];
@@ -118,6 +345,21 @@ export class CevizPanel implements vscode.WebviewViewProvider {
     private _evoPendingTargetFile = "";
     private _evoPendingBranch = "";
 
+    // ── Phase 22: Multi-Cloud AI Domain Routing ──────────────────────────────
+    private readonly _anthropicAdapter = new AnthropicAdapter();
+    private readonly _geminiAdapter    = new GeminiAdapter();
+    private _domainConfigs:     DomainConfig[]     = [];
+    private _tokenUsageLog:     TokenUsageRecord[] = [];
+    private _routingEnabled     = true;
+    private _routingThreshold   = 0.60;
+    private _lastModelRefresh   = 0;
+    private _dailyTokenLimit    = 0;   // 0 = 무제한
+    private _monthlyTokenLimit  = 0;   // 0 = 무제한
+    private _apiKeyStatuses: ApiKeyStatus[] = [
+        { provider: "anthropic", isSet: false, isValid: null },
+        { provider: "gemini",    isSet: false, isValid: null },
+    ];
+
     constructor(
         private readonly _extensionUri: vscode.Uri,
         private readonly _context: vscode.ExtensionContext
@@ -128,6 +370,24 @@ export class CevizPanel implements vscode.WebviewViewProvider {
         this._responseCache  = this._context.globalState.get("ceviz.responseCache", []);
         this._language                = this._context.globalState.get("ceviz.language", "");
         this._evoSystemPromptHistory  = this._context.globalState.get("ceviz.evoPromptHistory", []);
+        // Phase 22: 도메인·라우팅·토큰 사용량 복원
+        this._domainConfigs    = this._context.globalState.get("ceviz.domainConfigs",    CevizPanel._createDefaultDomainConfigs());
+        this._tokenUsageLog    = this._context.globalState.get("ceviz.tokenUsageLog",    []);
+        this._routingEnabled   = this._context.globalState.get("ceviz.routingEnabled",   true);
+        this._routingThreshold = this._context.globalState.get("ceviz.routingThreshold", 0.60);
+        this._lastModelRefresh = this._context.globalState.get("ceviz.lastModelRefresh", 0);
+        this._dailyTokenLimit   = this._context.globalState.get("ceviz.dailyTokenLimit",   0);
+        this._monthlyTokenLimit = this._context.globalState.get("ceviz.monthlyTokenLimit", 0);
+        // API 키 상태 플래그 복원 (실제 키는 SecretStorage에만 존재)
+        const savedApiStatuses: ApiKeyStatus[] = this._context.globalState.get("ceviz.apiKeyStatuses", []);
+        for (const saved of savedApiStatuses) {
+            const target = this._apiKeyStatuses.find(x => x.provider === saved.provider);
+            if (target) {
+                target.isSet = saved.isSet;
+                target.isValid = saved.isValid;
+                target.lastValidated = saved.lastValidated;
+            }
+        }
         if (this._sessions.length === 0) { this._createSession(); }
         else { this._currentSessionId = this._sessions[this._sessions.length - 1].id; }
     }
@@ -537,6 +797,28 @@ export class CevizPanel implements vscode.WebviewViewProvider {
 
                 case "evoGetHistory":
                     await this._evoGetHistory();
+                    break;
+
+                // ── Phase 22: Multi-Cloud AI Domain Routing ──────────────
+
+                case "apiKeySave":
+                    await this._handleApiKeySave(msg.provider, msg.key);
+                    break;
+
+                case "apiKeyDelete":
+                    await this._handleApiKeyDelete(msg.provider);
+                    break;
+
+                case "apiKeyValidate":
+                    await this._handleApiKeyValidate(msg.provider);
+                    break;
+
+                case "apiKeyGetStatus":
+                    this._sendApiKeyStatuses();
+                    break;
+
+                case "cloudChat":
+                    await this._handleCloudChat(msg.prompt, msg.provider, msg.model);
                     break;
             }
         });
@@ -2621,5 +2903,326 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
 <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
+    }
+
+    // ── Phase 22: 기본 도메인 설정 (static) ──────────────────────────────────
+
+    private static _createDefaultDomainConfigs(): DomainConfig[] {
+        return [
+            {
+                key: "general_chat", displayName: "일상 대화", enabled: true, isBuiltin: true,
+                keywords: [
+                    { word: "안녕", weight: 1.0, learned: false },
+                    { word: "잡담", weight: 1.0, learned: false },
+                    { word: "일상", weight: 1.0, learned: false },
+                    { word: "이야기", weight: 0.5, learned: false },
+                    { word: "hello", weight: 1.0, learned: false },
+                ],
+                modelMapping: { anthropic: "claude-sonnet-4-6", gemini: "gemini-2.0-flash" },
+            },
+            {
+                key: "coding", displayName: "코딩", enabled: true, isBuiltin: true,
+                keywords: [
+                    { word: "코드", weight: 1.0, learned: false },
+                    { word: "함수", weight: 1.0, learned: false },
+                    { word: "버그", weight: 1.0, learned: false },
+                    { word: "디버그", weight: 1.0, learned: false },
+                    { word: "구현", weight: 1.0, learned: false },
+                    { word: "알고리즘", weight: 1.0, learned: false },
+                    { word: "class", weight: 1.0, learned: false },
+                    { word: "function", weight: 1.0, learned: false },
+                    { word: "error", weight: 0.5, learned: false },
+                    { word: "typescript", weight: 1.0, learned: false },
+                    { word: "python", weight: 1.0, learned: false },
+                ],
+                modelMapping: { anthropic: "claude-opus-4-7", gemini: "gemini-2.5-pro" },
+            },
+            {
+                key: "game_dev", displayName: "게임 개발", enabled: true, isBuiltin: true,
+                keywords: [
+                    { word: "게임", weight: 1.0, learned: false },
+                    { word: "Unity", weight: 1.0, learned: false },
+                    { word: "Unreal", weight: 1.0, learned: false },
+                    { word: "캐릭터", weight: 0.5, learned: false },
+                    { word: "씬", weight: 1.0, learned: false },
+                    { word: "물리", weight: 0.5, learned: false },
+                    { word: "셰이더", weight: 1.0, learned: false },
+                    { word: "충돌", weight: 0.5, learned: false },
+                ],
+                modelMapping: { anthropic: "claude-opus-4-7", gemini: "gemini-2.5-pro" },
+            },
+            {
+                key: "english_learning", displayName: "영어 학습", enabled: true, isBuiltin: true,
+                keywords: [
+                    { word: "영어", weight: 1.0, learned: false },
+                    { word: "문법", weight: 1.0, learned: false },
+                    { word: "발음", weight: 1.0, learned: false },
+                    { word: "번역", weight: 1.0, learned: false },
+                    { word: "표현", weight: 0.5, learned: false },
+                    { word: "영작", weight: 1.0, learned: false },
+                    { word: "어휘", weight: 1.0, learned: false },
+                ],
+                modelMapping: { anthropic: "claude-sonnet-4-6", gemini: "gemini-2.0-flash" },
+            },
+            {
+                key: "whitepaper", displayName: "기술 백서", enabled: true, isBuiltin: true,
+                keywords: [
+                    { word: "백서", weight: 1.0, learned: false },
+                    { word: "기술", weight: 0.5, learned: false },
+                    { word: "논문", weight: 1.0, learned: false },
+                    { word: "리서치", weight: 1.0, learned: false },
+                    { word: "분석", weight: 0.5, learned: false },
+                    { word: "요약", weight: 0.5, learned: false },
+                    { word: "문서", weight: 0.5, learned: false },
+                ],
+                modelMapping: { anthropic: "claude-opus-4-7", gemini: "gemini-2.5-pro" },
+            },
+            {
+                key: "quick_answer", displayName: "빠른 즉답", enabled: true, isBuiltin: true,
+                keywords: [
+                    { word: "뭐야", weight: 1.0, learned: false },
+                    { word: "빠르게", weight: 1.0, learned: false },
+                    { word: "간단히", weight: 1.0, learned: false },
+                    { word: "한마디로", weight: 1.0, learned: false },
+                    { word: "정의", weight: 0.5, learned: false },
+                ],
+                modelMapping: { anthropic: "claude-haiku-4-5", gemini: "gemini-2.0-flash" },
+            },
+            {
+                key: "long_document", displayName: "긴 문서 분석", enabled: true, isBuiltin: true,
+                keywords: [
+                    { word: "전체", weight: 0.5, learned: false },
+                    { word: "파일", weight: 0.5, learned: false },
+                    { word: "문서", weight: 0.5, learned: false },
+                    { word: "전체적으로", weight: 1.0, learned: false },
+                    { word: "검토", weight: 1.0, learned: false },
+                    { word: "리뷰", weight: 1.0, learned: false },
+                ],
+                modelMapping: { anthropic: "claude-sonnet-4-6", gemini: "gemini-2.5-pro" },
+            },
+            {
+                key: "image_analysis", displayName: "이미지 분석", enabled: true, isBuiltin: true,
+                keywords: [
+                    { word: "이미지", weight: 1.0, learned: false },
+                    { word: "사진", weight: 1.0, learned: false },
+                    { word: "그림", weight: 0.5, learned: false },
+                    { word: "스크린샷", weight: 1.0, learned: false },
+                    { word: "분석해", weight: 0.5, learned: false },
+                ],
+                modelMapping: { anthropic: "claude-sonnet-4-6", gemini: "gemini-2.5-pro" },
+            },
+        ];
+    }
+
+    // ── Phase 22: API 키 관리 (SecretStorage) ────────────────────────────────
+
+    private async _apiKeyGet(provider: "anthropic" | "gemini"): Promise<string | undefined> {
+        return this._context.secrets.get(`ceviz.apiKey.${provider}`);
+    }
+
+    private async _apiKeySave(provider: "anthropic" | "gemini", key: string): Promise<void> {
+        await this._context.secrets.store(`ceviz.apiKey.${provider}`, key);
+        const status = this._apiKeyStatuses.find(s => s.provider === provider);
+        if (status) { status.isSet = true; status.isValid = null; }
+        this._persistApiKeyStatuses();
+    }
+
+    private async _apiKeyDelete(provider: "anthropic" | "gemini"): Promise<void> {
+        await this._context.secrets.delete(`ceviz.apiKey.${provider}`);
+        const status = this._apiKeyStatuses.find(s => s.provider === provider);
+        if (status) { status.isSet = false; status.isValid = null; status.lastValidated = undefined; }
+        this._persistApiKeyStatuses();
+    }
+
+    private async _apiKeyValidate(provider: "anthropic" | "gemini"): Promise<boolean> {
+        const key = await this._apiKeyGet(provider);
+        if (!key) { return false; }
+        const adapter: BaseAIAdapter = provider === "anthropic" ? this._anthropicAdapter : this._geminiAdapter;
+        try {
+            const valid = await adapter.validateKey(key);
+            const status = this._apiKeyStatuses.find(s => s.provider === provider);
+            if (status) {
+                status.isValid = valid;
+                status.lastValidated = new Date().toISOString();
+            }
+            this._persistApiKeyStatuses();
+            return valid;
+        } catch {
+            return false;
+        }
+    }
+
+    private _persistApiKeyStatuses(): void {
+        this._context.globalState.update("ceviz.apiKeyStatuses", this._apiKeyStatuses);
+    }
+
+    private _sendApiKeyStatuses(): void {
+        this._view?.webview.postMessage({ type: "apiKeyStatuses", statuses: this._apiKeyStatuses });
+    }
+
+    // ── Phase 22: API 키 메시지 핸들러 ───────────────────────────────────────
+
+    private async _handleApiKeySave(provider: "anthropic" | "gemini", rawKey: string): Promise<void> {
+        const key = (rawKey ?? "").trim();
+        if (!key) {
+            this._view?.webview.postMessage({
+                type: "apiKeyResult", provider, ok: false, msg: "API 키가 비어 있습니다."
+            });
+            return;
+        }
+        // 기본 형식 검증 (Anthropic: sk-ant-..., Gemini: AIza...)
+        if (provider === "anthropic" && !key.startsWith("sk-ant-")) {
+            this._view?.webview.postMessage({
+                type: "apiKeyResult", provider, ok: false,
+                msg: "Anthropic API 키는 'sk-ant-'로 시작해야 합니다."
+            });
+            return;
+        }
+        if (provider === "gemini" && !key.startsWith("AIza")) {
+            this._view?.webview.postMessage({
+                type: "apiKeyResult", provider, ok: false,
+                msg: "Google Gemini API 키는 'AIza'로 시작해야 합니다."
+            });
+            return;
+        }
+
+        this._view?.webview.postMessage({ type: "apiKeyValidating", provider });
+        await this._apiKeySave(provider, key);
+
+        // 저장 직후 즉시 검증
+        const valid = await this._apiKeyValidate(provider);
+        const adapter: BaseAIAdapter = provider === "anthropic" ? this._anthropicAdapter : this._geminiAdapter;
+        this._view?.webview.postMessage({
+            type: "apiKeyResult", provider, ok: valid,
+            masked: adapter.maskKey(key),
+            msg: valid
+                ? `✅ ${provider === "anthropic" ? "Anthropic Claude" : "Google Gemini"} API 키 저장 완료 (${adapter.maskKey(key)})`
+                : `⚠️ 키가 저장되었지만 검증 실패. 키를 다시 확인하세요.`,
+        });
+        this._sendApiKeyStatuses();
+    }
+
+    private async _handleApiKeyDelete(provider: "anthropic" | "gemini"): Promise<void> {
+        await this._apiKeyDelete(provider);
+        this._view?.webview.postMessage({
+            type: "apiKeyResult", provider, ok: true,
+            msg: `${provider === "anthropic" ? "Anthropic Claude" : "Google Gemini"} API 키가 삭제되었습니다.`
+        });
+        this._sendApiKeyStatuses();
+    }
+
+    private async _handleApiKeyValidate(provider: "anthropic" | "gemini"): Promise<void> {
+        const isSet = await this._apiKeyGet(provider);
+        if (!isSet) {
+            this._view?.webview.postMessage({
+                type: "apiKeyResult", provider, ok: false, msg: "저장된 API 키가 없습니다."
+            });
+            return;
+        }
+        this._view?.webview.postMessage({ type: "apiKeyValidating", provider });
+        const valid = await this._apiKeyValidate(provider);
+        this._view?.webview.postMessage({
+            type: "apiKeyResult", provider, ok: valid,
+            msg: valid
+                ? `✅ ${provider === "anthropic" ? "Anthropic Claude" : "Google Gemini"} API 키 유효`
+                : `❌ API 키 검증 실패. 키를 재입력해주세요.`,
+        });
+        this._sendApiKeyStatuses();
+    }
+
+    // ── Phase 22: Cloud AI 직접 호출 ─────────────────────────────────────────
+
+    private async _handleCloudChat(
+        prompt: string,
+        provider: "anthropic" | "gemini",
+        model: string
+    ): Promise<void> {
+        const session = this._sessions.find(s => s.id === this._currentSessionId);
+        if (!session) { return; }
+
+        const apiKey = await this._apiKeyGet(provider);
+        if (!apiKey) {
+            this._view?.webview.postMessage({
+                type: "cloudChatError",
+                msg: `${provider === "anthropic" ? "Anthropic" : "Gemini"} API 키가 설정되지 않았습니다.\n설정 → ☁️ Cloud AI 라우팅 → API 키 관리에서 키를 입력하세요.`,
+            });
+            return;
+        }
+
+        const adapter: BaseAIAdapter = provider === "anthropic" ? this._anthropicAdapter : this._geminiAdapter;
+        session.messages.push({ role: "user", content: prompt });
+        if (session.messages.length === 1) {
+            session.title = prompt.slice(0, 28) + (prompt.length > 28 ? "..." : "");
+        }
+        this._view?.webview.postMessage({ type: "userMsg", content: prompt });
+        this._view?.webview.postMessage({ type: "thinking" });
+
+        try {
+            const resp = await adapter.chat({ prompt, model }, apiKey);
+
+            // 토큰 사용량 기록
+            this._recordTokenUsage({
+                date:         new Date().toISOString().slice(0, 10),
+                provider,
+                model,
+                inputTokens:  resp.inputTokens,
+                outputTokens: resp.outputTokens,
+                costUsd:      resp.costUsd,
+            });
+
+            const msg: Message = {
+                role: "assistant", content: resp.content,
+                agent: provider === "anthropic" ? "Claude" : "Gemini",
+                tier: 2, engine: model,
+                tokenUsage: resp.inputTokens + resp.outputTokens,
+            };
+            session.messages.push(msg);
+            this._context.globalState.update(this._sessionsKey(), this._sessions);
+
+            this._view?.webview.postMessage({
+                type: "assistantMsg",
+                content: resp.content,
+                agent:   provider === "anthropic" ? "Claude" : "Gemini",
+                tier:    2,
+                engine:  model,
+                isCloud: true,
+                tokenUsage: resp.inputTokens + resp.outputTokens,
+                costUsd: resp.costUsd,
+                totalCostToday: this._todayCostUsd(),
+            });
+        } catch (e: any) {
+            session.messages.pop();
+            const errMsg = this._cloudErrorMessage(e, provider, adapter);
+            this._view?.webview.postMessage({ type: "cloudChatError", msg: errMsg });
+        }
+    }
+
+    private _cloudErrorMessage(e: any, provider: "anthropic" | "gemini", adapter: BaseAIAdapter): string {
+        const name = provider === "anthropic" ? "Anthropic Claude" : "Google Gemini";
+        if (e.response?.status === 401) { return `API 키가 유효하지 않습니다. 설정에서 키를 다시 입력해주세요: ${name}`; }
+        if (e.response?.status === 429) { return `⚠️ ${name} 요청 한도 초과 (Rate Limit). 잠시 후 다시 시도하세요.`; }
+        if (e.response?.status === 400) { return `❌ ${name} 요청 형식 오류: ${e.response?.data?.error?.message ?? e.message}`; }
+        if (e.code === "ECONNREFUSED" || e.code === "ENOTFOUND") { return `📡 ${name} 서버에 연결할 수 없습니다. 인터넷 연결을 확인하세요.`; }
+        if (e.code === "ETIMEDOUT") { return `⏱️ ${name} 응답 시간 초과 (120초). 더 짧은 프롬프트를 시도하세요.`; }
+        return `❌ ${name} 오류: ${e.message}`;
+    }
+
+    // ── Phase 22: 토큰 사용량 기록 ────────────────────────────────────────────
+
+    private _recordTokenUsage(record: TokenUsageRecord): void {
+        this._tokenUsageLog.push(record);
+        // 90일 초과 데이터 제거
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 90);
+        const cutoffStr = cutoff.toISOString().slice(0, 10);
+        this._tokenUsageLog = this._tokenUsageLog.filter(r => r.date >= cutoffStr);
+        this._context.globalState.update("ceviz.tokenUsageLog", this._tokenUsageLog);
+    }
+
+    private _todayCostUsd(): number {
+        const today = new Date().toISOString().slice(0, 10);
+        return this._tokenUsageLog
+            .filter(r => r.date === today)
+            .reduce((sum, r) => sum + r.costUsd, 0);
     }
 }
