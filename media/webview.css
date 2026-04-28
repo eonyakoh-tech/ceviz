@@ -477,3 +477,34 @@ body[dir="rtl"] .drop-menu{text-align:right}
 .evo-hist-btn{background:none;border:none;color:var(--vscode-textLink-foreground);cursor:pointer;font-size:11px;padding:0;font-family:var(--vscode-font-family)}
 .evo-hist-btn:hover{text-decoration:underline}
 .evo-hist-content{font-size:9px;max-height:120px;overflow-y:auto;white-space:pre-wrap;padding:6px;background:var(--vscode-input-background);border-radius:4px;margin-top:4px}
+/* ── 도움말 오버레이 ─────────────────────────────────────────────────────── */
+.help-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:220;align-items:flex-start;justify-content:center;padding-top:8px}
+.help-overlay.show{display:flex}
+.help-modal{background:var(--vscode-editor-background);border:1px solid var(--vscode-widget-border);border-radius:8px;width:calc(100% - 16px);max-height:calc(100vh - 16px);display:flex;flex-direction:column;overflow:hidden}
+.help-hdr{display:flex;align-items:center;gap:6px;padding:8px 12px;border-bottom:1px solid var(--vscode-widget-border);flex-shrink:0}
+.help-hdr-title{flex:1;font-size:12px;font-weight:600}
+.help-search-input{background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:3px;padding:3px 6px;font-size:10px;font-family:var(--vscode-font-family);width:110px}
+.help-search-input:focus{outline:1px solid var(--vscode-focusBorder)}
+.help-close-btn{background:none;border:none;color:var(--vscode-foreground);cursor:pointer;font-size:14px;padding:0 2px;opacity:.7;line-height:1}
+.help-close-btn:hover{opacity:1}
+.help-body{display:flex;flex:1;overflow:hidden;min-height:0}
+.help-nav{width:86px;flex-shrink:0;border-right:1px solid var(--vscode-widget-border);overflow-y:auto;padding:4px 0}
+.help-nav-btn{display:block;width:100%;text-align:left;background:none;border:none;color:var(--vscode-foreground);cursor:pointer;font-size:9.5px;font-family:var(--vscode-font-family);padding:5px 8px;line-height:1.35;opacity:.65;white-space:normal;word-break:keep-all}
+.help-nav-btn:hover{background:var(--vscode-toolbar-hoverBackground);opacity:1}
+.help-nav-btn.on{background:var(--vscode-list-activeSelectionBackground);color:var(--vscode-list-activeSelectionForeground);opacity:1}
+.help-nav-sep{height:1px;background:var(--vscode-widget-border);margin:4px 8px}
+.help-nav-link{display:block;padding:5px 8px;font-size:9.5px;color:var(--vscode-textLink-foreground);text-decoration:none;opacity:.8;word-break:keep-all}
+.help-nav-link:hover{text-decoration:underline;opacity:1}
+.help-content{flex:1;overflow-y:auto;padding:12px 14px;min-width:0}
+.help-sec{display:none}
+.help-sec.on{display:block}
+.help-h2{font-size:12px;font-weight:600;margin:0 0 10px;padding-bottom:4px;border-bottom:1px solid var(--vscode-widget-border)}
+.help-h3{font-size:10.5px;font-weight:600;margin:10px 0 3px;color:var(--vscode-descriptionForeground);text-transform:uppercase;letter-spacing:.03em}
+.help-p{font-size:11px;line-height:1.65;margin:0 0 7px}
+.help-ul{font-size:11px;line-height:1.65;padding-left:15px;margin:0 0 7px}
+.help-ul li{margin-bottom:2px}
+.help-kbd{background:var(--vscode-button-secondaryBackground);border:1px solid var(--vscode-widget-border);border-radius:3px;padding:1px 4px;font-size:9.5px;font-family:monospace}
+.help-table{width:100%;border-collapse:collapse;font-size:10.5px;margin-bottom:8px}
+.help-table th{background:var(--vscode-editor-inactiveSelectionBackground);padding:3px 7px;text-align:left;font-size:10px;font-weight:600}
+.help-table td{padding:3px 7px;border-bottom:1px solid var(--vscode-widget-border)}
+.help-no-result{font-size:11px;color:var(--vscode-descriptionForeground);padding:20px 0;text-align:center}

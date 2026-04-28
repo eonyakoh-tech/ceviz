@@ -1855,6 +1855,7 @@ ${response}
       <button class="ibtn" id="enBtn" title="영어 튜터 모드">En</button>
       <button class="ibtn" id="langBtn" title="언어 선택">🌐</button>
       <button class="ibtn" id="evoBtn" title="자기 개발 시스템">📈</button>
+      <button class="ibtn" id="helpBtn" title="사용 설명서">📖</button>
     </div>
   </div>
   <div class="status">
@@ -2354,6 +2355,266 @@ ${response}
     </div>
     <div class="modelmgr-footer">
       <button class="modelmgr-wiz-link" id="modelMgrWizBtn">🧙 설치 마법사 다시 실행</button>
+    </div>
+  </div>
+</div>
+
+<!-- 사용 설명서 오버레이 -->
+<div class="help-overlay" id="helpOverlay">
+  <div class="help-modal">
+    <div class="help-hdr">
+      <span class="help-hdr-title" id="helpTitleSpan">📖 CEVIZ 사용 설명서</span>
+      <input class="help-search-input" id="helpSearchInput" placeholder="섹션 검색... (Ctrl+F)" />
+      <button class="help-close-btn" id="helpCloseBtn">✕</button>
+    </div>
+    <div class="help-body">
+      <nav class="help-nav">
+        <button class="help-nav-btn on" id="helpNav1">🚀 시작하기</button>
+        <button class="help-nav-btn" id="helpNav2">⭐ 주요 기능</button>
+        <button class="help-nav-btn" id="helpNav3">💬 채팅 모드</button>
+        <button class="help-nav-btn" id="helpNav4">📈 자기 개발</button>
+        <button class="help-nav-btn" id="helpNav5">📡 RSS Feed</button>
+        <button class="help-nav-btn" id="helpNav6">📄 기술 백서</button>
+        <button class="help-nav-btn" id="helpNav7">🔧 모델 관리</button>
+        <button class="help-nav-btn" id="helpNav8">🧠 Vault 연동</button>
+        <div class="help-nav-sep"></div>
+        <button class="help-nav-btn" id="helpNav9">⌨️ 단축키</button>
+        <button class="help-nav-btn" id="helpNav10">❓ FAQ</button>
+        <button class="help-nav-btn" id="helpNav11">🔨 트러블슈팅</button>
+        <button class="help-nav-btn" id="helpNav12">🖥️ 환경 정보</button>
+        <div class="help-nav-sep"></div>
+        <a class="help-nav-link" href="https://github.com/eonyakoh/ceviz" target="_blank">GitHub ↗</a>
+      </nav>
+      <div class="help-content">
+
+        <!-- S1: 시작하기 -->
+        <div class="help-sec on" id="helpSec1">
+          <div class="help-h2">🚀 CEVIZ 시작하기</div>
+          <div class="help-h3">1단계 — PN40 서버 연결 확인</div>
+          <p class="help-p">상태 표시줄이 <b>PN40 연결됨 · Ollama ✓</b>로 바뀌면 준비 완료입니다. 서버 IP는 VS Code 설정 <code>ceviz.serverIp</code>에서 변경할 수 있습니다 (기본값: 100.69.155.43:8000).</p>
+          <div class="help-h3">2단계 — 설치 마법사 실행</div>
+          <p class="help-p">명령 팔레트(<span class="help-kbd">Ctrl+Shift+P</span>)에서 <b>CEVIZ: 설치 마법사 실행</b>을 입력하거나 헤더 ⚙️ 버튼 클릭 → 설치 마법사를 선택합니다.</p>
+          <p class="help-p">권장 모델 조합: <b>gemma3:4b</b> (채팅) + <b>nomic-embed-text</b> (RAG — 필수)</p>
+          <div class="help-h3">3단계 — 첫 채팅</div>
+          <p class="help-p">입력창에 질문을 입력하고 <span class="help-kbd">Enter</span>를 누릅니다. 기본 모드는 <b>Hybrid</b>로, 쉬운 질문은 Local AI, 복잡한 질문은 Cloud AI로 자동 라우팅됩니다.</p>
+          <div class="help-h3">빠른 시작 명령어 (PN40 서버)</div>
+          <p class="help-p"><code>ollama serve &amp;&amp; python3 ~/ceviz/api_server.py</code></p>
+        </div>
+
+        <!-- S2: 주요 기능 -->
+        <div class="help-sec" id="helpSec2">
+          <div class="help-h2">⭐ 주요 기능 소개</div>
+          <table class="help-table">
+            <tr><th>기능</th><th>설명</th></tr>
+            <tr><td>하이브리드 AI 채팅</td><td>Local (Ollama) · Cloud (Claude) · Hybrid 자동 전환</td></tr>
+            <tr><td>RAG 자기 개발</td><td>백서를 ChromaDB에 흡수 → 다음 답변부터 자동 반영</td></tr>
+            <tr><td>RSS 자동 수집</td><td>피드 구독, Whisper 음성 전사, Obsidian 저장</td></tr>
+            <tr><td>기술 백서 생성</td><td>RSS 기사 → 9섹션 구조화 백서 자동 생성</td></tr>
+            <tr><td>Soti-Skill 대시보드</td><td>멀티 에이전트 팀 병렬 오케스트레이션</td></tr>
+            <tr><td>Skill 라이브러리</td><td>AI 프롬프트 템플릿 생성·편집·가져오기/내보내기</td></tr>
+            <tr><td>Obsidian Vault 연동</td><td>ripgrep 기반 노트 검색 → 채팅 컨텍스트 자동 주입</td></tr>
+            <tr><td>코드 선택 주입</td><td>에디터 선택 영역을 <span class="help-kbd">Ctrl+Alt+C</span>로 채팅에 첨부</td></tr>
+            <tr><td>음성 입력</td><td>Web Speech API (한국어/영어) 마이크 버튼 지원</td></tr>
+            <tr><td>멀티 워크스페이스</td><td>워크스페이스별 세션 격리, 자동 전환</td></tr>
+            <tr><td>오프라인 폴백</td><td>서버 다운 시 캐시 응답으로 자동 전환</td></tr>
+            <tr><td>설치 마법사</td><td>모델 설치·삭제·권장 조합 자동 체크</td></tr>
+          </table>
+        </div>
+
+        <!-- S3: 채팅 모드 -->
+        <div class="help-sec" id="helpSec3">
+          <div class="help-h2">💬 채팅 모드 사용법</div>
+          <div class="help-h3">Local 모드</div>
+          <p class="help-p">PN40 Ollama에서 로컬 LLM(gemma3 등)을 사용합니다. 빠른 응답, 인터넷 불필요. 복잡한 추론에는 한계가 있습니다.</p>
+          <div class="help-h3">Cloud 모드</div>
+          <p class="help-p">Anthropic Claude를 호출합니다. 고품질 추론, 코딩, 번역에 적합합니다. API 비용이 발생하며 인터넷 연결이 필요합니다.</p>
+          <div class="help-h3">Hybrid 모드 (권장)</div>
+          <p class="help-p">요청 복잡도를 휴리스틱으로 판단하여 자동 라우팅합니다. Cloud 응답 후 <b>📚 로컬에 학습</b> 버튼으로 RAG에 저장할 수 있습니다.</p>
+          <div class="help-h3">Claude CLI 모드</div>
+          <p class="help-p">터미널에서 <code>claude</code> CLI를 실행하여 스트리밍 응답을 받습니다. <code>claude --version</code>으로 설치 여부를 자동 확인합니다.</p>
+          <div class="help-h3">English Tutor 모드</div>
+          <p class="help-p">헤더의 <b>En</b> 버튼을 클릭하면 영어 교정 프롬프트가 자동으로 래핑됩니다. 음성 입력도 영어(en-US)로 전환됩니다.</p>
+        </div>
+
+        <!-- S4: 자기 개발 시스템 -->
+        <div class="help-sec" id="helpSec4">
+          <div class="help-h2">📈 RAG 자기 개발 시스템</div>
+          <p class="help-p">헤더의 <b>📈</b> 버튼을 클릭하면 4단계 자기 개발 오버레이가 열립니다. 각 단계는 독립적으로 사용할 수 있습니다.</p>
+          <div class="help-h3">A단계 — RAG 흡수</div>
+          <p class="help-p">.md 백서 파일을 선택하면 ChromaDB의 선택한 컬렉션(general/game_dev/english)에 청크 단위로 흡수됩니다. 다음 채팅부터 자동으로 컨텍스트에 반영됩니다. 소요 시간: 최대 5분.</p>
+          <div class="help-h3">B단계 — 시스템 프롬프트 갱신</div>
+          <p class="help-p">A단계에서 흡수한 내용을 분석하여 AI 시스템 프롬프트 추가 내용을 제안합니다. 승인/거부/롤백이 가능하며 이력이 자동 저장됩니다.</p>
+          <div class="help-h3">C단계 — 모델 감지</div>
+          <p class="help-p">백서 내용에서 새 AI 모델명을 감지하고 설치 마법사로 연결합니다.</p>
+          <div class="help-h3">D단계 — 코드 수정 (위험)</div>
+          <p class="help-p">webview.js/css 파일에 직접 변경을 제안합니다. 자동으로 새 브랜치를 생성하고 컴파일 검증 후 커밋합니다. 보안 관련 코드(12개 항목)는 자동 거부됩니다.</p>
+        </div>
+
+        <!-- S5: RSS Feed -->
+        <div class="help-sec" id="helpSec5">
+          <div class="help-h2">📡 RSS Feed 구독 가이드</div>
+          <div class="help-h3">구독 추가</div>
+          <p class="help-p">RSS 탭(📡)에서 <b>+ 구독 추가</b>를 클릭합니다. URL, 이름, 수집 주기(분), 처리 모드를 입력합니다.</p>
+          <div class="help-h3">처리 모드</div>
+          <ul class="help-ul">
+            <li><b>일반 요약 (📄)</b>: 기사를 간단히 요약하여 Obsidian에 저장</li>
+            <li><b>기술 백서 (📋)</b>: 9섹션 구조로 심층 분석 (Phase 19)</li>
+          </ul>
+          <div class="help-h3">즉시 갱신</div>
+          <p class="help-p">구독 목록에서 <b>지금 갱신</b> 버튼을 클릭하면 즉시 수집을 시작합니다.</p>
+          <div class="help-h3">알림</div>
+          <p class="help-p">새 기사가 수집되면 2분마다 폴링하여 VS Code 알림으로 표시합니다. 알림 클릭 시 .md 파일이 VS Code에서 열립니다.</p>
+          <div class="help-h3">PN40 서비스 설치</div>
+          <p class="help-p"><code>bash pn40_rss_setup.sh</code>로 systemd user timer를 설치하면 PN40이 자동 수집합니다.</p>
+        </div>
+
+        <!-- S6: 기술 백서 -->
+        <div class="help-sec" id="helpSec6">
+          <div class="help-h2">📄 기술 백서 자동 생성</div>
+          <p class="help-p">RSS 피드의 기사를 LLM이 분석하여 9개 고정 섹션으로 구성된 기술 백서를 자동 생성합니다.</p>
+          <div class="help-h3">9개 섹션 구조</div>
+          <ul class="help-ul">
+            <li>① 개요 및 배경</li>
+            <li>② 핵심 기술 분석</li>
+            <li>③ 아키텍처 및 설계</li>
+            <li>④ 구현 세부사항</li>
+            <li>⑤ 성능 및 벤치마크</li>
+            <li>⑥ 활용 사례</li>
+            <li>⑦ 장단점 비교</li>
+            <li>⑧ 미래 전망</li>
+            <li>⑨ 결론 및 권장사항</li>
+          </ul>
+          <div class="help-h3">모델 선택</div>
+          <p class="help-p">설치된 모델 중 2GB 이상인 가장 큰 모델을 자동으로 선택합니다. 각 섹션은 자체 검증 후 최대 2회 재생성합니다.</p>
+          <div class="help-h3">보안</div>
+          <p class="help-p">기사 내용은 &lt;content&gt; 태그로 격리되어 프롬프트 인젝션을 방지합니다.</p>
+        </div>
+
+        <!-- S7: 모델 관리 -->
+        <div class="help-sec" id="helpSec7">
+          <div class="help-h2">🔧 모델 관리</div>
+          <div class="help-h3">설치 마법사</div>
+          <p class="help-p">명령 팔레트에서 <b>CEVIZ: 설치 마법사 실행</b> 또는 헤더 ⚙️ 버튼을 클릭합니다. 5단계 마법사로 권장 모델을 자동 설치합니다.</p>
+          <div class="help-h3">권장 모델 조합</div>
+          <table class="help-table">
+            <tr><th>모델</th><th>용도</th><th>크기</th></tr>
+            <tr><td>gemma3:4b</td><td>범용 채팅 (권장)</td><td>~3GB</td></tr>
+            <tr><td>gemma3:1b</td><td>경량 채팅</td><td>~815MB</td></tr>
+            <tr><td>nomic-embed-text</td><td>RAG 임베딩 (필수)</td><td>~274MB</td></tr>
+            <tr><td>qwen2.5-coder:1.5b</td><td>코딩 특화 (PN40)</td><td>~986MB</td></tr>
+            <tr><td>qwen2.5-coder:3b</td><td>코딩 특화 (T480s)</td><td>~1.9GB</td></tr>
+          </table>
+          <div class="help-h3">모델 삭제</div>
+          <p class="help-p">헤더 ⚙️ 버튼 → <b>모델 관리</b>를 클릭합니다. 각 모델 옆의 🗑️ 버튼으로 삭제할 수 있습니다.</p>
+        </div>
+
+        <!-- S8: Vault 연동 -->
+        <div class="help-sec" id="helpSec8">
+          <div class="help-h2">🧠 Obsidian Vault 연동</div>
+          <div class="help-h3">Vault 경로 설정</div>
+          <p class="help-p">사이드바의 🧠 버튼을 클릭하면 Vault 경로 입력창이 열립니다. 기본값은 <code>~/Documents/Obsidian</code> 등 일반적인 경로를 자동 탐지합니다.</p>
+          <div class="help-h3">노트 검색</div>
+          <p class="help-p">검색창에 키워드를 입력하면 ripgrep이 Vault 내 모든 .md 파일을 검색합니다. 검색 결과를 클릭하면 채팅 컨텍스트로 자동 주입됩니다.</p>
+          <div class="help-h3">RSS 자동 저장</div>
+          <p class="help-p">RSS 수집된 요약/백서는 Vault의 <code>vault_sync/</code> 폴더에 저장됩니다. Syncthing을 설정하면 PN40 ↔ T480s 간 자동 동기화됩니다.</p>
+          <div class="help-h3">요구사항</div>
+          <p class="help-p">ripgrep(<code>rg</code>)이 시스템에 설치되어 있어야 합니다. <code>sudo apt install ripgrep</code>으로 설치하세요.</p>
+        </div>
+
+        <!-- S9: 단축키 -->
+        <div class="help-sec" id="helpSec9">
+          <div class="help-h2">⌨️ 단축키 모음</div>
+          <table class="help-table">
+            <tr><th>단축키</th><th>동작</th></tr>
+            <tr><td><span class="help-kbd">Enter</span></td><td>채팅 메시지 전송</td></tr>
+            <tr><td><span class="help-kbd">Shift+Enter</span></td><td>입력창 줄바꿈</td></tr>
+            <tr><td><span class="help-kbd">Ctrl+Alt+C</span></td><td>에디터 선택 코드를 채팅에 주입</td></tr>
+            <tr><td><span class="help-kbd">Ctrl+Shift+P</span> → CEVIZ: 새 세션</td><td>새 채팅 세션 시작</td></tr>
+            <tr><td><span class="help-kbd">Ctrl+Shift+P</span> → CEVIZ: 영어 튜터</td><td>English Tutor 모드 토글</td></tr>
+            <tr><td><span class="help-kbd">Ctrl+Shift+P</span> → CEVIZ: 설치 마법사</td><td>설치 마법사 실행</td></tr>
+            <tr><td><span class="help-kbd">Ctrl+F</span> (도움말 내)</td><td>도움말 섹션 검색</td></tr>
+            <tr><td><span class="help-kbd">Esc</span> (오버레이 내)</td><td>오버레이 닫기</td></tr>
+          </table>
+          <div class="help-h3">우클릭 메뉴</div>
+          <p class="help-p">에디터에서 코드를 선택 후 우클릭 → <b>CEVIZ: 코드를 채팅에 주입</b>을 선택하면 코드 블록이 채팅 입력창에 첨부됩니다.</p>
+        </div>
+
+        <!-- S10: FAQ -->
+        <div class="help-sec" id="helpSec10">
+          <div class="help-h2">❓ 자주 묻는 질문</div>
+          <div class="help-h3">Q. Cloud 모드를 사용하려면?</div>
+          <p class="help-p">PN40 서버에 Anthropic API 키가 설정되어 있어야 합니다. 서버 관리자에게 <code>ANTHROPIC_API_KEY</code> 환경변수 설정을 요청하세요.</p>
+          <div class="help-h3">Q. 모델이 드롭다운에 표시되지 않아요</div>
+          <p class="help-p">PN40에서 <code>ollama list</code>로 설치된 모델을 확인하세요. 없다면 설치 마법사를 실행하여 권장 모델을 설치합니다.</p>
+          <div class="help-h3">Q. RAG 검색이 동작하지 않아요</div>
+          <p class="help-p">nomic-embed-text 모델이 설치되어 있어야 합니다. ChromaDB 패키지도 PN40에 설치되어 있어야 합니다: <code>pip install chromadb</code></p>
+          <div class="help-h3">Q. 응답이 너무 느려요</div>
+          <p class="help-p">더 작은 모델(gemma3:1b)로 전환하거나, Hybrid 모드의 Cloud 임계값을 조정해보세요. PN40과의 Tailscale 연결 상태도 확인하세요.</p>
+          <div class="help-h3">Q. 세션이 사라졌어요</div>
+          <p class="help-p">세션은 <code>vscode.ExtensionContext.globalState</code>에 저장됩니다. VS Code 재설치 시 초기화될 수 있습니다. Skill은 Import/Export로 백업하세요.</p>
+          <div class="help-h3">Q. 음성 입력이 작동하지 않아요</div>
+          <p class="help-p">Web Speech API는 Chromium 기반 환경에서만 동작합니다. VS Code 내장 브라우저가 아닌 경우 지원되지 않을 수 있습니다.</p>
+        </div>
+
+        <!-- S11: 트러블슈팅 -->
+        <div class="help-sec" id="helpSec11">
+          <div class="help-h2">🔨 트러블슈팅</div>
+          <div class="help-h3">서버 연결 안됨 (빨간 점)</div>
+          <ul class="help-ul">
+            <li>PN40이 켜져 있는지 확인: <code>ping 100.69.155.43</code></li>
+            <li>Tailscale VPN 연결 확인: <code>tailscale status</code></li>
+            <li>API 서버 실행 확인: <code>curl http://100.69.155.43:8000/status</code></li>
+            <li>서버 재시작: <code>sudo systemctl restart ceviz-api</code></li>
+          </ul>
+          <div class="help-h3">빌드 오류 (webpack)</div>
+          <ul class="help-ul">
+            <li><code>npm install</code> 후 <code>npm run compile</code> 재시도</li>
+            <li>TypeScript 에러 확인: <code>npx tsc --noEmit</code></li>
+            <li>node_modules 재설치: <code>rm -rf node_modules &amp;&amp; npm install</code></li>
+          </ul>
+          <div class="help-h3">RAG 흡수 실패</div>
+          <ul class="help-ul">
+            <li>PN40에서 <code>pip show chromadb</code>로 설치 확인</li>
+            <li>PN40에서 <code>ollama list</code>로 nomic-embed-text 확인</li>
+            <li>evolution_router.py가 api_server.py에 등록되었는지 확인</li>
+          </ul>
+          <div class="help-h3">Webview 빈 화면</div>
+          <ul class="help-ul">
+            <li>VS Code 개발자 도구(<span class="help-kbd">Ctrl+Shift+I</span>)에서 콘솔 오류 확인</li>
+            <li>Extension 재시작: <code>code --disable-extensions</code> 후 재활성화</li>
+          </ul>
+          <div class="help-h3">VSIX 재설치</div>
+          <p class="help-p"><code>npm run compile &amp;&amp; npx vsce package &amp;&amp; code --install-extension ceviz-0.2.0.vsix</code></p>
+        </div>
+
+        <!-- S12: 환경 정보 -->
+        <div class="help-sec" id="helpSec12">
+          <div class="help-h2">🖥️ 환경 정보</div>
+          <table class="help-table">
+            <tr><th>항목</th><th>값</th></tr>
+            <tr><td>PN40 (서버)</td><td>Lenovo ThinkPad PN40 · Tailscale IP 100.69.155.43</td></tr>
+            <tr><td>T480s (클라이언트)</td><td>Lenovo ThinkPad T480s · VS Code Extension 개발</td></tr>
+            <tr><td>API 포트</td><td>8000 (FastAPI + Uvicorn)</td></tr>
+            <tr><td>Tailscale</td><td>P2P VPN · PN40 ↔ T480s 직접 연결</td></tr>
+            <tr><td>Ollama</td><td>로컬 LLM 서비스 · 기본 포트 11434</td></tr>
+            <tr><td>ChromaDB</td><td>벡터 DB · <code>~/ceviz/chroma/</code> 저장</td></tr>
+            <tr><td>Extension 버전</td><td>ceviz-0.2.0</td></tr>
+            <tr><td>브랜치</td><td>extension-ui</td></tr>
+          </table>
+          <div class="help-h3">PN40 서비스 관리</div>
+          <ul class="help-ul">
+            <li>API 서버: <code>sudo systemctl status ceviz-api</code></li>
+            <li>RSS 수집: <code>systemctl --user status ceviz-rss.timer</code></li>
+            <li>로그: <code>journalctl -u ceviz-api -f</code></li>
+          </ul>
+          <div class="help-h3">설정 파일 위치</div>
+          <ul class="help-ul">
+            <li>PN40: <code>~/ceviz/api_server.py</code>, <code>~/ceviz/evolution_router.py</code></li>
+            <li>T480s: VS Code <code>settings.json</code> → <code>ceviz.serverIp</code></li>
+          </ul>
+        </div>
+
+      </div>
     </div>
   </div>
 </div>

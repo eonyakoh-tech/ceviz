@@ -32,6 +32,8 @@ const I18N = {
         ttlSkillBtn:"Skill CRUD",ttlSettings:"AI 엔진 설정",ttlEnglish:"영어 튜터 모드",
         ttlLang:"언어 선택",ttlMic:"음성 입력 (한국어/영어)",ttlStop:"전송 취소 (Stop)",
         ttlEvo:"자기 개발 시스템",evoTitle:"📈 CEVIZ 자기 개발 시스템",evoHistLabel:"📋 개발 이력",
+        ttlHelp:"사용 설명서",helpTitle:"📖 CEVIZ 사용 설명서",helpSearch:"섹션 검색... (Ctrl+F)",helpClose:"닫기",
+        helpSecs:["🚀 시작하기","⭐ 주요 기능","💬 채팅 모드","📈 자기 개발","📡 RSS Feed","📄 기술 백서","🔧 모델 관리","🧠 Vault 연동","⌨️ 단축키","❓ FAQ","🔨 트러블슈팅","🖥️ 환경 정보"],
         langSelectTitle:"언어 선택",langSelectHint:"사용할 언어를 선택하세요",langSave:"확인",
     },
     en: {
@@ -63,6 +65,8 @@ const I18N = {
         ttlSkillBtn:"Skill CRUD",ttlSettings:"AI Engine Settings",ttlEnglish:"English Tutor Mode",
         ttlLang:"Select Language",ttlMic:"Voice Input (KO/EN)",ttlStop:"Cancel (Stop)",
         ttlEvo:"Self-Development System",evoTitle:"📈 CEVIZ Self-Development System",evoHistLabel:"📋 Dev History",
+        ttlHelp:"User Manual",helpTitle:"📖 CEVIZ User Manual",helpSearch:"Search sections... (Ctrl+F)",helpClose:"Close",
+        helpSecs:["🚀 Getting Started","⭐ Key Features","💬 Chat Modes","📈 Self-Development","📡 RSS Feed","📄 Whitepaper","🔧 Model Mgmt","🧠 Vault","⌨️ Shortcuts","❓ FAQ","🔨 Troubleshoot","🖥️ Environment"],
         langSelectTitle:"Select Language",langSelectHint:"Choose your preferred language",langSave:"Confirm",
     },
     tr: {
@@ -94,6 +98,8 @@ const I18N = {
         ttlSkillBtn:"Beceri CRUD",ttlSettings:"AI Motor Ayarları",ttlEnglish:"İngilizce Öğretmeni",
         ttlLang:"Dil Seç",ttlMic:"Sesli Giriş",ttlStop:"İptal (Durdur)",
         ttlEvo:"Kendini Geliştirme Sistemi",evoTitle:"📈 CEVIZ Kendini Geliştirme Sistemi",evoHistLabel:"📋 Geliştirme Geçmişi",
+        ttlHelp:"Kullanım Kılavuzu",helpTitle:"📖 CEVIZ Kullanım Kılavuzu",helpSearch:"Bölüm ara... (Ctrl+F)",helpClose:"Kapat",
+        helpSecs:["🚀 Başlarken","⭐ Temel Özellikler","💬 Sohbet Modu","📈 Kendini Geliştir","📡 RSS Feed","📄 Teknik Belge","🔧 Model Yönetimi","🧠 Vault","⌨️ Kısayollar","❓ SSS","🔨 Sorun Giderme","🖥️ Ortam Bilgisi"],
         langSelectTitle:"Dil Seçin",langSelectHint:"Tercih ettiğiniz dili seçin",langSave:"Onayla",
     },
     ar: {
@@ -125,6 +131,8 @@ const I18N = {
         ttlSkillBtn:"CRUD المهارات",ttlSettings:"إعدادات محرك الذكاء الاصطناعي",ttlEnglish:"معلم الإنجليزية",
         ttlLang:"اختر اللغة",ttlMic:"الإدخال الصوتي",ttlStop:"إلغاء (إيقاف)",
         ttlEvo:"نظام التطوير الذاتي",evoTitle:"📈 CEVIZ نظام التطوير الذاتي",evoHistLabel:"📋 سجل التطوير",
+        ttlHelp:"دليل المستخدم",helpTitle:"📖 CEVIZ دليل المستخدم",helpSearch:"بحث في الأقسام... (Ctrl+F)",helpClose:"إغلاق",
+        helpSecs:["🚀 البدء","⭐ الميزات","💬 أوضاع الدردشة","📈 التطوير الذاتي","📡 RSS","📄 الورقة البيضاء","🔧 النماذج","🧠 Vault","⌨️ الاختصارات","❓ الأسئلة","🔨 الاستكشاف","🖥️ البيئة"],
         langSelectTitle:"اختر اللغة",langSelectHint:"اختر لغتك المفضلة",langSave:"تأكيد",
     },
     fa: {
@@ -156,6 +164,8 @@ const I18N = {
         ttlSkillBtn:"CRUD مهارت",ttlSettings:"تنظیمات موتور هوش مصنوعی",ttlEnglish:"معلم انگلیسی",
         ttlLang:"انتخاب زبان",ttlMic:"ورودی صوتی",ttlStop:"لغو (توقف)",
         ttlEvo:"سیستم خودتوسعه",evoTitle:"📈 CEVIZ سیستم خودتوسعه",evoHistLabel:"📋 تاریخچه توسعه",
+        ttlHelp:"راهنمای کاربر",helpTitle:"📖 CEVIZ راهنمای کاربر",helpSearch:"جستجوی بخش... (Ctrl+F)",helpClose:"بستن",
+        helpSecs:["🚀 شروع","⭐ ویژگی‌ها","💬 حالت چت","📈 خودتوسعه","📡 RSS","📄 کاغذ سفید","🔧 مدل","🧠 Vault","⌨️ میانبرها","❓ پرسش‌ها","🔨 عیب‌یابی","🖥️ محیط"],
         langSelectTitle:"انتخاب زبان",langSelectHint:"زبان مورد نظر خود را انتخاب کنید",langSave:"تأیید",
     },
     ru: {
@@ -187,6 +197,8 @@ const I18N = {
         ttlSkillBtn:"CRUD навыков",ttlSettings:"Настройки движка ИИ",ttlEnglish:"Репетитор английского",
         ttlLang:"Выбор языка",ttlMic:"Голосовой ввод",ttlStop:"Отмена (Стоп)",
         ttlEvo:"Система Саморазвития",evoTitle:"📈 CEVIZ Система Саморазвития",evoHistLabel:"📋 История разработки",
+        ttlHelp:"Руководство пользователя",helpTitle:"📖 CEVIZ Руководство пользователя",helpSearch:"Поиск по разделам... (Ctrl+F)",helpClose:"Закрыть",
+        helpSecs:["🚀 Начало работы","⭐ Функции","💬 Режим чата","📈 Саморазвитие","📡 RSS","📄 Белая книга","🔧 Модели","🧠 Vault","⌨️ Горячие клавиши","❓ FAQ","🔨 Устранение","🖥️ Среда"],
         langSelectTitle:"Выбор языка",langSelectHint:"Выберите предпочитаемый язык",langSave:"Подтвердить",
     },
 };
@@ -230,6 +242,15 @@ function applyI18n(l) {
     s("stopBtn", "ttlStop", "title");
     s("evoBtn", "ttlEvo", "title");
     s("evoTitleSpan", "evoTitle");
+    s("helpBtn", "ttlHelp", "title");
+    s("helpTitleSpan", "helpTitle");
+    s("helpSearchInput", "helpSearch", "ph");
+    s("helpCloseBtn", "helpClose");
+    const helpSecLabels = (I18N[lang] || I18N.ko).helpSecs;
+    helpSecLabels.forEach((label, i) => {
+        const btn = document.getElementById("helpNav" + (i + 1));
+        if (btn) { btn.textContent = label; }
+    });
 
     // Session
     q(".sess-label", "sessions");
@@ -2386,3 +2407,69 @@ document.getElementById("rssIntervalSel").addEventListener("change", () => {
     showCtxToast("✅ 갱신 주기 변경됨: " + interval + " — PN40 timer에 반영해주세요.");
 });
 // ─────────────────────────────────────────────────────────────────────────────
+// ── 사용 설명서 (Phase 21) ────────────────────────────────────────────────────
+
+let _helpActiveSec = 0;
+
+function openHelp() {
+    document.getElementById("helpOverlay").classList.add("show");
+    helpSwitchSec(0);
+    document.getElementById("helpSearchInput").value = "";
+}
+
+function closeHelp() {
+    document.getElementById("helpOverlay").classList.remove("show");
+}
+
+function helpSwitchSec(idx) {
+    _helpActiveSec = idx;
+    document.querySelectorAll(".help-sec").forEach((s, i) => s.classList.toggle("on", i === idx));
+    document.querySelectorAll(".help-nav-btn").forEach((b, i) => b.classList.toggle("on", i === idx));
+    document.getElementById("helpSearchInput").value = "";
+}
+
+function helpDoSearch(query) {
+    const q = query.trim().toLowerCase();
+    const secs = document.querySelectorAll(".help-sec");
+    const navBtns = document.querySelectorAll(".help-nav-btn");
+    if (!q) {
+        secs.forEach((s, i) => s.classList.toggle("on", i === _helpActiveSec));
+        navBtns.forEach((b, i) => b.classList.toggle("on", i === _helpActiveSec));
+        return;
+    }
+    let anyMatch = false;
+    secs.forEach((sec, i) => {
+        const match = sec.textContent.toLowerCase().includes(q);
+        sec.classList.toggle("on", match);
+        if (navBtns[i]) { navBtns[i].classList.toggle("on", match); }
+        if (match) { anyMatch = true; }
+    });
+    if (!anyMatch) {
+        secs[0].classList.add("on");
+        if (navBtns[0]) { navBtns[0].classList.add("on"); }
+    }
+}
+
+document.getElementById("helpBtn").addEventListener("click", openHelp);
+document.getElementById("helpCloseBtn").addEventListener("click", closeHelp);
+document.getElementById("helpOverlay").addEventListener("click", e => {
+    if (e.target === document.getElementById("helpOverlay")) { closeHelp(); }
+});
+
+document.getElementById("helpSearchInput").addEventListener("input", e => {
+    helpDoSearch(e.target.value);
+});
+
+document.querySelectorAll(".help-nav-btn").forEach((btn, i) => {
+    btn.addEventListener("click", () => helpSwitchSec(i));
+});
+
+document.addEventListener("keydown", e => {
+    const overlay = document.getElementById("helpOverlay");
+    if (!overlay.classList.contains("show")) { return; }
+    if (e.ctrlKey && e.key === "f") {
+        e.preventDefault();
+        document.getElementById("helpSearchInput").focus();
+    }
+    if (e.key === "Escape") { closeHelp(); }
+});
