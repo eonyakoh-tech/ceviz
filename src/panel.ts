@@ -355,6 +355,7 @@ export class CevizPanel implements vscode.WebviewViewProvider {
     private _lastModelRefresh   = 0;
     private _dailyTokenLimit    = 0;   // 0 = 무제한
     private _monthlyTokenLimit  = 0;   // 0 = 무제한
+    private _pendingCloudPrompt?: string; // 분류 다이얼로그 대기 중 프롬프트
     private _apiKeyStatuses: ApiKeyStatus[] = [
         { provider: "anthropic", isSet: false, isValid: null },
         { provider: "gemini",    isSet: false, isValid: null },
@@ -820,6 +821,61 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                 case "cloudChat":
                     await this._handleCloudChat(msg.prompt, msg.provider, msg.model);
                     break;
+
+                case "classifyConfirmed":
+                    await this._handleClassifyConfirmed(
+                        msg.domainKey, msg.provider, msg.model,
+                        msg.learn ?? false, msg.extractedKeywords ?? []
+                    );
+                    break;
+
+                case "routingGetConfig":
+                    this._sendRoutingConfig();
+                    break;
+
+                case "routingSetConfig":
+                    await this._applyRoutingConfig(msg.config);
+                    break;
+
+                case "domainGetAll":
+                    this._sendDomainConfigs();
+                    break;
+
+                case "domainToggle":
+                    await this._domainToggle(msg.key, msg.enabled);
+                    break;
+
+                case "domainAdd":
+                    await this._domainAdd(msg.domain);
+                    break;
+
+                case "domainDelete":
+                    await this._domainDelete(msg.key);
+                    break;
+
+                case "domainUpdateKeywords":
+                    await this._domainUpdateKeywords(msg.key, msg.keywords);
+                    break;
+
+                case "domainMappingUpdate":
+                    await this._domainMappingUpdate(msg.key, msg.provider, msg.model);
+                    break;
+
+                case "domainLearnKeywords":
+                    await this._learnDomainKeywords(msg.domainKey, msg.keywords);
+                    break;
+
+                case "tokenUsageGet":
+                    this._sendTokenUsage();
+                    break;
+
+                case "tokenLimitSet":
+                    await this._setTokenLimits(msg.daily, msg.monthly);
+                    break;
+
+                case "modelRefresh":
+                    await this._refreshCloudModels();
+                    break;
             }
         });
     }
@@ -862,6 +918,16 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
 
 💬 답변
 [Answer the user's actual question in English. Adjust vocabulary and sentence complexity to match their CEFR level.]`;
+        }
+
+        // ── Phase 22: Cloud AI 자동 라우팅 인터셉트 ──────────────────────────
+        // cloud 모드이고, 자동 라우팅 ON, 영어 튜터 모드 아닌 경우
+        if (this._mode === "cloud" && this._routingEnabled && !this._englishMode) {
+            const hasAny = await this._hasAnyCloudApiKey();
+            if (hasAny) {
+                await this._handleRoutedPrompt(session, prompt, finalPrompt);
+                return;
+            }
         }
 
         // Copilot CLI 모드 — T480s 로컬 실행, PN40 불필요
@@ -3224,5 +3290,533 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
         return this._tokenUsageLog
             .filter(r => r.date === today)
             .reduce((sum, r) => sum + r.costUsd, 0);
+    }
+
+    // ── Phase 22: 자동 라우팅 메서드 ─────────────────────────────────────────
+
+    private async _hasAnyCloudApiKey(): Promise<boolean> {
+        for (const s of this._apiKeyStatuses) {
+            if (s.isSet) { return true; }
+        }
+        // globalState 플래그가 없으면 SecretStorage 직접 확인 (첫 실행)
+        for (const p of ["anthropic", "gemini"] as const) {
+            const key = await this._apiKeyGet(p);
+            if (key) {
+                const status = this._apiKeyStatuses.find(s => s.provider === p);
+                if (status) { status.isSet = true; }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private async _classifyDomain(prompt: string): Promise<ClassifyResult | null> {
+        const activeKeys = this._domainConfigs
+            .filter(d => d.enabled)
+            .map(d => d.key);
+        if (activeKeys.length === 0) { return null; }
+        try {
+            const resp = await axios.post(
+                `${this._getUrl()}/classify-domain`,
+                { question: prompt.slice(0, 500), active_domains: activeKeys },
+                { timeout: 10_000 }
+            );
+            const d = resp.data;
+            return {
+                domain:       d.domain       ?? activeKeys[0],
+                confidence:   d.confidence   ?? 0,
+                alternatives: d.alternatives ?? [],
+            };
+        } catch {
+            return null;
+        }
+    }
+
+    private async _selectAdapterAndModel(domainKey: string): Promise<
+        { adapter: BaseAIAdapter; model: string; provider: "anthropic" | "gemini" } | null
+    > {
+        const domain = this._domainConfigs.find(d => d.key === domainKey);
+        if (!domain) { return null; }
+
+        // Anthropic 우선, 없으면 Gemini
+        for (const provider of ["anthropic", "gemini"] as const) {
+            const model = domain.modelMapping[provider];
+            if (!model) { continue; }
+            const key = await this._apiKeyGet(provider);
+            if (!key) { continue; }
+            const adapter = provider === "anthropic" ? this._anthropicAdapter : this._geminiAdapter;
+            return { adapter, model, provider };
+        }
+        return null;
+    }
+
+    private async _handleRoutedPrompt(
+        session: Session,
+        prompt: string,
+        finalPrompt: string
+    ): Promise<void> {
+        const classify = await this._classifyDomain(prompt);
+
+        if (!classify) {
+            // PN40 분류기 오류 → 기존 PN40 /prompt 흐름으로 폴백
+            this._view?.webview.postMessage({
+                type: "routingFallback", reason: "분류기 연결 실패 — PN40 모드로 폴백합니다."
+            });
+            await this._sendToPN40(session, prompt, finalPrompt);
+            return;
+        }
+
+        if (classify.confidence >= this._routingThreshold) {
+            // 자동 라우팅
+            const sel = await this._selectAdapterAndModel(classify.domain);
+            if (sel) {
+                session.messages.push({ role: "user", content: prompt });
+                if (session.messages.length === 1) {
+                    session.title = prompt.slice(0, 28) + (prompt.length > 28 ? "..." : "");
+                }
+                this._view?.webview.postMessage({ type: "userMsg", content: prompt });
+                this._view?.webview.postMessage({
+                    type: "routingAuto",
+                    domain:    classify.domain,
+                    provider:  sel.provider,
+                    model:     sel.model,
+                    confidence: classify.confidence,
+                });
+                this._view?.webview.postMessage({ type: "thinking" });
+                await this._executeCloudCall(session, prompt, sel.adapter, sel.model, sel.provider);
+            } else {
+                // API 키 없음 → PN40 폴백
+                this._view?.webview.postMessage({
+                    type: "routingFallback",
+                    reason: `${classify.domain} 도메인 API 키 미설정 — PN40 모드로 폴백합니다.`
+                });
+                await this._sendToPN40(session, prompt, finalPrompt);
+            }
+        } else {
+            // 신뢰도 미달 → 사용자 확인 다이얼로그
+            this._pendingCloudPrompt = finalPrompt;
+            session.messages.push({ role: "user", content: prompt });
+            if (session.messages.length === 1) {
+                session.title = prompt.slice(0, 28) + (prompt.length > 28 ? "..." : "");
+            }
+            this._context.globalState.update(this._sessionsKey(), this._sessions);
+            this._view?.webview.postMessage({ type: "userMsg", content: prompt });
+            this._view?.webview.postMessage({
+                type: "classifyConfirm",
+                domain:       classify.domain,
+                confidence:   classify.confidence,
+                alternatives: classify.alternatives,
+                allDomains:   this._domainConfigs
+                    .filter(d => d.enabled)
+                    .map(d => ({ key: d.key, displayName: d.displayName })),
+            });
+        }
+    }
+
+    private async _handleClassifyConfirmed(
+        domainKey: string,
+        provider: "anthropic" | "gemini",
+        model: string,
+        learn: boolean,
+        extractedKeywords: string[]
+    ): Promise<void> {
+        const session = this._sessions.find(s => s.id === this._currentSessionId);
+        if (!session) { return; }
+
+        const prompt = this._pendingCloudPrompt;
+        this._pendingCloudPrompt = undefined;
+        if (!prompt) { return; }
+
+        if (learn && extractedKeywords.length > 0) {
+            await this._learnDomainKeywords(domainKey, extractedKeywords);
+        }
+
+        const apiKey = await this._apiKeyGet(provider);
+        if (!apiKey) {
+            this._view?.webview.postMessage({
+                type: "cloudChatError",
+                msg: `${provider === "anthropic" ? "Anthropic" : "Gemini"} API 키가 설정되지 않았습니다.`
+            });
+            return;
+        }
+
+        const adapter: BaseAIAdapter = provider === "anthropic" ? this._anthropicAdapter : this._geminiAdapter;
+        this._view?.webview.postMessage({ type: "thinking" });
+        await this._executeCloudCall(session, prompt, adapter, model, provider);
+    }
+
+    private async _executeCloudCall(
+        session: Session,
+        prompt: string,
+        adapter: BaseAIAdapter,
+        model: string,
+        provider: "anthropic" | "gemini"
+    ): Promise<void> {
+        const apiKey = await this._apiKeyGet(provider);
+        if (!apiKey) { return; }
+
+        // 한도 체크
+        if (!this._checkTokenLimitOk()) {
+            this._view?.webview.postMessage({
+                type: "cloudChatError",
+                msg: "일일 토큰 사용 한도에 도달했습니다. 설정에서 한도를 조정하거나 내일 다시 시도하세요."
+            });
+            return;
+        }
+
+        try {
+            const resp = await adapter.chat({ prompt, model }, apiKey);
+
+            this._recordTokenUsage({
+                date:         new Date().toISOString().slice(0, 10),
+                provider,
+                model,
+                inputTokens:  resp.inputTokens,
+                outputTokens: resp.outputTokens,
+                costUsd:      resp.costUsd,
+            });
+
+            const msg: Message = {
+                role: "assistant", content: resp.content,
+                agent:     provider === "anthropic" ? "Claude" : "Gemini",
+                tier:      2,
+                engine:    model,
+                tokenUsage: resp.inputTokens + resp.outputTokens,
+            };
+            session.messages.push(msg);
+            this._lastCloudResponse = msg;
+            this._context.globalState.update(this._sessionsKey(), this._sessions);
+
+            this._view?.webview.postMessage({
+                type:      "assistantMsg",
+                content:   resp.content,
+                agent:     provider === "anthropic" ? "Claude" : "Gemini",
+                tier:      2,
+                engine:    model,
+                isCloud:   true,
+                tokenUsage: resp.inputTokens + resp.outputTokens,
+                costUsd:   resp.costUsd,
+                totalCostToday: this._todayCostUsd(),
+            });
+        } catch (e: any) {
+            session.messages.pop();
+            // 폴백: 다른 제공자 시도
+            const fallbackProvider: "anthropic" | "gemini" = provider === "anthropic" ? "gemini" : "anthropic";
+            const fallbackKey = await this._apiKeyGet(fallbackProvider);
+            if (fallbackKey) {
+                const fallbackDomain = this._domainConfigs.find(
+                    d => d.modelMapping[provider] === model || d.modelMapping[fallbackProvider]
+                );
+                const fallbackModel = fallbackDomain?.modelMapping[fallbackProvider];
+                if (fallbackModel) {
+                    const fallbackAdapter: BaseAIAdapter =
+                        fallbackProvider === "anthropic" ? this._anthropicAdapter : this._geminiAdapter;
+                    const errMsg = this._cloudErrorMessage(e, provider, adapter);
+                    this._view?.webview.postMessage({
+                        type: "routingFallback",
+                        reason: `${errMsg} → ${fallbackProvider === "anthropic" ? "Claude" : "Gemini"} (${fallbackModel})로 재시도`
+                    });
+                    session.messages.push({ role: "user", content: prompt });
+                    await this._executeCloudCall(session, prompt, fallbackAdapter, fallbackModel, fallbackProvider);
+                    return;
+                }
+            }
+            // 최종 폴백: PN40
+            const errMsg = this._cloudErrorMessage(e, provider, adapter);
+            this._view?.webview.postMessage({
+                type: "routingFallback",
+                reason: `${errMsg} → PN40 로컬 모드로 폴백합니다.`
+            });
+            try {
+                const res = await axios.post(`${this._getUrl()}/prompt`,
+                    { prompt, model: this._model },
+                    { timeout: 200000 }
+                );
+                const d = res.data;
+                const fallbackMsg: Message = { role: "assistant", content: d.result, agent: d.agent, tier: 0 };
+                session.messages.push(fallbackMsg);
+                this._context.globalState.update(this._sessionsKey(), this._sessions);
+                this._view?.webview.postMessage({ type: "assistantMsg", content: d.result, agent: d.agent, tier: 0 });
+            } catch {
+                this._view?.webview.postMessage({
+                    type: "assistantMsg",
+                    content: "모든 AI 서비스 연결에 실패했습니다. 네트워크 상태를 확인하세요.",
+                    agent: "system", tier: 0
+                });
+            }
+        }
+    }
+
+    private async _sendToPN40(session: Session, prompt: string, finalPrompt: string): Promise<void> {
+        session.messages.push({ role: "user", content: prompt });
+        if (session.messages.length === 1) {
+            session.title = prompt.slice(0, 28) + (prompt.length > 28 ? "..." : "");
+        }
+        this._view?.webview.postMessage({ type: "userMsg", content: prompt });
+        this._view?.webview.postMessage({ type: "thinking" });
+        this._abortController = new AbortController();
+        try {
+            const res = await axios.post(`${this._getUrl()}/prompt`,
+                { prompt: finalPrompt, model: this._model },
+                { timeout: 200000, signal: this._abortController.signal }
+            );
+            const d = res.data;
+            const isCloud = d.tier === 2;
+            const tokenEstimate = isCloud ? Math.floor(finalPrompt.length / 4 + d.result.length / 4) : 0;
+            if (isCloud) { this._totalTokens += tokenEstimate; }
+            const msg: Message = {
+                role: "assistant", content: d.result, agent: d.agent,
+                tier: d.tier, engine: d.engine,
+                tokenUsage: isCloud ? tokenEstimate : undefined,
+                ragDocs: d.rag_docs || undefined,
+                domain: d.domain || undefined,
+            };
+            session.messages.push(msg);
+            this._lastCloudResponse = isCloud ? msg : null;
+            this._context.globalState.update(this._sessionsKey(), this._sessions);
+            this._cacheResponse(prompt, d.result, d.agent, d.engine, d.tier);
+            this._view?.webview.postMessage({
+                type: "assistantMsg", content: d.result,
+                agent: d.agent, tier: d.tier, engine: d.engine,
+                isCloud, tokenUsage: isCloud ? tokenEstimate : null,
+                totalTokens: this._totalTokens, ragDocs: d.rag_docs || 0, domain: d.domain || "",
+            });
+        } catch (e: any) {
+            if (e.code === "ERR_CANCELED" || e.name === "CanceledError") {
+                session.messages.pop();
+                this._view?.webview.postMessage({ type: "requestCanceled" });
+            } else {
+                session.messages.pop();
+                this._view?.webview.postMessage({
+                    type: "assistantMsg",
+                    content: "PN40 연결 실패: " + e.message,
+                    agent: "system", tier: 0
+                });
+            }
+        } finally {
+            this._abortController = undefined;
+        }
+    }
+
+    private _checkTokenLimitOk(): boolean {
+        if (this._dailyTokenLimit <= 0) { return true; }
+        const today = new Date().toISOString().slice(0, 10);
+        const todayTokens = this._tokenUsageLog
+            .filter(r => r.date === today)
+            .reduce((sum, r) => sum + r.inputTokens + r.outputTokens, 0);
+        return todayTokens < this._dailyTokenLimit;
+    }
+
+    // ── Phase 22: 도메인 관리 메서드 ──────────────────────────────────────────
+
+    private _sendRoutingConfig(): void {
+        this._view?.webview.postMessage({
+            type: "routingConfig",
+            enabled:          this._routingEnabled,
+            threshold:        this._routingThreshold,
+            dailyTokenLimit:  this._dailyTokenLimit,
+            monthlyTokenLimit: this._monthlyTokenLimit,
+            lastModelRefresh: this._lastModelRefresh,
+            apiKeyStatuses:   this._apiKeyStatuses,
+        });
+    }
+
+    private async _applyRoutingConfig(cfg: Record<string, unknown>): Promise<void> {
+        if (typeof cfg.enabled === "boolean") {
+            this._routingEnabled = cfg.enabled;
+            this._context.globalState.update("ceviz.routingEnabled", cfg.enabled);
+        }
+        if (typeof cfg.threshold === "number") {
+            this._routingThreshold = Math.max(0.40, Math.min(0.90, cfg.threshold));
+            this._context.globalState.update("ceviz.routingThreshold", this._routingThreshold);
+        }
+        if (typeof cfg.dailyTokenLimit === "number") {
+            this._dailyTokenLimit = Math.max(0, cfg.dailyTokenLimit);
+            this._context.globalState.update("ceviz.dailyTokenLimit", this._dailyTokenLimit);
+        }
+        if (typeof cfg.monthlyTokenLimit === "number") {
+            this._monthlyTokenLimit = Math.max(0, cfg.monthlyTokenLimit);
+            this._context.globalState.update("ceviz.monthlyTokenLimit", this._monthlyTokenLimit);
+        }
+        this._sendRoutingConfig();
+    }
+
+    private _sendDomainConfigs(): void {
+        this._view?.webview.postMessage({ type: "domainConfigs", domains: this._domainConfigs });
+    }
+
+    private async _domainToggle(key: string, enabled: boolean): Promise<void> {
+        const d = this._domainConfigs.find(c => c.key === key);
+        if (!d) { return; }
+        d.enabled = enabled;
+        await this._persistDomainConfigs();
+        this._sendDomainConfigs();
+    }
+
+    private async _domainAdd(domain: Partial<DomainConfig>): Promise<void> {
+        const key = (domain.key ?? "").replace(/[^a-z0-9_]/g, "_").slice(0, 40);
+        if (!key || this._domainConfigs.find(d => d.key === key)) {
+            this._view?.webview.postMessage({
+                type: "importResult", ok: false,
+                msg: key ? `도메인 키 '${key}'가 이미 존재합니다.` : "유효한 도메인 키를 입력하세요."
+            });
+            return;
+        }
+        const newDomain: DomainConfig = {
+            key,
+            displayName:  (domain.displayName ?? key).slice(0, 40),
+            enabled:      true,
+            isBuiltin:    false,
+            keywords:     Array.isArray(domain.keywords) ? domain.keywords : [],
+            modelMapping: {
+                anthropic: domain.modelMapping?.anthropic ?? "claude-sonnet-4-6",
+                gemini:    domain.modelMapping?.gemini    ?? "gemini-2.0-flash",
+            },
+        };
+        this._domainConfigs.push(newDomain);
+        await this._persistDomainConfigs();
+        this._sendDomainConfigs();
+    }
+
+    private async _domainDelete(key: string): Promise<void> {
+        const d = this._domainConfigs.find(c => c.key === key);
+        if (!d) { return; }
+        if (d.isBuiltin) {
+            this._view?.webview.postMessage({
+                type: "importResult", ok: false,
+                msg: "기본 도메인은 삭제할 수 없습니다. 비활성화만 가능합니다."
+            });
+            return;
+        }
+        this._domainConfigs = this._domainConfigs.filter(c => c.key !== key);
+        await this._persistDomainConfigs();
+        this._sendDomainConfigs();
+    }
+
+    private async _domainUpdateKeywords(key: string, keywords: DomainKeyword[]): Promise<void> {
+        const d = this._domainConfigs.find(c => c.key === key);
+        if (!d) { return; }
+        d.keywords = keywords.slice(0, 50);
+        await this._persistDomainConfigs();
+        this._sendDomainConfigs();
+    }
+
+    private async _domainMappingUpdate(
+        key: string, provider: "anthropic" | "gemini", model: string
+    ): Promise<void> {
+        const d = this._domainConfigs.find(c => c.key === key);
+        if (!d) { return; }
+        d.modelMapping[provider] = model;
+        await this._persistDomainConfigs();
+        this._sendDomainConfigs();
+    }
+
+    private async _persistDomainConfigs(): Promise<void> {
+        this._context.globalState.update("ceviz.domainConfigs", this._domainConfigs);
+        // PN40에도 동기화 (실패해도 무시)
+        try {
+            await axios.put(
+                `${this._getUrl()}/classify-domain/config`,
+                { domains: this._domainConfigs },
+                { timeout: 5_000 }
+            );
+        } catch {}
+    }
+
+    private async _learnDomainKeywords(domainKey: string, keywords: string[]): Promise<void> {
+        // 로컬 domainConfigs 에도 추가
+        const domain = this._domainConfigs.find(d => d.key === domainKey);
+        if (domain) {
+            const existing = new Set(domain.keywords.map(k => k.word.toLowerCase()));
+            for (const word of keywords) {
+                const clean = word.replace(/[^\w가-힣\s\-]/g, "").trim().slice(0, 40);
+                if (clean && !existing.has(clean.toLowerCase())) {
+                    domain.keywords.push({ word: clean, weight: 1.0, learned: true });
+                    existing.add(clean.toLowerCase());
+                }
+            }
+            if (domain.keywords.length > 50) {
+                const builtin = domain.keywords.filter(k => !k.learned);
+                const learned = domain.keywords.filter(k => k.learned);
+                domain.keywords = [...builtin, ...learned.slice(learned.length - (50 - builtin.length))];
+            }
+            await this._persistDomainConfigs();
+        }
+        // PN40에도 동기화
+        try {
+            await axios.post(
+                `${this._getUrl()}/classify-domain/learn`,
+                { domain_key: domainKey, keywords },
+                { timeout: 5_000 }
+            );
+        } catch {}
+    }
+
+    private _sendTokenUsage(): void {
+        const today = new Date().toISOString().slice(0, 10);
+        const thisMonth = today.slice(0, 7);
+        const todayRecords    = this._tokenUsageLog.filter(r => r.date === today);
+        const monthlyRecords  = this._tokenUsageLog.filter(r => r.date.startsWith(thisMonth));
+        const sumRecords = (recs: TokenUsageRecord[]) => ({
+            inputTokens:  recs.reduce((s, r) => s + r.inputTokens,  0),
+            outputTokens: recs.reduce((s, r) => s + r.outputTokens, 0),
+            costUsd:      recs.reduce((s, r) => s + r.costUsd,      0),
+        });
+        this._view?.webview.postMessage({
+            type:    "tokenUsage",
+            today:   sumRecords(todayRecords),
+            monthly: sumRecords(monthlyRecords),
+            daily7:  this._tokenUsageLast7Days(),
+            dailyLimit:   this._dailyTokenLimit,
+            monthlyLimit: this._monthlyTokenLimit,
+        });
+    }
+
+    private _tokenUsageLast7Days(): Array<{ date: string; costUsd: number; tokens: number }> {
+        const result: Map<string, { costUsd: number; tokens: number }> = new Map();
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const key = d.toISOString().slice(0, 10);
+            result.set(key, { costUsd: 0, tokens: 0 });
+        }
+        for (const r of this._tokenUsageLog) {
+            if (result.has(r.date)) {
+                const e = result.get(r.date)!;
+                e.costUsd += r.costUsd;
+                e.tokens  += r.inputTokens + r.outputTokens;
+            }
+        }
+        return Array.from(result.entries()).map(([date, v]) => ({ date, ...v }));
+    }
+
+    private async _setTokenLimits(daily: number, monthly: number): Promise<void> {
+        this._dailyTokenLimit   = Math.max(0, daily   ?? 0);
+        this._monthlyTokenLimit = Math.max(0, monthly ?? 0);
+        this._context.globalState.update("ceviz.dailyTokenLimit",   this._dailyTokenLimit);
+        this._context.globalState.update("ceviz.monthlyTokenLimit", this._monthlyTokenLimit);
+        this._sendTokenUsage();
+    }
+
+    private async _refreshCloudModels(): Promise<void> {
+        const results: Array<{ provider: string; models: string[]; ok: boolean }> = [];
+        for (const provider of ["anthropic", "gemini"] as const) {
+            const key = await this._apiKeyGet(provider);
+            if (!key) {
+                results.push({ provider, models: [], ok: false });
+                continue;
+            }
+            const adapter: BaseAIAdapter = provider === "anthropic"
+                ? this._anthropicAdapter : this._geminiAdapter;
+            try {
+                const models = await adapter.listModels(key);
+                results.push({ provider, models, ok: true });
+            } catch {
+                results.push({ provider, models: [], ok: false });
+            }
+        }
+        this._lastModelRefresh = Date.now();
+        this._context.globalState.update("ceviz.lastModelRefresh", this._lastModelRefresh);
+        this._view?.webview.postMessage({ type: "cloudModels", results, refreshedAt: this._lastModelRefresh });
     }
 }
