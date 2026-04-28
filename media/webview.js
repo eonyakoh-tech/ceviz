@@ -31,6 +31,7 @@ const I18N = {
         ttlProject:"프로젝트 관리",ttlBrain:"지식 신경망 동기화",ttlSoti:"Soti-Skill 대시보드",
         ttlSkillBtn:"Skill CRUD",ttlSettings:"AI 엔진 설정",ttlEnglish:"영어 튜터 모드",
         ttlLang:"언어 선택",ttlMic:"음성 입력 (한국어/영어)",ttlStop:"전송 취소 (Stop)",
+        ttlEvo:"자기 개발 시스템",evoTitle:"📈 CEVIZ 자기 개발 시스템",evoHistLabel:"📋 개발 이력",
         langSelectTitle:"언어 선택",langSelectHint:"사용할 언어를 선택하세요",langSave:"확인",
     },
     en: {
@@ -61,6 +62,7 @@ const I18N = {
         ttlProject:"Manage Projects",ttlBrain:"Sync Knowledge Network",ttlSoti:"Soti-Skill Dashboard",
         ttlSkillBtn:"Skill CRUD",ttlSettings:"AI Engine Settings",ttlEnglish:"English Tutor Mode",
         ttlLang:"Select Language",ttlMic:"Voice Input (KO/EN)",ttlStop:"Cancel (Stop)",
+        ttlEvo:"Self-Development System",evoTitle:"📈 CEVIZ Self-Development System",evoHistLabel:"📋 Dev History",
         langSelectTitle:"Select Language",langSelectHint:"Choose your preferred language",langSave:"Confirm",
     },
     tr: {
@@ -91,6 +93,7 @@ const I18N = {
         ttlProject:"Projeleri Yönet",ttlBrain:"Bilgi Ağını Senkronize Et",ttlSoti:"Soti-Skill Panosu",
         ttlSkillBtn:"Beceri CRUD",ttlSettings:"AI Motor Ayarları",ttlEnglish:"İngilizce Öğretmeni",
         ttlLang:"Dil Seç",ttlMic:"Sesli Giriş",ttlStop:"İptal (Durdur)",
+        ttlEvo:"Kendini Geliştirme Sistemi",evoTitle:"📈 CEVIZ Kendini Geliştirme Sistemi",evoHistLabel:"📋 Geliştirme Geçmişi",
         langSelectTitle:"Dil Seçin",langSelectHint:"Tercih ettiğiniz dili seçin",langSave:"Onayla",
     },
     ar: {
@@ -121,6 +124,7 @@ const I18N = {
         ttlProject:"إدارة المشاريع",ttlBrain:"مزامنة شبكة المعرفة",ttlSoti:"لوحة Soti-Skill",
         ttlSkillBtn:"CRUD المهارات",ttlSettings:"إعدادات محرك الذكاء الاصطناعي",ttlEnglish:"معلم الإنجليزية",
         ttlLang:"اختر اللغة",ttlMic:"الإدخال الصوتي",ttlStop:"إلغاء (إيقاف)",
+        ttlEvo:"نظام التطوير الذاتي",evoTitle:"📈 CEVIZ نظام التطوير الذاتي",evoHistLabel:"📋 سجل التطوير",
         langSelectTitle:"اختر اللغة",langSelectHint:"اختر لغتك المفضلة",langSave:"تأكيد",
     },
     fa: {
@@ -151,6 +155,7 @@ const I18N = {
         ttlProject:"مدیریت پروژه‌ها",ttlBrain:"همگام‌سازی شبکه دانش",ttlSoti:"داشبورد Soti-Skill",
         ttlSkillBtn:"CRUD مهارت",ttlSettings:"تنظیمات موتور هوش مصنوعی",ttlEnglish:"معلم انگلیسی",
         ttlLang:"انتخاب زبان",ttlMic:"ورودی صوتی",ttlStop:"لغو (توقف)",
+        ttlEvo:"سیستم خودتوسعه",evoTitle:"📈 CEVIZ سیستم خودتوسعه",evoHistLabel:"📋 تاریخچه توسعه",
         langSelectTitle:"انتخاب زبان",langSelectHint:"زبان مورد نظر خود را انتخاب کنید",langSave:"تأیید",
     },
     ru: {
@@ -181,6 +186,7 @@ const I18N = {
         ttlProject:"Управление проектами",ttlBrain:"Синхронизация базы знаний",ttlSoti:"Панель Soti-Skill",
         ttlSkillBtn:"CRUD навыков",ttlSettings:"Настройки движка ИИ",ttlEnglish:"Репетитор английского",
         ttlLang:"Выбор языка",ttlMic:"Голосовой ввод",ttlStop:"Отмена (Стоп)",
+        ttlEvo:"Система Саморазвития",evoTitle:"📈 CEVIZ Система Саморазвития",evoHistLabel:"📋 История разработки",
         langSelectTitle:"Выбор языка",langSelectHint:"Выберите предпочитаемый язык",langSave:"Подтвердить",
     },
 };
@@ -222,6 +228,8 @@ function applyI18n(l) {
     s("langBtn", "ttlLang", "title");
     s("micBtn", "ttlMic", "title");
     s("stopBtn", "ttlStop", "title");
+    s("evoBtn", "ttlEvo", "title");
+    s("evoTitleSpan", "evoTitle");
 
     // Session
     q(".sess-label", "sessions");
@@ -2190,11 +2198,11 @@ document.getElementById("evoHistBtn").addEventListener("click", () => {
     const hist = document.getElementById("evoHistContent");
     if (hist.style.display === "none") {
         hist.style.display = "";
-        document.getElementById("evoHistBtn").textContent = "📋 진화 이력 ▴";
+        document.getElementById("evoHistBtn").textContent = t("evoHistLabel") + " ▴";
         vscode.postMessage({ type: "evoGetHistory" });
     } else {
         hist.style.display = "none";
-        document.getElementById("evoHistBtn").textContent = "📋 진화 이력 ▾";
+        document.getElementById("evoHistBtn").textContent = t("evoHistLabel") + " ▾";
     }
 });
 

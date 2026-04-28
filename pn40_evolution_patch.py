@@ -1,5 +1,5 @@
 """
-PN40 ceviz-api 자가 진화 라우터 (Phase 20)
+PN40 ceviz-api 자기 개발 라우터 (Phase 20)
 ==========================================
 적용 방법:
   1. scp pn40_evolution_patch.py remotecommandcenter@100.69.155.43:~/ceviz/evolution_router.py

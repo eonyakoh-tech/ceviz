@@ -38,7 +38,7 @@
 | 항목 | 내용 |
 |------|------|
 | 브랜치 | `extension-ui` |
-| 최신 Phase | Phase 20 자가 진화 시스템 완료 (2026-04-27) |
+| 최신 Phase | Phase 20 자기 개발 시스템 완료 (2026-04-27) |
 | 패키지 버전 | `ceviz-0.2.0` |
 | 백엔드 주소 | `100.69.155.43:8000` (기본값) |
 | 빌드 상태 | webpack 컴파일 정상 |
@@ -140,14 +140,14 @@
 - **내용**: 피드별 처리 모드(일반 요약/기술 백서) 선택 UI, 9개 섹션 고정 템플릿, 섹션 자체 검증+최대 2회 재생성, 필수 섹션 실패 시 "수동 확인 필요" 표시, Ollama 모델 자동 선택(2GB+ 중 최대), 프롬프트 인젝션 방어(<transcript>격리+악성패턴필터), 피드 목록에 📄/📋 모드 배지
 - **파일**: `pn40_rss_whitepaper.py`(신규), `pn40_rss_worker.py`, `pn40_rss_router.py`, `src/panel.ts`, `media/webview.js`, `media/webview.css`
 
-### ✅ Phase 20 — CEVIZ 자가 진화 시스템 (RAG 흡수 + 안전 검증)
+### ✅ Phase 20 — CEVIZ 자기 개발 시스템 (RAG 흡수 + 안전 검증)
 - **완료**: 2026-04-27
 - **구조**: 4단계(A~D) 분리, 각 단계 사용자 승인 필수
 - **A단계 (RAG 흡수)**: 백서 .md 파일 선택 → ChromaDB general/game_dev/english 컬렉션 흡수, EVOLUTION.md 기록
 - **B단계 (프롬프트 갱신)**: 흡수 내용으로 시스템 프롬프트 추가 제안, diff 표시, 승인/거부/롤백, 이력 globalState 영속
 - **C단계 (모델 감지)**: 백서에서 모델명 자동 감지(정규식+LLM), 설치 마법사(Phase 17) 연결
 - **D단계 (코드 수정)**: 자동 거부 12항목 강제 체크, webview.js/css 한정, 브랜치 생성+편집+컴파일 검증+커밋, 실패 시 자동 복구
-- **EVOLUTION.md**: 신규 생성, 모든 진화 이력 자동 기록
+- **EVOLUTION.md**: 신규 생성, 모든 개발 이력 자동 기록
 - **D단계 자동 거부**: 암호화/인증·globalState·세션·캐시·axios·cp.exec·require·process.env·ChromaDB·Whisper·yt-dlp·위험 git·보안 검증 함수
 - **파일**: `EVOLUTION.md`, `pn40_evolution_patch.py`, `src/panel.ts`, `media/webview.js`, `media/webview.css`, `package.json`
 
@@ -180,7 +180,8 @@
 | 2026-04-27 | Phase 17: 설치 마법사 & 모델 관리 | 5단계 마법사 오버레이, 모델 관리 overlay, wizardGetInfo/Install/Delete 핸들러, PN40 패치스크립트, 빌드·패키징 완료 |
 | 2026-04-27 | Phase 18: RSS Feed 자동 수집 + Obsidian 저장 | RSS 탭 UI, 구독 CRUD, 2분 알림 폴링, rss_router/worker/setup 스크립트, 빌드·패키징 완료 |
 | 2026-04-27 | Phase 19: 기술 백서 자동 생성 | pn40_rss_whitepaper.py 신규, 모드 선택 UI, 9섹션 검증+재시도, 모델 자동선택, 인젝션방어, 빌드·패키징 완료 |
-| 2026-04-27 | Phase 20: CEVIZ 자가 진화 시스템 A~D단계 | EVOLUTION.md 신규, pn40_evolution_patch.py, 🧬 버튼, 4단계 오버레이, 자동거부 12항목, 브랜치+컴파일 검증, 빌드·패키징 완료 |
+| 2026-04-27 | Phase 20: CEVIZ 자기 개발 시스템 A~D단계 | EVOLUTION.md 신규, pn40_evolution_patch.py, 📈 버튼, 4단계 오버레이, 자동거부 12항목, 브랜치+컴파일 검증, 빌드·패키징 완료 |
+| 2026-04-28 | Phase 21: UI/UX 개선 & 사용성 강화 시작 | 작업 진행 중 |
 
 ---
 

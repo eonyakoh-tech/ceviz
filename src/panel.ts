@@ -1377,7 +1377,7 @@ ${response}
             detail: `${explanation.slice(0, 120)} | 이력 ${this._evoSystemPromptHistory.length}개`,
             applied: true
         });
-        vscode.window.showInformationMessage(`CEVIZ 진화: 시스템 프롬프트 갱신됨 (이력 ${this._evoSystemPromptHistory.length}개)`);
+        vscode.window.showInformationMessage(`CEVIZ 자기 개발: 시스템 프롬프트 갱신됨 (이력 ${this._evoSystemPromptHistory.length}개)`);
     }
 
     private async _evoRollbackPrompt(): Promise<void> {
@@ -1559,7 +1559,7 @@ ${response}
                 branch
             });
             vscode.window.showInformationMessage(
-                `CEVIZ 진화: 브랜치 "${branch}" 생성됨. 며칠 사용 후 main으로 머지하세요.`
+                `CEVIZ 자기 개발: 브랜치 "${branch}" 생성됨. 며칠 사용 후 main으로 머지하세요.`
             );
         } catch (e: any) {
             this._evoPendingBranch = "";
@@ -1854,7 +1854,7 @@ ${response}
       <button class="ibtn" id="gearBtn" title="AI 엔진 설정">⚙️</button>
       <button class="ibtn" id="enBtn" title="영어 튜터 모드">En</button>
       <button class="ibtn" id="langBtn" title="언어 선택">🌐</button>
-      <button class="ibtn" id="evoBtn" title="자가 진화 시스템">🧬</button>
+      <button class="ibtn" id="evoBtn" title="자기 개발 시스템">📈</button>
     </div>
   </div>
   <div class="status">
@@ -2166,11 +2166,11 @@ ${response}
   </div>
 </div>
 
-<!-- 자가 진화 시스템 오버레이 -->
+<!-- 자기 개발 시스템 오버레이 -->
 <div class="evo-overlay" id="evoOverlay">
   <div class="evo-modal">
     <div class="evo-hdr">
-      <span>🧬 CEVIZ 자가 진화 시스템</span>
+      <span id="evoTitleSpan">📈 CEVIZ 자기 개발 시스템</span>
       <button class="evo-close-btn" id="evoCloseBtn">✕</button>
     </div>
     <!-- 단계 탭 -->
@@ -2262,7 +2262,7 @@ ${response}
     </div>
     <!-- 이력 -->
     <div class="evo-history-sec">
-      <button class="evo-hist-btn" id="evoHistBtn">📋 진화 이력 ▾</button>
+      <button class="evo-hist-btn" id="evoHistBtn">📋 개발 이력 ▾</button>
       <pre class="evo-hist-content" id="evoHistContent" style="display:none"></pre>
     </div>
   </div>
