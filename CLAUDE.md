@@ -38,7 +38,7 @@
 | 항목 | 내용 |
 |------|------|
 | 브랜치 | `extension-ui` |
-| 최신 Phase | Phase 20 자기 개발 시스템 완료 (2026-04-27) |
+| 최신 Phase | Phase 21 UI/UX 개선 완료 (2026-04-28) — 아이콘 교체(작업 1)는 이미지 수신 후 예정 |
 | 패키지 버전 | `ceviz-0.2.0` |
 | 백엔드 주소 | `100.69.155.43:8000` (기본값) |
 | 빌드 상태 | webpack 컴파일 정상 |
@@ -153,6 +153,16 @@
 - **D단계 자동 거부**: 암호화/인증·globalState·세션·캐시·axios·cp.exec·require·process.env·ChromaDB·Whisper·yt-dlp·위험 git·보안 검증 함수
 - **파일**: `EVOLUTION.md`, `pn40_evolution_patch.py`, `src/panel.ts`, `media/webview.js`, `media/webview.css`, `package.json`
 
+### 🔄 Phase 21 — UI/UX 개선 & 사용성 강화
+- **상태**: 진행 중 (2026-04-28) — 작업 1(아이콘 교체) 이미지 수신 후 완료 예정
+- **작업 2**: 🧬 자가 진화 → 📈 자기 개발 명칭 변경, i18n 6개 언어 (ttlEvo/evoTitle/evoHistLabel)
+- **작업 3**: "로컬에 학습" 버튼 → `/evolution/absorb` RAG 흡수 방식 전환, `_evoLastAbsorbContent` 자동 동기화
+- **작업 4**: 학습/임베딩 timeout 60s→300s, CSS disabled 버튼 pulsing 애니메이션, "(최대 5분)" 힌트
+- **작업 5**: 📖 도움말 오버레이, 12섹션, i18n 6개 언어, Ctrl+F 검색, Esc/클릭 닫기
+- **작업 6**: qwen2.5-coder:1.5b(PN40) · qwen2.5-coder:3b(T480s) 설치 완료, 마법사 카탈로그 추가
+- **작업 1**: 메인 아이콘 교체 (이미지 파일 수신 대기)
+- **파일**: `src/panel.ts`, `media/webview.js`, `media/webview.css`, `CLAUDE.md`, `EVOLUTION.md`, `pn40_evolution_patch.py`
+
 ### 🔄 Phase 18 — RSS Feed 자동 수집 + Obsidian 저장
 - **상태**: 진행 중 (2026-04-27)
 - **아키텍처**: PN40 systemd user timer → rss_worker.py → vault_sync/ → Syncthing → T480s Vault
@@ -183,7 +193,7 @@
 | 2026-04-27 | Phase 18: RSS Feed 자동 수집 + Obsidian 저장 | RSS 탭 UI, 구독 CRUD, 2분 알림 폴링, rss_router/worker/setup 스크립트, 빌드·패키징 완료 |
 | 2026-04-27 | Phase 19: 기술 백서 자동 생성 | pn40_rss_whitepaper.py 신규, 모드 선택 UI, 9섹션 검증+재시도, 모델 자동선택, 인젝션방어, 빌드·패키징 완료 |
 | 2026-04-27 | Phase 20: CEVIZ 자기 개발 시스템 A~D단계 | EVOLUTION.md 신규, pn40_evolution_patch.py, 📈 버튼, 4단계 오버레이, 자동거부 12항목, 브랜치+컴파일 검증, 빌드·패키징 완료 |
-| 2026-04-28 | Phase 21: UI/UX 개선 & 사용성 강화 시작 | 작업 진행 중 |
+| 2026-04-28 | Phase 21: UI/UX 개선 & 사용성 강화 | 작업 2(명칭 변경) · 작업 3(RAG 학습) · 작업 4(timeout 300s) · 작업 5(도움말) · 작업 6(코딩 모델) 완료. 작업 1(아이콘) 이미지 수신 대기 중 |
 
 ---
 
