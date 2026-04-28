@@ -2120,7 +2120,7 @@ document.getElementById("evoAbsorbBtn").addEventListener("click", () => {
     const content    = document.getElementById("evoPreviewBody").textContent;
     const filePath   = document.getElementById("evoPreviewFname").dataset.path || "";
     document.getElementById("evoAbsorbBtn").disabled = true;
-    document.getElementById("evoAbsorbBtn").textContent = "학습 중...";
+    document.getElementById("evoAbsorbBtn").textContent = "학습 중... (최대 5분)";
     vscode.postMessage({ type: "evoAbsorb", content, filePath, collection });
 });
 
@@ -2130,7 +2130,7 @@ document.getElementById("evoProposePromptBtn").addEventListener("click", () => {
     document.getElementById("evoDiffArea").style.display = "none";
     vscode.postMessage({ type: "evoProposePrompt" });
     document.getElementById("evoProposePromptBtn").disabled = true;
-    document.getElementById("evoProposePromptBtn").textContent = "분석 중...";
+    document.getElementById("evoProposePromptBtn").textContent = "분석 중... (최대 5분)";
 });
 
 document.getElementById("evoApplyPromptBtn").addEventListener("click", () => {
@@ -2159,7 +2159,7 @@ document.getElementById("evoDetectModelBtn").addEventListener("click", () => {
     const text = document.getElementById("evoModelScanText").value.trim();
     if (!text) { evoSetResult("evoModelList", "텍스트를 입력하세요.", false); return; }
     document.getElementById("evoDetectModelBtn").disabled = true;
-    document.getElementById("evoDetectModelBtn").textContent = "감지 중...";
+    document.getElementById("evoDetectModelBtn").textContent = "감지 중... (최대 5분)";
     vscode.postMessage({ type: "evoDetectModel", text });
 });
 
@@ -2175,7 +2175,7 @@ document.getElementById("evoProposeCodeBtn").addEventListener("click", () => {
     }
     document.getElementById("evoCodeProposalArea").style.display = "none";
     document.getElementById("evoProposeCodeBtn").disabled = true;
-    document.getElementById("evoProposeCodeBtn").textContent = "제안 중...";
+    document.getElementById("evoProposeCodeBtn").textContent = "제안 중... (최대 5분)";
     vscode.postMessage({ type: "evoProposeCode", oldCode, description, targetFile });
 });
 

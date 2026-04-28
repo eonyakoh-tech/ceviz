@@ -865,7 +865,7 @@ ${response}
         try {
             await axios.post(`${this._getUrl()}/prompt`,
                 { prompt, model: this._model },
-                { timeout: 60000 }
+                { timeout: 300000 }
             );
             this._view?.webview.postMessage({ type: "learnComplete", success: true });
             this._view?.webview.postMessage({
@@ -1316,7 +1316,7 @@ ${response}
     private async _evoAbsorb(content: string, filePath: string, collection: string): Promise<void> {
         try {
             const r = await axios.post(`${this._getUrl()}/evolution/absorb`,
-                { content, source_path: filePath, collection }, { timeout: 60000 });
+                { content, source_path: filePath, collection }, { timeout: 300000 });
             const d = r.data;
             this._view?.webview.postMessage({
                 type: "evoAbsorbDone",
@@ -1349,7 +1349,7 @@ ${response}
         this._view?.webview.postMessage({ type: "evoProposing" });
         try {
             const r = await axios.post(`${this._getUrl()}/evolution/propose-prompt`,
-                { content: this._evoLastAbsorbContent }, { timeout: 120000 });
+                { content: this._evoLastAbsorbContent }, { timeout: 300000 });
             this._view?.webview.postMessage({
                 type: "evoPromptProposal",
                 proposedText: r.data.proposed_addition,
@@ -1407,7 +1407,7 @@ ${response}
         this._view?.webview.postMessage({ type: "evoDetecting" });
         try {
             const r = await axios.post(`${this._getUrl()}/evolution/detect-model`,
-                { content: text }, { timeout: 60000 });
+                { content: text }, { timeout: 300000 });
             this._view?.webview.postMessage({
                 type: "evoModelDetected",
                 models: r.data.models || []
@@ -1456,7 +1456,7 @@ ${response}
         try {
             const r = await axios.post(`${this._getUrl()}/evolution/propose-code`,
                 { old_code: oldCode, description, target_file: targetFile },
-                { timeout: 180000 });
+                { timeout: 300000 });
             const { new_code, explanation } = r.data;
 
             const forbidden = this._evoCheckForbidden(new_code);
