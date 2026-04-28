@@ -856,28 +856,25 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
     // ─────────────────────────────────────────────────────────────────────────
 
     private async _learnFromCloud(response: string) {
-        const prompt = `다음 Cloud AI의 응답 방식을 학습하고 내면화하세요.
-로컬 모델 학습 데이터로 저장합니다 (단방향: Cloud→Local 전용):
----
-${response}
----
-이 처리 방식의 핵심 패턴을 추출하여 향후 유사 태스크에 적용하세요.`;
         try {
-            await axios.post(`${this._getUrl()}/prompt`,
-                { prompt, model: this._model },
+            const r = await axios.post(`${this._getUrl()}/evolution/absorb`,
+                { content: response, source_path: "", collection: "general" },
                 { timeout: 300000 }
             );
+            this._evoLastAbsorbContent = response;
+            const d = r.data;
+            const note = d.fallback ? " (RAG 엔진 없음 — 파일로 저장됨)" : ` · ${d.chunks_added}청크`;
             this._view?.webview.postMessage({ type: "learnComplete", success: true });
             this._view?.webview.postMessage({
                 type: "assistantMsg",
-                content: "✅ Cloud AI 처리 방식을 로컬 모델에 학습 완료했습니다.",
+                content: `✅ Cloud AI 응답을 RAG 지식 베이스에 저장 완료${note}`,
                 agent: "system", tier: 1
             });
         } catch (e: any) {
             this._view?.webview.postMessage({ type: "learnComplete", success: false });
             this._view?.webview.postMessage({
                 type: "assistantMsg",
-                content: "❌ 학습 실패: " + e.message,
+                content: `❌ RAG 저장 실패: ${(e.response?.data?.detail || e.message)}`,
                 agent: "system", tier: 0
             });
         }

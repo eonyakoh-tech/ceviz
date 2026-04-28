@@ -410,7 +410,7 @@ window.addEventListener("message", e => {
         case "learnComplete":
             if (pendingLearnBtn) {
                 pendingLearnBtn.disabled = false;
-                pendingLearnBtn.textContent = m.success ? "✅ 학습됨" : "❌ 재시도";
+                pendingLearnBtn.textContent = m.success ? "✅ RAG 저장됨" : "❌ 재시도";
                 pendingLearnBtn = null;
             }
             break;
@@ -715,9 +715,9 @@ function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage, ragD
         if (isCloud && content) {
             const lb = document.createElement("button");
             lb.className = "learn-btn";
-            lb.textContent = "📚 로컬에 학습";
+            lb.textContent = "📚 RAG에 저장";
             lb.title = "Cloud AI 처리 방식을 Local 모델에 단방향 학습";
-            lb.onclick = () => { pendingLearnBtn = lb; lb.disabled = true; lb.textContent = "학습 중..."; vscode.postMessage({ type: "learnFromCloud", response: content }); };
+            lb.onclick = () => { pendingLearnBtn = lb; lb.disabled = true; lb.textContent = "저장 중... (최대 5분)"; vscode.postMessage({ type: "learnFromCloud", response: content }); };
             meta.appendChild(lb);
         }
     }
