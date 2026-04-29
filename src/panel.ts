@@ -4,6 +4,16 @@ import * as path from "path";
 import * as fs from "fs";
 import axios from "axios";
 import {
+    LicenseManager,
+    LicensePlan,
+    PLAN_LABELS,
+    PLAN_PRICES,
+    PLAN_LIMITS,
+    STORE_URL,
+    isValidKeyFormat,
+    maskKey,
+} from "./license";
+import {
     expandTilde,
     cliExecutable,
     homedir,
@@ -329,6 +339,8 @@ class GeminiAdapter extends BaseAIAdapter {
 
 export class CevizPanel implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
+    // ── Phase 27: 라이선스 관리자 ──────────────────────────────────────────────
+    private _license!: LicenseManager;
     // ── Phase 23: 인증 axios 인스턴스 ──────────────────────────────────────────
     private _http = axios.create(); // PN40 API 호출 전용 — 토큰 헤더 자동 첨부
     private _pn40Token: string = ""; // SecretStorage에서 로드한 토큰 캐시
@@ -406,8 +418,15 @@ export class CevizPanel implements vscode.WebviewViewProvider {
         }
         if (this._sessions.length === 0) { this._createSession(); }
         else { this._currentSessionId = this._sessions[this._sessions.length - 1].id; }
+        // Phase 27: 라이선스 관리자 초기화
+        this._license = new LicenseManager(
+            this._context.secrets,
+            this._context.globalState,
+            vscode.env.machineId,
+        );
+        this._license.initialize().catch(() => {});
         // Phase 23: 저장된 PN40 토큰으로 axios 인스턴스 초기화 (비동기)
-        this._initHttpClient().catch(() => {});
+        this._initHttpClient().catch(() => {})
     }
 
     private _createSession(): Session {
@@ -628,6 +647,10 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                     });
                     this._checkDependencies().catch(() => {});
                     this._checkBackendUpdate().catch(() => {});
+                    // Phase 27: 라이선스 상태 전송 + 넛지 + 백그라운드 재검증
+                    this._sendLicenseStatus();
+                    this._license.revalidate().catch(() => {});
+                    this._checkLicenseNudge();
                     break;
 
                 case "ragReset":
@@ -836,6 +859,7 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                     break;
 
                 case "evoAbsorb":
+                    if (!this._licenseGuard("evolution")) { break; }
                     await this._evoAbsorb(msg.content, msg.filePath, msg.collection);
                     break;
 
@@ -990,6 +1014,33 @@ export class CevizPanel implements vscode.WebviewViewProvider {
 
                 case "backendUpdateRun":
                     await this._runBackendUpdate();
+                    break;
+
+                // ── Phase 27: 라이선스 ───────────────────────────────────────
+                case "licenseActivate":
+                    await this._handleLicenseActivate(msg.key);
+                    break;
+
+                case "licenseDeactivate":
+                    await this._handleLicenseDeactivate();
+                    break;
+
+                case "licenseGetStatus":
+                    this._sendLicenseStatus();
+                    break;
+
+                case "licenseOpenStore":
+                    await vscode.env.openExternal(
+                        vscode.Uri.parse(STORE_URL[msg.plan as keyof typeof STORE_URL] ?? STORE_URL.personal)
+                    );
+                    break;
+
+                case "licenseJwtVerify":
+                    await this._handleJwtVerify(msg.token);
+                    break;
+
+                case "licenseNudgeDismiss":
+                    this._license.markNudgeShown(msg.nudge);
                     break;
             }
         });
@@ -3299,6 +3350,54 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
           </ul>
         </div>
 
+        <!-- S14: 라이선스 & 구매 -->
+        <div class="help-sec" id="helpSec14">
+          <div class="help-h2">🔑 라이선스 & 구매</div>
+
+          <div class="help-h3">플랜 비교</div>
+          <table class="help-table" style="font-size:10.5px">
+            <tr><th>기능</th><th>Trial</th><th>Personal<br>$49</th><th>Pro<br>$99</th><th>Founder<br>$149</th></tr>
+            <tr><td>Local AI</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+            <tr><td>Cloud AI (BYOK)</td><td>50회/일</td><td>무제한</td><td>무제한</td><td>무제한</td></tr>
+            <tr><td>RAG 자기 개발</td><td>❌</td><td>✅</td><td>✅</td><td>✅</td></tr>
+            <tr><td>기술 백서 생성</td><td>❌</td><td>✅</td><td>✅</td><td>✅</td></tr>
+            <tr><td>음성 입력</td><td>❌</td><td>✅</td><td>✅</td><td>✅</td></tr>
+            <tr><td>RSS 구독</td><td>3개</td><td>무제한</td><td>무제한</td><td>무제한</td></tr>
+            <tr><td>멀티 워크스페이스</td><td>1개</td><td>무제한</td><td>무제한</td><td>무제한</td></tr>
+            <tr><td>사용 기기</td><td>1대</td><td>1대</td><td>3대</td><td>무제한</td></tr>
+            <tr><td>업데이트</td><td>14일</td><td>v1.x 평생</td><td>v1.x 평생</td><td>평생</td></tr>
+            <tr><td>기술 지원</td><td>없음</td><td>이메일</td><td>우선순위</td><td>우선순위</td></tr>
+          </table>
+
+          <div class="help-h3">BYOK(자기 API 키) 정책</div>
+          <p class="help-p">Cloud AI(Claude/Gemini) 비용은 사용자가 직접 부담합니다. CEVIZ는 라이선스 비용만 받으며 Cloud AI 사용량에 대한 추가 과금이 없습니다. API 키는 VS Code SecretStorage에만 저장되어 외부로 전송되지 않습니다.</p>
+
+          <div class="help-h3">구매 단계</div>
+          <ol class="help-ul">
+            <li>☁️ Cloud 탭 → 🔑 라이선스 → [구매하기] 클릭</li>
+            <li>LemonSqueezy 결제 페이지에서 플랜 선택 및 결제</li>
+            <li>이메일로 라이선스 키 수신 (XXXX-XXXX-XXXX-XXXX 형식)</li>
+            <li>Cloud 탭 → 🔑 라이선스 → 키 입력 후 [활성화]</li>
+          </ol>
+
+          <div class="help-h3">기기 이전</div>
+          <p class="help-p">새 기기에서 사용하려면 기존 기기에서 Cloud 탭 → 🔑 라이선스 → [라이선스 이전]을 먼저 실행하세요. Pro 플랜은 3대, Personal은 1대까지 동시 활성화할 수 있습니다.</p>
+
+          <div class="help-h3">환불 정책</div>
+          <p class="help-p">LemonSqueezy를 통해 구매 후 30일 이내 환불을 요청할 수 있습니다. 구매 영수증 이메일의 환불 링크를 이용하거나 eonyakoh@gmail.com으로 문의하세요.</p>
+
+          <div class="help-h3">v2.0 업그레이드 정책</div>
+          <p class="help-p">v1.x 범위의 모든 업데이트는 무료입니다. v2.0 메이저 업그레이드 시 기존 라이선스 보유자는 50% 할인이 적용됩니다. 보안 패치는 모든 버전에 무료 제공됩니다.</p>
+
+          <div class="help-h3">자주 묻는 질문</div>
+          <ul class="help-ul">
+            <li><b>오프라인에서도 사용 가능한가요?</b> — 최대 14일간 오프라인 사용 허용됩니다. Local AI는 라이선스 없이도 항상 사용 가능합니다.</li>
+            <li><b>구독형인가요?</b> — 아닙니다. 일회성 구매 후 영구 사용입니다.</li>
+            <li><b>Cloud AI 요금도 내야 하나요?</b> — CEVIZ 라이선스 비용과 Cloud AI API 비용은 별개입니다. API 키는 직접 발급받아 사용합니다.</li>
+            <li><b>Trial이 만료되면?</b> — Local AI는 계속 사용 가능합니다. Cloud AI 등 일부 기능이 제한됩니다.</li>
+          </ul>
+        </div>
+
       </div>
     </div>
   </div>
@@ -3825,6 +3924,9 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
         model: string,
         provider: "anthropic" | "gemini"
     ): Promise<void> {
+        // Phase 27: Cloud AI 일일 쿼터 게이트
+        if (!this._cloudQuotaGuard()) { return; }
+        this._license.recordCloudCall();
         const apiKey = await this._apiKeyGet(provider);
         if (!apiKey) { return; }
 
@@ -4199,6 +4301,107 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
         this._lastModelRefresh = Date.now();
         this._context.globalState.update("ceviz.lastModelRefresh", this._lastModelRefresh);
         this._view?.webview.postMessage({ type: "cloudModels", results, refreshedAt: this._lastModelRefresh });
+    }
+
+    // ── Phase 27: 라이선스 메서드 ────────────────────────────────────────────
+
+    private _sendLicenseStatus(): void {
+        const summary = this._license.getSummary();
+        const limits  = PLAN_LIMITS[summary.plan];
+        this._view?.webview.postMessage({
+            type: "licenseStatus",
+            ...summary,
+            limits,
+            planLabel: PLAN_LABELS[summary.plan],
+        });
+    }
+
+    private async _handleLicenseActivate(rawKey: string): Promise<void> {
+        this._view?.webview.postMessage({ type: "licenseActivating" });
+        const result = await this._license.activate(rawKey);
+        if (result.ok) {
+            this._sendLicenseStatus();
+            this._view?.webview.postMessage({
+                type: "licenseActivateDone",
+                ok: true,
+                plan: result.plan,
+                planLabel: PLAN_LABELS[result.plan!],
+            });
+        } else {
+            this._view?.webview.postMessage({
+                type: "licenseActivateDone",
+                ok: false,
+                error: result.error,
+            });
+        }
+    }
+
+    private async _handleLicenseDeactivate(): Promise<void> {
+        const result = await this._license.deactivate();
+        this._sendLicenseStatus();
+        this._view?.webview.postMessage({
+            type: "licenseDeactivateDone",
+            ok: result.ok,
+            error: result.error,
+        });
+    }
+
+    private async _handleJwtVerify(token: string): Promise<void> {
+        const result = await this._license.verifyOfflineJwt(token);
+        if (result.ok) { this._sendLicenseStatus(); }
+        this._view?.webview.postMessage({
+            type: "licenseActivateDone",
+            ok: result.ok,
+            plan: result.plan,
+            planLabel: result.plan ? PLAN_LABELS[result.plan] : undefined,
+            error: result.error,
+        });
+    }
+
+    /**
+     * 기능 게이트 — 차단 시 webview에 upgradePrompt 전송.
+     * Local AI 모드는 항상 통과.
+     */
+    private _licenseGuard(feature: keyof typeof PLAN_LIMITS["trial"], mode?: string): boolean {
+        if (mode === "local") { return true; }
+        const result = this._license.check(feature);
+        if (!result.allowed) {
+            this._view?.webview.postMessage({
+                type: "upgradePrompt",
+                feature,
+                plan: result.plan,
+                trialDaysLeft: result.trialDaysLeft,
+            });
+        }
+        return result.allowed;
+    }
+
+    /** Cloud AI 일일 쿼터 게이트 */
+    private _cloudQuotaGuard(): boolean {
+        if (this._mode === "local") { return true; }
+        const quota = this._license.checkCloudQuota();
+        if (!quota.allowed) {
+            this._view?.webview.postMessage({
+                type: "upgradePrompt",
+                feature: "cloudCallsPerDay",
+                plan: this._license.getCurrentPlan(),
+                trialDaysLeft: this._license.trialDaysLeft(),
+                quotaUsed: quota.used,
+                quotaLimit: quota.limit,
+            });
+        }
+        return quota.allowed;
+    }
+
+    /** 넛지 표시 (1회성) */
+    private _checkLicenseNudge(): void {
+        const nudge = this._license.getPendingNudge();
+        if (!nudge) { return; }
+        this._view?.webview.postMessage({
+            type: "licenseNudge",
+            nudge,
+            trialDaysLeft: this._license.trialDaysLeft(),
+        });
     }
 
     // ── Phase 26: 의존성 자동 확인 ───────────────────────────────────────────
