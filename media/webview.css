@@ -508,3 +508,54 @@ body[dir="rtl"] .drop-menu{text-align:right}
 .help-table th{background:var(--vscode-editor-inactiveSelectionBackground);padding:3px 7px;text-align:left;font-size:10px;font-weight:600}
 .help-table td{padding:3px 7px;border-bottom:1px solid var(--vscode-widget-border)}
 .help-no-result{font-size:11px;color:var(--vscode-descriptionForeground);padding:20px 0;text-align:center}
+
+/* ── Phase 22: Multi-Cloud AI Domain Routing ─────────────────────────────── */
+.classify-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:400;display:none;align-items:center;justify-content:center}
+.classify-overlay.show{display:flex}
+.classify-dialog{background:var(--vscode-editor-background);border:1px solid var(--vscode-focusBorder);border-radius:6px;padding:16px 18px;width:min(320px,90vw);max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.classify-title{font-size:13px;font-weight:700;margin-bottom:6px;color:var(--vscode-editor-foreground)}
+.classify-sub{font-size:11px;color:var(--vscode-descriptionForeground);margin:0 0 10px}
+.classify-opts{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+.classify-opt{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:4px;cursor:pointer;font-size:11.5px;border:1px solid transparent;transition:background .15s}
+.classify-opt:hover{background:var(--vscode-list-hoverBackground)}
+.classify-opt.sel{background:var(--vscode-list-activeSelectionBackground);border-color:var(--vscode-focusBorder);color:var(--vscode-list-activeSelectionForeground)}
+.classify-star{color:#f0c040;font-size:12px}
+.classify-pct{font-size:10px;color:var(--vscode-descriptionForeground);margin-left:4px}
+.classify-check{font-size:13px;color:var(--vscode-focusBorder);width:14px;flex-shrink:0}
+.classify-more-row{margin-bottom:8px}
+.classify-more-btn{font-size:11px;background:none;border:none;color:var(--vscode-textLink-foreground);cursor:pointer;padding:2px 0}
+.classify-more-btn:hover{text-decoration:underline}
+.classify-learn-row{font-size:11px;margin-bottom:12px;display:flex;flex-direction:column;gap:4px;color:var(--vscode-descriptionForeground)}
+.classify-learn-row input[type=checkbox]{accent-color:var(--vscode-focusBorder)}
+.classify-btn-row{display:flex;gap:8px}
+.classify-ok{flex:1;background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;border-radius:3px;padding:6px;font-size:11.5px;cursor:pointer}
+.classify-ok:hover{background:var(--vscode-button-hoverBackground)}
+.classify-cancel{flex:1;background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground);border:none;border-radius:3px;padding:6px;font-size:11.5px;cursor:pointer}
+.classify-cancel:hover{opacity:.85}
+.routing-info{font-size:10px;padding:3px 8px;border-radius:3px;margin:4px 0;opacity:.85}
+.routing-info.auto{background:rgba(0,120,200,.12);color:var(--vscode-textLink-foreground);border-left:2px solid var(--vscode-textLink-foreground)}
+.routing-info.fallback{background:rgba(220,120,0,.12);color:#d4a000;border-left:2px solid #d4a000}
+.akey-badge{font-size:10.5px;padding:1px 6px;border-radius:10px;font-weight:600}
+.akey-badge.unset{background:rgba(120,120,120,.15);color:var(--vscode-descriptionForeground)}
+.akey-badge.saved{background:rgba(0,120,200,.15);color:var(--vscode-textLink-foreground)}
+.akey-badge.valid{background:rgba(0,170,80,.15);color:#0a0}
+.akey-badge.invalid{background:rgba(200,40,40,.15);color:#c00}
+.akey-badge.validating{background:rgba(200,160,0,.15);color:#aa8800}
+.domain-table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:10px}
+.domain-table th{font-size:10px;font-weight:600;padding:3px 6px;background:var(--vscode-editor-inactiveSelectionBackground);text-align:left}
+.domain-table td{padding:4px 6px;border-bottom:1px solid var(--vscode-widget-border);vertical-align:middle}
+.domain-kw-preview{color:var(--vscode-descriptionForeground);font-size:10px}
+.domain-kw-btn,.domain-del-btn{font-size:10px;padding:2px 6px;border:1px solid var(--vscode-widget-border);background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground);border-radius:3px;cursor:pointer;margin-right:3px}
+.domain-del-btn{color:#c00;border-color:rgba(200,40,40,.3)}
+.domain-model-sel{font-size:10px;background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border:1px solid var(--vscode-dropdown-border);border-radius:3px;padding:1px 3px;width:100%;max-width:160px}
+.toggle-lbl{display:flex;align-items:center;cursor:pointer}
+.toggle-lbl input{display:none}
+.toggle-track{width:28px;height:15px;background:var(--vscode-button-secondaryBackground);border-radius:8px;position:relative;transition:background .2s}
+.toggle-lbl input:checked+.toggle-track{background:var(--vscode-button-background)}
+.toggle-track::after{content:"";position:absolute;top:2px;left:2px;width:11px;height:11px;background:#fff;border-radius:50%;transition:left .2s}
+.toggle-lbl input:checked+.toggle-track::after{left:15px}
+.usage-row{display:flex;justify-content:space-between;font-size:11px;padding:2px 0;border-bottom:1px solid var(--vscode-widget-border)}
+.usage-bar{display:flex;align-items:flex-end;gap:3px;height:40px;margin:8px 0}
+.usage-bar-col{display:flex;flex-direction:column;align-items:center;gap:2px}
+.usage-bar-fill{width:16px;background:var(--vscode-button-background);border-radius:2px 2px 0 0;min-height:2px;transition:height .3s}
+.usage-bar-label{font-size:9px;color:var(--vscode-descriptionForeground)}

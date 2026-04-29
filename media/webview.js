@@ -354,6 +354,18 @@ let currentProject = "";
 let projModalOpen = false;
 let injectedCode = null; // { code, fileName, language, lineStart, lineEnd }
 
+// ── Phase 22: 라우팅 상태 ──────────────────────────────────────────────────
+let _classifyPending = null; // { domainKey, provider, model, allDomains, showAll }
+let _apiKeyStatuses = [
+    { provider: "anthropic", isSet: false, isValid: null },
+    { provider: "gemini",    isSet: false, isValid: null },
+];
+let _domainConfigs = [];
+let _routingEnabled = true;
+let _routingThreshold = 0.60;
+let _tokenUsage = { today: { costUsd: 0, tokens: 0 }, monthly: { costUsd: 0, tokens: 0 } };
+let _cloudModels = { anthropic: [], gemini: [] };
+
 window.addEventListener("load", () => {
     console.log("CEVIZ: load fired, sending ready");
     vscode.postMessage({ type: "ready" });
@@ -654,6 +666,71 @@ window.addEventListener("message", e => {
 
         case "rssError":
             showCtxToast("❌ RSS 오류: " + (m.msg || "알 수 없는 오류"));
+            break;
+
+        // ── Phase 22: Multi-Cloud AI Domain Routing ──────────────────────────
+
+        case "classifyConfirm":
+            hideThink();
+            _openClassifyDialog(m);
+            break;
+
+        case "routingAuto":
+            hideThink();
+            _appendRoutingInfo("auto", m);
+            showThink();
+            break;
+
+        case "routingFallback":
+            hideThink();
+            _appendRoutingInfo("fallback", m);
+            showThink();
+            break;
+
+        case "cloudChatError":
+            hideThink();
+            appendMsg("assistant", m.msg || "Cloud AI 오류가 발생했습니다.", "system", 0);
+            break;
+
+        case "apiKeyStatuses":
+            _apiKeyStatuses = m.statuses || _apiKeyStatuses;
+            _renderApiKeyStatuses();
+            break;
+
+        case "apiKeyResult":
+            _onApiKeyResult(m);
+            break;
+
+        case "apiKeyValidating":
+            _setApiKeyValidatingState(m.provider, true);
+            break;
+
+        case "domainConfigs":
+            _domainConfigs = m.domains || [];
+            _renderDomainTable();
+            break;
+
+        case "routingConfig":
+            _routingEnabled = m.enabled;
+            _routingThreshold = m.threshold;
+            _tokenUsage.dailyLimit   = m.dailyTokenLimit;
+            _tokenUsage.monthlyLimit = m.monthlyTokenLimit;
+            _apiKeyStatuses = m.apiKeyStatuses || _apiKeyStatuses;
+            _renderRoutingSettings();
+            _renderApiKeyStatuses();
+            break;
+
+        case "tokenUsage":
+            _tokenUsage = m;
+            _renderTokenUsage();
+            break;
+
+        case "cloudModels":
+            for (const r of (m.results || [])) {
+                _cloudModels[r.provider] = r.models;
+            }
+            _renderCloudModelDropdowns();
+            showCtxToast("☁️ 클라우드 모델 목록 갱신 완료");
             break;
     }
 });
@@ -2476,4 +2553,334 @@ document.addEventListener("keydown", e => {
         document.getElementById("helpSearchInput").focus();
     }
     if (e.key === "Escape") { closeHelp(); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── Phase 22: Multi-Cloud AI Domain Routing UI ───────────────────────────────
+
+// ── 도메인 분류 확인 다이얼로그 ────────────────────────────────────────────────
+
+function _openClassifyDialog(data) {
+    _classifyPending = {
+        top:          data.domain,
+        confidence:   data.confidence,
+        alternatives: data.alternatives || [],
+        allDomains:   data.allDomains   || [],
+        selectedKey:  data.domain,
+        showAll:      false,
+    };
+
+    let overlay = document.getElementById("classifyOverlay");
+    if (!overlay) {
+        overlay = document.createElement("div");
+        overlay.id = "classifyOverlay";
+        overlay.className = "classify-overlay";
+        document.body.appendChild(overlay);
+        overlay.addEventListener("click", e => {
+            if (e.target === overlay) { _cancelClassify(); }
+        });
+    }
+
+    _renderClassifyDialog(overlay);
+    overlay.classList.add("show");
+}
+
+function _renderClassifyDialog(overlay) {
+    const p = _classifyPending;
+    if (!p) { return; }
+
+    // 표시할 도메인 목록 구성
+    const topThree = [
+        { key: p.top, confidence: p.confidence, isTop: true },
+        ...p.alternatives.slice(0, 2).map(a => ({ key: a.domain, confidence: a.confidence, isTop: false })),
+    ];
+    const showList = p.showAll ? p.allDomains : topThree;
+
+    const optionsHtml = showList.map(item => {
+        const cfg  = p.allDomains.find(d => d.key === item.key) || { key: item.key, displayName: item.key };
+        const pct  = item.confidence !== undefined ? Math.round(item.confidence * 100) : null;
+        const sel  = p.selectedKey === item.key;
+        const star = !p.showAll && item.isTop ? "<span class='classify-star'>★</span> " : "";
+        const pctTxt = pct !== null ? `<span class='classify-pct'>(신뢰도 ${pct}%)</span>` : "";
+        return `<div class="classify-opt${sel ? " sel" : ""}" data-key="${item.key}">
+            <span class="classify-check">${sel ? "●" : "○"}</span>
+            ${star}<span class="classify-name">${cfg.displayName || item.key}</span>${pctTxt}
+        </div>`;
+    }).join("");
+
+    const moreBtn = p.showAll
+        ? ""
+        : `<div class="classify-more-row"><button class="classify-more-btn" onclick="_classifyShowAll()">기타 도메인 보기...</button></div>`;
+
+    overlay.innerHTML = `
+        <div class="classify-dialog">
+            <div class="classify-title">🤔 어느 도메인의 질문인가요?</div>
+            <p class="classify-sub">다음 중 가장 가까운 도메인을 선택해주세요:</p>
+            <div class="classify-opts" id="classifyOpts">${optionsHtml}</div>
+            ${moreBtn}
+            <div class="classify-learn-row">
+                <label><input type="checkbox" id="classifyLearnChk"> 이 선택을 학습 (다음에는 자동 분류)</label>
+            </div>
+            <div class="classify-btn-row">
+                <button class="classify-ok" onclick="_confirmClassify()">확인</button>
+                <button class="classify-cancel" onclick="_cancelClassify()">취소 (기본 모델 사용)</button>
+            </div>
+        </div>`;
+
+    overlay.querySelectorAll(".classify-opt").forEach(el => {
+        el.addEventListener("click", () => {
+            _classifyPending.selectedKey = el.dataset.key;
+            _renderClassifyDialog(overlay);
+        });
+    });
+}
+
+function _classifyShowAll() {
+    if (!_classifyPending) { return; }
+    _classifyPending.showAll = true;
+    const overlay = document.getElementById("classifyOverlay");
+    if (overlay) { _renderClassifyDialog(overlay); }
+}
+
+function _confirmClassify() {
+    const p = _classifyPending;
+    if (!p) { return; }
+    const domain = p.allDomains.find(d => d.key === p.selectedKey);
+    if (!domain) { _cancelClassify(); return; }
+
+    // 선택된 도메인의 매핑에서 provider/model 결정
+    const domainCfg = _domainConfigs.find(d => d.key === p.selectedKey);
+    let provider = "anthropic";
+    let model    = "claude-sonnet-4-6";
+    if (domainCfg) {
+        // 상태가 valid인 provider 우선
+        const anthropicOk = _apiKeyStatuses.find(s => s.provider === "anthropic")?.isSet;
+        const geminiOk    = _apiKeyStatuses.find(s => s.provider === "gemini")?.isSet;
+        if (anthropicOk) {
+            provider = "anthropic";
+            model    = domainCfg.modelMapping?.anthropic || "claude-sonnet-4-6";
+        } else if (geminiOk) {
+            provider = "gemini";
+            model    = domainCfg.modelMapping?.gemini || "gemini-2.0-flash";
+        }
+    }
+
+    const learn = document.getElementById("classifyLearnChk")?.checked || false;
+
+    document.getElementById("classifyOverlay")?.classList.remove("show");
+    _classifyPending = null;
+
+    vscode.postMessage({
+        type:               "classifyConfirmed",
+        domainKey:          p.selectedKey,
+        provider,
+        model,
+        learn,
+        extractedKeywords:  [], // 서버 측에서 추출 (작업 7)
+    });
+}
+
+function _cancelClassify() {
+    document.getElementById("classifyOverlay")?.classList.remove("show");
+    _classifyPending = null;
+    // 기본 PN40 모드로 폴백 — 마지막 userMsg는 이미 표시됨
+    appendMsg("assistant", "_(분류 취소됨 — PN40 기본 모드로 응답합니다)_", "system", 0);
+}
+
+// ── 라우팅 알림 인포 버블 ────────────────────────────────────────────────────
+
+function _appendRoutingInfo(kind, data) {
+    const area = document.getElementById("chatArea");
+    if (!area) { return; }
+    const div = document.createElement("div");
+    div.className = "routing-info " + kind;
+    if (kind === "auto") {
+        const pct = Math.round((data.confidence || 0) * 100);
+        div.textContent = `⚡ 자동 라우팅: ${data.domain} → ${data.provider === "anthropic" ? "Claude" : "Gemini"} ${data.model} (신뢰도 ${pct}%)`;
+    } else {
+        div.textContent = `⚠️ ${data.reason || "폴백"}`;
+    }
+    area.appendChild(div);
+    area.scrollTop = area.scrollHeight;
+}
+
+// ── API 키 상태 렌더링 ───────────────────────────────────────────────────────
+
+function _renderApiKeyStatuses() {
+    for (const s of _apiKeyStatuses) {
+        const row   = document.getElementById(`apiKeyRow-${s.provider}`);
+        const badge = document.getElementById(`apiKeyBadge-${s.provider}`);
+        const valBtn = document.getElementById(`apiKeyValBtn-${s.provider}`);
+        if (!row || !badge) { continue; }
+
+        if (!s.isSet) {
+            badge.textContent = "⬜ 미설정";
+            badge.className   = "akey-badge unset";
+        } else if (s.isValid === null) {
+            badge.textContent = "🔘 저장됨 (미검증)";
+            badge.className   = "akey-badge saved";
+        } else if (s.isValid) {
+            badge.textContent = "✅ 유효";
+            badge.className   = "akey-badge valid";
+        } else {
+            badge.textContent = "❌ 무효";
+            badge.className   = "akey-badge invalid";
+        }
+        if (valBtn) { valBtn.disabled = false; }
+    }
+}
+
+function _setApiKeyValidatingState(provider, validating) {
+    const badge  = document.getElementById(`apiKeyBadge-${provider}`);
+    const valBtn = document.getElementById(`apiKeyValBtn-${provider}`);
+    if (badge)  { badge.textContent = "⏳ 검증 중..."; badge.className = "akey-badge validating"; }
+    if (valBtn) { valBtn.disabled = validating; }
+}
+
+function _onApiKeyResult(m) {
+    _setApiKeyValidatingState(m.provider, false);
+    const row = document.getElementById(`apiKeyRow-${m.provider}`);
+    const inp = document.getElementById(`apiKeyInp-${m.provider}`);
+    if (inp && m.ok) { inp.value = ""; inp.placeholder = m.masked || "저장됨"; }
+    showCtxToast(m.msg || (m.ok ? "✅ 저장 완료" : "❌ 오류"));
+}
+
+// ── 도메인 설정 테이블 렌더링 ────────────────────────────────────────────────
+
+function _renderDomainTable() {
+    const tbody = document.getElementById("domainTableBody");
+    if (!tbody) { return; }
+    tbody.innerHTML = "";
+    for (const d of _domainConfigs) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td><label class="toggle-lbl">
+                <input type="checkbox" class="domain-toggle" data-key="${d.key}" ${d.enabled ? "checked" : ""}>
+                <span class="toggle-track"></span>
+            </label></td>
+            <td>${d.displayName}</td>
+            <td><span class="domain-kw-preview">${d.keywords.slice(0, 5).map(k => k.word).join(", ")}</span></td>
+            <td>
+                <select class="domain-model-sel" data-key="${d.key}" data-prov="anthropic">
+                    ${_modelOptions("anthropic", d.modelMapping.anthropic)}
+                </select>
+            </td>
+            <td>
+                <select class="domain-model-sel" data-key="${d.key}" data-prov="gemini">
+                    ${_modelOptions("gemini", d.modelMapping.gemini)}
+                </select>
+            </td>
+            <td>
+                <button class="domain-kw-btn" data-key="${d.key}">키워드</button>
+                ${!d.isBuiltin ? `<button class="domain-del-btn" data-key="${d.key}">삭제</button>` : ""}
+            </td>`;
+        tbody.appendChild(tr);
+    }
+
+    tbody.querySelectorAll(".domain-toggle").forEach(el => {
+        el.addEventListener("change", () => {
+            vscode.postMessage({ type: "domainToggle", key: el.dataset.key, enabled: el.checked });
+        });
+    });
+    tbody.querySelectorAll(".domain-model-sel").forEach(el => {
+        el.addEventListener("change", () => {
+            vscode.postMessage({ type: "domainMappingUpdate", key: el.dataset.key, provider: el.dataset.prov, model: el.value });
+        });
+    });
+    tbody.querySelectorAll(".domain-kw-btn").forEach(el => {
+        el.addEventListener("click", () => _openKeywordEditor(el.dataset.key));
+    });
+    tbody.querySelectorAll(".domain-del-btn").forEach(el => {
+        el.addEventListener("click", () => {
+            if (confirm(`도메인 '${el.dataset.key}'를 완전히 삭제합니다. 복구 불가.`)) {
+                vscode.postMessage({ type: "domainDelete", key: el.dataset.key });
+            }
+        });
+    });
+}
+
+function _modelOptions(provider, selected) {
+    const builtin = {
+        anthropic: ["claude-opus-4-7","claude-opus-4-6","claude-sonnet-4-6","claude-haiku-4-5"],
+        gemini:    ["gemini-2.5-pro","gemini-2.5-flash","gemini-2.0-flash","gemini-1.5-pro","gemini-1.5-flash"],
+    };
+    const list = _cloudModels[provider]?.length ? _cloudModels[provider] : builtin[provider];
+    return list.map(m => `<option value="${m}" ${m === selected ? "selected" : ""}>${m}</option>`).join("");
+}
+
+function _renderCloudModelDropdowns() {
+    document.querySelectorAll(".domain-model-sel").forEach(el => {
+        const cur = el.value;
+        el.innerHTML = _modelOptions(el.dataset.prov, cur);
+    });
+}
+
+// ── 키워드 편집기 ─────────────────────────────────────────────────────────────
+
+function _openKeywordEditor(domainKey) {
+    const d = _domainConfigs.find(x => x.key === domainKey);
+    if (!d) { return; }
+    const kwText = d.keywords.map(k => k.word).join(", ");
+    const input = prompt(`[${d.displayName}] 키워드 편집\n쉼표로 구분하여 입력 (최대 50개):\n`, kwText);
+    if (input === null) { return; }
+    const words = input.split(",").map(w => w.trim()).filter(w => w);
+    const keywords = words.slice(0, 50).map((word, i) => ({
+        word, weight: 1.0, learned: d.keywords[i]?.learned || false
+    }));
+    vscode.postMessage({ type: "domainUpdateKeywords", key: domainKey, keywords });
+}
+
+// ── 라우팅 설정 렌더링 ────────────────────────────────────────────────────────
+
+function _renderRoutingSettings() {
+    const tog = document.getElementById("routingEnabledTog");
+    const thr = document.getElementById("routingThresholdSlider");
+    const thrVal = document.getElementById("routingThresholdVal");
+    if (tog) { tog.checked = _routingEnabled; }
+    if (thr) { thr.value = Math.round(_routingThreshold * 100); }
+    if (thrVal) { thrVal.textContent = Math.round(_routingThreshold * 100) + "%"; }
+}
+
+// ── 토큰 사용량 렌더링 ────────────────────────────────────────────────────────
+
+function _renderTokenUsage() {
+    const el = document.getElementById("tokenUsageSummary");
+    if (!el) { return; }
+    const today   = _tokenUsage.today   || { costUsd: 0, inputTokens: 0, outputTokens: 0 };
+    const monthly = _tokenUsage.monthly || { costUsd: 0, inputTokens: 0, outputTokens: 0 };
+    const todayTokens   = (today.inputTokens   || 0) + (today.outputTokens   || 0);
+    const monthlyTokens = (monthly.inputTokens || 0) + (monthly.outputTokens || 0);
+    el.innerHTML = `
+        <div class="usage-row"><span>오늘</span><span>${todayTokens.toLocaleString()} tokens / $${today.costUsd.toFixed(4)}</span></div>
+        <div class="usage-row"><span>이번 달</span><span>${monthlyTokens.toLocaleString()} tokens / $${monthly.costUsd.toFixed(4)}</span></div>`;
+
+    // 7일 미니 바 차트
+    const daily7 = _tokenUsage.daily7 || [];
+    const barEl  = document.getElementById("tokenUsageBar");
+    if (barEl && daily7.length) {
+        const max = Math.max(...daily7.map(d => d.tokens), 1);
+        barEl.innerHTML = daily7.map(d => {
+            const h = Math.round((d.tokens / max) * 32);
+            const label = d.date.slice(5); // MM-DD
+            return `<div class="usage-bar-col"><div class="usage-bar-fill" style="height:${h}px" title="${d.date}: ${d.tokens.toLocaleString()} tokens ($${d.costUsd.toFixed(4)})"></div><div class="usage-bar-label">${label}</div></div>`;
+        }).join("");
+    }
+}
+
+// ── Cloud AI 설정 탭 초기화 ──────────────────────────────────────────────────
+
+function _initCloudTab() {
+    vscode.postMessage({ type: "routingGetConfig" });
+    vscode.postMessage({ type: "domainGetAll" });
+    vscode.postMessage({ type: "tokenUsageGet" });
+    vscode.postMessage({ type: "apiKeyGetStatus" });
+}
+
+// ── Esc 키로 분류 다이얼로그 닫기 ───────────────────────────────────────────
+
+document.addEventListener("keydown", e => {
+    if (e.key === "Escape") {
+        const overlay = document.getElementById("classifyOverlay");
+        if (overlay?.classList.contains("show")) { _cancelClassify(); }
+    }
 });
