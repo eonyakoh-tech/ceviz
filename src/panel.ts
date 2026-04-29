@@ -948,6 +948,22 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                 case "modelRefresh":
                     await this._refreshCloudModels();
                     break;
+
+                // ── Phase 23 작업 10: 보안 이벤트 로그 ──────────────────────
+                case "getSecLog":
+                    this._view?.webview.postMessage({
+                        type: "secLogResult",
+                        log: this.getSecurityLog(),
+                    });
+                    break;
+
+                case "clearSecLog":
+                    this._context.globalState.update("ceviz.securityLog", []);
+                    this._view?.webview.postMessage({
+                        type: "secLogResult",
+                        log: [],
+                    });
+                    break;
             }
         });
     }
@@ -2709,6 +2725,19 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
       <button class="cloud-btn-sm" id="modelRefreshBtn">지금 모델 목록 갱신</button>
     </div>
 
+    <!-- Section 7: 보안 이벤트 로그 (Phase 23 작업 10) -->
+    <div class="cloud-section sec-log-section">
+      <div class="cloud-sec-title">🛡️ 보안 이벤트 로그</div>
+      <p class="cloud-sec-desc">API 키 감지·토큰 이상·인증 실패 등 보안 이벤트가 로컬에 기록됩니다.</p>
+      <div class="sec-log-toolbar">
+        <button class="cloud-btn-sm" id="secLogRefreshBtn">🔄 새로고침</button>
+        <button class="cloud-btn-sm sec-log-clear-btn" id="secLogClearBtn">🗑 기록 삭제</button>
+      </div>
+      <div class="sec-log-list" id="secLogList">
+        <div class="sec-log-empty">이벤트 없음</div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -3538,6 +3567,39 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
         const cutoffStr = cutoff.toISOString().slice(0, 10);
         this._tokenUsageLog = this._tokenUsageLog.filter(r => r.date >= cutoffStr);
         this._context.globalState.update("ceviz.tokenUsageLog", this._tokenUsageLog);
+        // Phase 23 작업 11: 비정상 토큰 소비 감지
+        this._checkTokenAnomaly();
+    }
+
+    private _checkTokenAnomaly(): void {
+        const now   = Date.now();
+        const ONE_H = 3_600_000;
+        const recentTokens = this._tokenUsageLog
+            .filter(r => new Date(r.date).getTime() >= now - ONE_H * 24) // 오늘 로그
+            .reduce((s, r) => s + r.inputTokens + r.outputTokens, 0);
+
+        // 7일 시간당 평균 계산
+        const sevenDayTokens = this._tokenUsageLog.reduce(
+            (s, r) => s + r.inputTokens + r.outputTokens, 0
+        );
+        const avgPerHour = sevenDayTokens / (7 * 24) || 1;
+        const recentPerHour = recentTokens / 24;
+
+        if (recentPerHour > avgPerHour * 5 && recentPerHour > 5000) {
+            const key = "ceviz.lastAnomalyAlert";
+            const lastAlert: number = this._context.globalState.get(key, 0);
+            if (now - lastAlert > ONE_H) { // 1시간에 1회만 경고
+                this._context.globalState.update(key, now);
+                this._securityLog("tokenAnomaly", `시간당 ${Math.round(recentPerHour)}토큰 (평균의 ${Math.round(recentPerHour / avgPerHour)}배)`);
+                this._view?.webview.postMessage({
+                    type: "securityAlert",
+                    kind: "tokenAnomaly",
+                    recentPerHour: Math.round(recentPerHour),
+                    avgPerHour:    Math.round(avgPerHour),
+                    multiplier:    Math.round(recentPerHour / avgPerHour),
+                });
+            }
+        }
     }
 
     private _todayCostUsd(): number {

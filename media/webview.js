@@ -754,6 +754,14 @@ window.addEventListener("message", e => {
         case "pn40TokenResult":
             _onPn40TokenResult(m);
             break;
+
+        case "securityAlert":
+            _showSecurityAlert(m);
+            break;
+
+        case "secLogResult":
+            _renderSecLog(m.log);
+            break;
     }
 });
 
@@ -944,10 +952,71 @@ function updateLocalModels(list) {
     // reserved for dynamic local model injection
 }
 
+// ── Phase 23: API 키 감지 패턴 ───────────────────────────────────────────────
+const _API_KEY_PATTERNS = [
+    { re: /sk-ant-[a-zA-Z0-9\-_]{20,}/,   label: "Anthropic Claude API 키"        },
+    { re: /sk-[a-zA-Z0-9]{20,}/,           label: "OpenAI API 키"                   },
+    { re: /AIzaSy[a-zA-Z0-9\-_]{30,}/,    label: "Google API 키 (Gemini/Firebase)" },
+    { re: /xai-[a-zA-Z0-9]{20,}/,          label: "xAI Grok API 키"                 },
+    { re: /ghp_[a-zA-Z0-9]{36,}/,          label: "GitHub Personal Access Token"    },
+    { re: /ghr_[a-zA-Z0-9]{36,}/,          label: "GitHub Refresh Token"            },
+    { re: /eyJ[a-zA-Z0-9_\-]{30,}\.[a-zA-Z0-9_\-]{20,}\.[a-zA-Z0-9_\-]{20,}/, label: "JWT 토큰" },
+];
+
+function _detectApiKey(text) {
+    for (const { re, label } of _API_KEY_PATTERNS) {
+        const m = text.match(re);
+        if (m) { return { matched: m[0], label }; }
+    }
+    return null;
+}
+
+function _showApiKeyWarning(label, onEdit) {
+    let overlay = document.getElementById("apiKeyWarnOverlay");
+    if (!overlay) {
+        overlay = document.createElement("div");
+        overlay.id = "apiKeyWarnOverlay";
+        overlay.className = "sec-warn-overlay";
+        document.body.appendChild(overlay);
+    }
+    overlay.innerHTML = `
+        <div class="sec-warn-dialog">
+            <div class="sec-warn-icon">🚨</div>
+            <div class="sec-warn-title">API 키가 감지되었습니다</div>
+            <p class="sec-warn-msg">
+                <b>${escapeHtml(label)}</b> 패턴이 입력에서 감지되어<br>
+                <b>전송이 차단되었습니다.</b><br><br>
+                API 키는 채팅창이 아닌<br>
+                <b>☁️ Cloud 탭 → API 키 관리</b>에서 입력해주세요.
+            </p>
+            <div class="sec-warn-btns">
+                <button class="sec-warn-settings" id="apiKeyWarnSettings">⚙️ Cloud 탭 열기</button>
+                <button class="sec-warn-edit" id="apiKeyWarnEdit">메시지 수정</button>
+            </div>
+        </div>`;
+    overlay.classList.add("show");
+    overlay.querySelector("#apiKeyWarnSettings").addEventListener("click", () => {
+        overlay.classList.remove("show");
+        switchTab("cloud");
+    });
+    overlay.querySelector("#apiKeyWarnEdit").addEventListener("click", () => {
+        overlay.classList.remove("show");
+        if (onEdit) { onEdit(); }
+    });
+}
+
 function sendPrompt() {
     const inp = document.getElementById("promptInput");
     const p = inp.value.trim();
     if (!p && !injectedCode) { return; }
+
+    // Phase 23 작업 9: API 키 감지 → 전송 차단
+    const detected = _detectApiKey(p);
+    if (detected) {
+        _showApiKeyWarning(detected.label, () => inp.focus());
+        return;
+    }
+
     let finalPrompt = p;
     if (injectedCode) {
         const ref = `[코드 참조: ${injectedCode.fileName} L${injectedCode.lineStart}-${injectedCode.lineEnd} | ${injectedCode.language}]\n\`\`\`${injectedCode.language}\n${injectedCode.code}\n\`\`\``;
@@ -2902,6 +2971,7 @@ function _initCloudTab() {
     vscode.postMessage({ type: "domainGetAll" });
     vscode.postMessage({ type: "tokenUsageGet" });
     vscode.postMessage({ type: "apiKeyGetStatus" });
+    vscode.postMessage({ type: "getSecLog" });
 }
 
 // ── Phase 23: PN40 토큰 UI ───────────────────────────────────────────────────
@@ -3012,6 +3082,72 @@ function _updateLastRefreshText(ts) {
     if (!ts) { el.textContent = "미갱신"; return; }
     const d = new Date(ts);
     el.textContent = d.toLocaleString();
+}
+
+// ── Phase 23 작업 10: 보안 이벤트 로그 뷰어 ─────────────────────────────────
+
+const _SEC_EVENT_LABELS = {
+    tokenAnomaly:  { icon: "⚠️", label: "토큰 이상" },
+    apiKeyBlocked: { icon: "🚨", label: "API 키 차단" },
+    pn40AuthFail:  { icon: "🔒", label: "PN40 인증 실패" },
+    ipBlocked:     { icon: "🚫", label: "IP 차단" },
+    xssBlocked:    { icon: "🛡️", label: "XSS 차단" },
+    cspViolation:  { icon: "🔐", label: "CSP 위반" },
+};
+
+function _renderSecLog(log) {
+    const el = document.getElementById("secLogList");
+    if (!el) { return; }
+    if (!log || log.length === 0) {
+        el.innerHTML = '<div class="sec-log-empty">이벤트 없음</div>';
+        return;
+    }
+    el.innerHTML = log.slice(0, 50).map(entry => {
+        const meta = _SEC_EVENT_LABELS[entry.event] || { icon: "🔔", label: entry.event };
+        const ts   = new Date(entry.timestamp).toLocaleString();
+        return `<div class="sec-log-entry">
+            <span class="sec-log-icon">${meta.icon}</span>
+            <div class="sec-log-body">
+                <span class="sec-log-label">${escapeHtml(meta.label)}</span>
+                <span class="sec-log-ts">${ts}</span>
+                <span class="sec-log-detail">${escapeHtml(entry.detail)}</span>
+            </div>
+        </div>`;
+    }).join("");
+}
+
+document.getElementById("secLogRefreshBtn")?.addEventListener("click", () => {
+    vscode.postMessage({ type: "getSecLog" });
+});
+
+document.getElementById("secLogClearBtn")?.addEventListener("click", () => {
+    if (confirm("보안 이벤트 기록을 모두 삭제합니다. 계속하시겠습니까?")) {
+        vscode.postMessage({ type: "clearSecLog" });
+    }
+});
+
+// ── Phase 23: 비정상 토큰 소비 경고 ─────────────────────────────────────────
+
+function _showSecurityAlert(m) {
+    if (m.kind === "tokenAnomaly") {
+        let el = document.getElementById("tokenAnomalyBanner");
+        if (!el) {
+            el = document.createElement("div");
+            el.id = "tokenAnomalyBanner";
+            el.className = "sec-anomaly-banner";
+            document.body.appendChild(el);
+        }
+        el.innerHTML = `
+            <div class="sec-anomaly-inner">
+                <span class="sec-anomaly-icon">⚠️</span>
+                <div class="sec-anomaly-body">
+                    <b>비정상적인 토큰 소비 감지</b><br>
+                    최근 시간당 ${m.recentPerHour.toLocaleString()}토큰 (평소 평균 ${m.avgPerHour.toLocaleString()}의 ${m.multiplier}배)
+                </div>
+                <button class="sec-anomaly-dismiss" onclick="this.closest('.sec-anomaly-banner').remove()">✕</button>
+            </div>`;
+        el.style.display = "flex";
+    }
 }
 
 // ── Esc 키로 분류 다이얼로그 닫기 ───────────────────────────────────────────
