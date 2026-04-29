@@ -38,7 +38,7 @@
 | 항목 | 내용 |
 |------|------|
 | 브랜치 | `extension-ui` |
-| 최신 Phase | Phase 21 UI/UX 개선 & 사용성 강화 완료 (2026-04-28) |
+| 최신 Phase | Phase 22 Multi-Cloud AI 도메인 라우팅 완료 (2026-04-29) |
 | 패키지 버전 | `ceviz-0.2.0` |
 | 백엔드 주소 | `100.69.155.43:8000` (기본값) |
 | 빌드 상태 | webpack 컴파일 정상 |
@@ -163,6 +163,18 @@
 - **작업 1**: 메인 아이콘 교체 — 네온 뇌회로 PNG (1254×1254→128×128 리사이즈), Marketplace + activity bar 동일 적용, walnut.svg 백업
 - **파일**: `src/panel.ts`, `media/webview.js`, `media/webview.css`, `media/icon.png`, `package.json`, `.vscodeignore`, `CLAUDE.md`, `EVOLUTION.md`, `pn40_evolution_patch.py`
 
+### ✅ Phase 22 — Multi-Cloud AI 도메인 라우팅 시스템
+- **완료**: 2026-04-29
+- **작업 1+2**: API 키 SecretStorage 저장·검증, BaseAIAdapter 추상 계층 + AnthropicAdapter + GeminiAdapter
+- **작업 3**: PN40 도메인 분류기 (pn40_domain_router.py) — 키워드 매칭(40%) + gemma3:1b LLM(60%)
+- **작업 4+5**: 도메인-모델 매핑 구조 + 자동 라우팅 (cloud 모드 인터셉트 → 분류 → API 직접 호출)
+- **작업 6+7**: 신뢰도 60% 미만 확인 다이얼로그 (★ 근접 추천) + 키워드 학습 메커니즘
+- **작업 8+9**: 폴백 3단계 (타 제공자→PN40) 버그 수정 + 토큰/비용 버블 표시 ($0.0000)
+- **작업 10**: ☁️ Cloud AI 라우팅 탭 (API 키/도메인/라우팅/사용량/모델 갱신 6섹션)
+- **작업 11~14**: 주간 자동 모델 갱신, 도메인 추가/삭제 UI, 도움말 S13, i18n 6개 언어
+- **보안**: API 키 SecretStorage 전용, 마스킹, 키 형식 사전 검증, PN40 프롬프트 인젝션 방어
+- **파일**: `src/panel.ts`, `media/webview.js`, `media/webview.css`, `pn40_domain_router.py`
+
 ### 🔄 Phase 18 — RSS Feed 자동 수집 + Obsidian 저장
 - **상태**: 진행 중 (2026-04-27)
 - **아키텍처**: PN40 systemd user timer → rss_worker.py → vault_sync/ → Syncthing → T480s Vault
@@ -194,6 +206,7 @@
 | 2026-04-27 | Phase 19: 기술 백서 자동 생성 | pn40_rss_whitepaper.py 신규, 모드 선택 UI, 9섹션 검증+재시도, 모델 자동선택, 인젝션방어, 빌드·패키징 완료 |
 | 2026-04-27 | Phase 20: CEVIZ 자기 개발 시스템 A~D단계 | EVOLUTION.md 신규, pn40_evolution_patch.py, 📈 버튼, 4단계 오버레이, 자동거부 12항목, 브랜치+컴파일 검증, 빌드·패키징 완료 |
 | 2026-04-28 | Phase 21: UI/UX 개선 & 사용성 강화 | 작업 1~6 전체 완료. 아이콘 교체(네온 뇌회로) · 자기 개발 명칭 · RAG 학습 · timeout 300s · 도움말 · 코딩 모델 설치. ceviz-0.2.0.vsix 재패키징 완료 |
+| 2026-04-29 | Phase 22: Multi-Cloud AI 도메인 라우팅 | 작업 1~14 전체 완료. SecretStorage API 키, BaseAIAdapter, PN40 분류기, 자동 라우팅, 확인 다이얼로그, 키워드 학습, 폴백 3단계, 토큰비용 UI, ☁️ Cloud 탭, 도움말 S13, i18n. ceviz-0.2.0.vsix 재패키징 완료 |
 
 ---
 
