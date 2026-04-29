@@ -15,3 +15,9 @@ security.log
 *.log.gz
 secrets/
 credentials/
+
+# ── Phase 27: 라이선스/결제 민감 파일 ────────────────────────────────────────
+*.pem
+jwt_private.pem
+jwt_public.pem
+release/

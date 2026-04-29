@@ -1,21 +1,168 @@
-MIT License
+CEVIZ SOFTWARE LICENSE AGREEMENT
+Version 1.0 — Effective 2026-04-29
 
-Copyright (c) 2026 EONYAK OH
+Copyright (c) 2026 EONYAK OH. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. DEFINITIONS
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+"Software" means the CEVIZ VS Code extension and all associated
+backend scripts, documentation, and media files in this repository.
+
+"License Key" means the unique alphanumeric key issued upon purchase
+through the LemonSqueezy payment platform.
+
+"Licensed User" means a natural person or legal entity that has
+purchased a valid License Key.
+
+"Trial Period" means the 14-day free evaluation period starting from
+the first installation of the Software.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+2. TRIAL LICENSE
+
+During the Trial Period, you may use the Software free of charge
+subject to the following limitations:
+
+  · Cloud AI calls: 50 per day
+  · RSS feed subscriptions: 3 maximum
+  · Workspaces: 1 maximum
+  · Self-Development System (RAG): disabled
+  · Voice input: disabled
+
+Local AI (Ollama) is always available without restriction, including
+after the Trial Period expires.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+3. PAID LICENSE PLANS
+
+Upon purchasing a License Key, you are granted a non-exclusive,
+non-transferable (except as provided in Section 6), perpetual license
+to use the Software subject to the plan you purchased:
+
+  Plan        | Price | Devices | Features
+  ─────────────────────────────────────────────────
+  Personal    | $49   | 1       | All v1.x features
+  Pro         | $99   | 3       | All v1.x features
+  Founder     | $149  | unlimited | All features, lifetime
+
+"All v1.x features" means all features available in any v1.x release,
+including features added after your purchase date.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+4. PERMITTED USES
+
+Licensed Users may:
+  a) Install and use the Software on the number of devices permitted
+     by their plan.
+  b) Use the Software for personal or commercial purposes.
+  c) Receive all v1.x updates at no additional cost.
+  d) Receive security patches for all supported versions at no cost.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+5. RESTRICTIONS
+
+You may NOT:
+  a) Redistribute, sublicense, sell, or transfer the Software or
+     any License Key to third parties.
+  b) Remove or alter any copyright, trademark, or license notices.
+  c) Reverse-engineer the license verification mechanism.
+  d) Share your License Key with others or use it on more devices
+     than your plan permits.
+  e) Use the Software to develop a competing product.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+6. LICENSE TRANSFER
+
+You may transfer your License Key to a new device by deactivating it
+on the current device first (Cloud tab → License → Transfer License).
+The maximum number of simultaneously active devices is determined by
+your plan (Section 3).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+7. BRING YOUR OWN KEY (BYOK) POLICY
+
+Cloud AI usage (Anthropic Claude, Google Gemini) requires the user
+to supply their own API keys. CEVIZ does NOT charge for Cloud AI
+usage; all API costs are billed directly by the respective providers
+to the user. The License Fee covers only the CEVIZ software itself.
+
+This policy ensures CEVIZ incurs zero marginal infrastructure cost
+per user for Cloud AI, and the user retains full control over their
+API spending.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+8. VERSION UPGRADE POLICY
+
+  a) All v1.x releases (v1.0 through v1.x) are free for all
+     Licensed Users, regardless of when they purchased.
+  b) Major version upgrades (e.g., v1.x → v2.0) are optional
+     paid upgrades. Existing Licensed Users receive a 50% discount.
+  c) Security patches are provided free of charge to all versions
+     under active support.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+9. REFUND POLICY
+
+LemonSqueezy provides a 30-day money-back guarantee. To request a
+refund, use the link in your purchase confirmation email or contact:
+eonyakoh@gmail.com
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+10. OFFLINE USE
+
+The Software may be used without internet connectivity for up to
+14 days following the last successful online license verification.
+After 14 days offline, an internet connection is required to
+revalidate the license. Local AI (Ollama) remains functional
+regardless of license verification status.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+11. DATA PRIVACY
+
+The Software stores all user data (chat history, sessions, API keys,
+license keys) locally on the user's device using VS Code's built-in
+secure storage APIs. No user data is transmitted to CEVIZ servers.
+The only external network calls made by the Software are:
+
+  · License validation: api.lemonsqueezy.com
+  · Cloud AI inference: api.anthropic.com or generativelanguage.googleapis.com
+    (only when explicitly initiated by the user with their own API keys)
+  · Backend update check: api.github.com/repos/eonyakoh/ceviz (weekly, opt-out via settings)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+12. DISCLAIMER OF WARRANTIES
+
+THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED. THE LICENSOR DOES NOT WARRANT THAT THE SOFTWARE
+WILL BE ERROR-FREE OR UNINTERRUPTED.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+13. LIMITATION OF LIABILITY
+
+IN NO EVENT SHALL THE LICENSOR BE LIABLE FOR ANY INDIRECT, INCIDENTAL,
+SPECIAL, OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE USE OR INABILITY
+TO USE THE SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+14. GOVERNING LAW
+
+This Agreement is governed by the laws of the Republic of Korea.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Contact: eonyakoh@gmail.com
