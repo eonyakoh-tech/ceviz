@@ -28,13 +28,14 @@ import logging
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 # ── 경로 설정 ─────────────────────────────────────────────────────────────
 
@@ -92,6 +93,80 @@ def _load(path: Path, default):
 
 def _save(path: Path, data) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    # whisper 큐·피드 목록 등 민감 파일은 소유자만 읽기/쓰기
+    try:
+        path.chmod(stat.S_IRUSR | stat.S_IWUSR)  # 0o600
+    except OSError:
+        pass
+
+
+# ── Phase 23: RSS XSS 방어 ────────────────────────────────────────────────────
+
+_DANGER_TAGS_RE = re.compile(
+    r"<\s*(?:script|iframe|object|embed|form|input|meta|link|style|svg|math)"
+    r"(?:\s[^>]*)?>.*?</\s*(?:script|iframe|object|embed|form|input|meta|link|style|svg|math)\s*>",
+    re.IGNORECASE | re.DOTALL,
+)
+_SELF_CLOSE_DANGER_RE = re.compile(
+    r"<\s*(?:script|iframe|object|embed|input|meta|link)\s*/?>", re.IGNORECASE
+)
+_JS_URL_RE       = re.compile(r"javascript\s*:", re.IGNORECASE)
+_EVENT_ATTR_RE   = re.compile(r"\bon\w+\s*=\s*['\"][^'\"]*['\"]", re.IGNORECASE)
+_DATA_URL_RE     = re.compile(r"data\s*:\s*[\w/]+;base64,[A-Za-z0-9+/=]+", re.IGNORECASE)
+_ALL_TAGS_RE     = re.compile(r"<[^>]+>")
+
+
+def _sanitize_rss_content(text: str) -> Tuple[str, bool]:
+    """
+    RSS 콘텐츠에서 XSS 위험 요소를 제거한다.
+    반환값: (sanitized_text, had_dangerous_content)
+    """
+    had_danger = False
+
+    def _sub(pattern, repl, s):
+        nonlocal had_danger
+        result, count = pattern.subn(repl, s)
+        if count:
+            had_danger = True
+        return result
+
+    text = _sub(_DANGER_TAGS_RE,     "",                   text)
+    text = _sub(_SELF_CLOSE_DANGER_RE, "",                 text)
+    text = _sub(_JS_URL_RE,          "[removed:js-url]",   text)
+    text = _sub(_EVENT_ATTR_RE,      "",                   text)
+    text = _sub(_DATA_URL_RE,        "[removed:data-url]", text)
+    text = _ALL_TAGS_RE.sub("", text)      # 나머지 HTML 태그 전체 제거
+    return text, had_danger
+
+
+def _warn_header_if_needed(had_danger: bool) -> str:
+    """위험 요소 제거 시 .md 헤더에 삽입할 경고 문자열."""
+    if not had_danger:
+        return ""
+    return (
+        "> ⚠️ **보안 알림**: 이 콘텐츠에서 잠재적 위험 요소(XSS 패턴)가 "
+        "자동으로 제거되었습니다.\n\n"
+    )
+
+
+# ── Phase 23: 고아 임시 파일 정리 ────────────────────────────────────────────
+
+def _cleanup_orphan_tmp_files() -> None:
+    """시작 시 이전 실행에서 남겨진 ceviz_rss_* 임시 파일을 제거한다."""
+    tmp_dir = Path("/tmp")
+    count = 0
+    for p in tmp_dir.glob("ceviz_rss_*"):
+        try:
+            if p.is_file():
+                p.unlink()
+                count += 1
+            elif p.is_dir():
+                shutil.rmtree(p, ignore_errors=True)
+                count += 1
+        except OSError:
+            pass
+    if count:
+        logging.info(f"[RSS] 고아 임시 파일 {count}개 정리 완료")
 
 # ── URL + 경로 보안 ───────────────────────────────────────────────────────
 
@@ -176,6 +251,7 @@ def _extract_subtitles(video_url: str) -> Optional[str]:
     """
     tmp_dir = Path(tempfile.mkdtemp(prefix="ceviz_rss_sub_", dir="/tmp"))
     try:
+        tmp_dir.chmod(stat.S_IRWXU)  # 0o700 — 소유자만 접근
         out_tmpl = str(tmp_dir / "sub.%(ext)s")
         cmd = [
             "yt-dlp",
@@ -388,7 +464,8 @@ def _process_entry(feed: dict, entry: dict, cfg: dict) -> Optional[str]:
 
     elif platform == "reddit":
         raw = entry.get("summary") or entry.get("description") or ""
-        content = re.sub(r"<[^>]+>", "", raw).strip()
+        content, _danger = _sanitize_rss_content(raw)
+        content = content.strip()
 
     else:  # blog
         raw = ""
@@ -396,7 +473,8 @@ def _process_entry(feed: dict, entry: dict, cfg: dict) -> Optional[str]:
             raw = entry["content"][0].get("value", "")
         if not raw:
             raw = entry.get("summary") or ""
-        content = re.sub(r"<[^>]+>", "", raw).strip()
+        content, _danger = _sanitize_rss_content(raw)
+        content = content.strip()
 
     content = re.sub(r"\s{2,}", " ", content)
 
@@ -431,6 +509,8 @@ def _process_entry(feed: dict, entry: dict, cfg: dict) -> Optional[str]:
             return _write_md(vault_sync, platform, title, fm, body)
 
     # ── 일반 요약 모드 ────────────────────────────────────────────────────
+    # _danger: reddit/blog 플랫폼에서 XSS 패턴이 제거되었으면 True
+    security_warn = _warn_header_if_needed(locals().get("_danger", False))
     summary = _summarize(content, title, platform, ollama_url, ollama_model)
 
     if platform == "youtube":
@@ -443,7 +523,7 @@ def _process_entry(feed: dict, entry: dict, cfg: dict) -> Optional[str]:
             "duration": duration,
             "mode": "summary",
         }
-        body = f"# {title}\n\n"
+        body = security_warn + f"# {title}\n\n"
         if summary:
             body += summary + "\n\n"
         body += "## 자막 원문\n\n" + content[:4000] + "\n"
@@ -456,7 +536,7 @@ def _process_entry(feed: dict, entry: dict, cfg: dict) -> Optional[str]:
             "processed": datetime.now().strftime("%Y-%m-%d %H:%M"),
             "mode": "summary",
         }
-        body = f"# {title}\n\n"
+        body = security_warn + f"# {title}\n\n"
         if summary:
             body += summary + "\n\n"
         if content:
@@ -502,8 +582,13 @@ def _process_whisper_queue(cfg: dict) -> None:
             changed = True
             continue
 
-        # 임시 오디오 파일은 /tmp 전용 — 처리 완료/실패 모두 반드시 삭제
-        audio_tmp = tempfile.mktemp(suffix=".mp3", prefix="ceviz_rss_", dir="/tmp")
+        # 임시 오디오 파일: mkstemp으로 생성 (레이스 컨디션 방지), 권한 600
+        audio_fd, audio_tmp = tempfile.mkstemp(suffix=".mp3", prefix="ceviz_rss_", dir="/tmp")
+        os.close(audio_fd)
+        try:
+            os.chmod(audio_tmp, stat.S_IRUSR | stat.S_IWUSR)
+        except OSError:
+            pass
         try:
             job["attempts"] = job.get("attempts", 0) + 1
 
@@ -587,6 +672,7 @@ def _process_whisper_queue(cfg: dict) -> None:
 
 def main() -> None:
     log.info("=== RSS 수집 시작 ===")
+    _cleanup_orphan_tmp_files()  # Phase 23: 고아 임시 파일 정리
     cfg = _load_config()
 
     vault_sync = Path(cfg["vault_sync_path"])

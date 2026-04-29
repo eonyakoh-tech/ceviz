@@ -890,7 +890,7 @@ function updateModeLabel() {
     const mName = modeNames[mode] || "Hybrid";
     const m = modelInfo[model] || { name: model, bg: "#1e3a5f", col: "#7ec8e3", ch: "✦" };
     const iStyle = "display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;border-radius:2px;background:" + m.bg + ";color:" + m.col + ";font-size:8px;vertical-align:middle;margin:0 2px";
-    document.getElementById("modeBtnLabel").innerHTML = mName + " &middot; <span style='" + iStyle + "'>" + m.ch + "</span>" + m.name;
+    document.getElementById("modeBtnLabel").innerHTML = escapeHtml(mName) + " &middot; <span style='" + iStyle + "'>" + escapeHtml(m.ch) + "</span>" + escapeHtml(m.name);
     document.querySelectorAll(".drop-item").forEach(el => {
         el.classList.toggle("selected", el.dataset.mode === mode && el.dataset.model === model);
     });
@@ -1000,13 +1000,13 @@ function renderSkills() {
     filtered.forEach(sk => {
         const div = document.createElement("div");
         div.className = "skill-card";
-        const tags = (sk.tags || []).map(t => `<span class="sk-tag">${t}</span>`).join("");
+        const tags = (sk.tags || []).map(t => `<span class="sk-tag">${escapeHtml(t)}</span>`).join("");
         div.innerHTML = `
           <div class="sk-head">
-            <span class="sk-name">${sk.name}</span>
-            <span class="sk-cat">${catEmoji[sk.category] || "⚡"} ${sk.category}</span>
+            <span class="sk-name">${escapeHtml(sk.name)}</span>
+            <span class="sk-cat">${catEmoji[sk.category] || "⚡"} ${escapeHtml(sk.category)}</span>
           </div>
-          ${sk.description ? `<div class="sk-desc">${sk.description}</div>` : ""}
+          ${sk.description ? `<div class="sk-desc">${escapeHtml(sk.description)}</div>` : ""}
           ${tags ? `<div class="sk-tags">${tags}</div>` : ""}
           <div class="sk-foot">
             <span class="sk-uses">사용 ${sk.uses || 0}회</span>
@@ -1100,8 +1100,8 @@ function renderOrchResult(raw) {
         agents.forEach(a => {
             const c = document.createElement("div");
             c.className = "agent-card";
-            c.innerHTML = '<div class="agent-name">' + a.name + " — " + a.role + "</div>" +
-                '<div style="margin-top:4px;font-size:11px">' + a.result + "</div>" +
+            c.innerHTML = '<div class="agent-name">' + escapeHtml(a.name || "") + " — " + escapeHtml(a.role || "") + "</div>" +
+                '<div style="margin-top:4px;font-size:11px">' + escapeHtml(a.result || "") + "</div>" +
                 '<div class="progress"><div class="progress-inner" style="width:100%"></div></div>';
             cards.appendChild(c);
         });
@@ -1109,7 +1109,7 @@ function renderOrchResult(raw) {
             const f = document.createElement("div");
             f.className = "agent-card";
             f.style.borderLeft = "3px solid var(--vscode-focusBorder)";
-            f.innerHTML = '<div class="agent-name">✅ 최종 결과</div><div style="margin-top:4px;font-size:11px">' + data.final + "</div>";
+            f.innerHTML = '<div class="agent-name">✅ 최종 결과</div><div style="margin-top:4px;font-size:11px">' + escapeHtml(data.final) + "</div>";
             cards.appendChild(f);
         }
     } catch (_) {
