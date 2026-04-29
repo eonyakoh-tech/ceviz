@@ -621,3 +621,80 @@ body[dir="rtl"] .drop-menu{text-align:right}
 .wiz-os-icon{font-size:22px}
 .wiz-os-label{font-size:12px;font-weight:600;color:var(--vscode-editor-foreground)}
 .wiz-os-script{font-size:10px;color:var(--vscode-descriptionForeground);font-family:monospace}
+
+/* ═══════════════════════════════════════════════════════════
+   Phase 27: 라이선스 시스템 UI
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 사이드바 배지 (작업 4) ─────────────────────────────── */
+.lic-status-badge{display:inline-flex;align-items:center;font-size:9.5px;font-weight:700;
+  padding:1px 5px;border-radius:3px;margin-left:4px;cursor:pointer;white-space:nowrap}
+.lic-badge-trial  {background:#7a4500;color:#ffa;border:1px solid #a06000}
+.lic-badge-personal{background:#0a4a8a;color:#9cf;border:1px solid #1a6abf}
+.lic-badge-pro    {background:#3a1a6a;color:#c8a0ff;border:1px solid #6030a0}
+.lic-badge-founder{background:#5a4000;color:#ffd700;border:1px solid #8a6000}
+.lic-badge-expired{background:#4a0000;color:#f88;border:1px solid #800}
+
+/* ── Cloud 탭 라이선스 섹션 (작업 3) ────────────────────── */
+.lic-section{border-color:var(--vscode-focusBorder)!important}
+.lic-status-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.lic-plan-badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px}
+.lic-trial-days{font-size:10.5px;color:var(--vscode-descriptionForeground)}
+.lic-meta{font-size:10px;color:var(--vscode-descriptionForeground);margin-bottom:8px;line-height:1.8}
+.lic-key-row{display:flex;gap:6px;margin-bottom:4px}
+.lic-key-inp{flex:1;background:var(--vscode-input-background);color:var(--vscode-input-foreground);
+  border:1px solid var(--vscode-input-border,rgba(128,128,128,.35));border-radius:3px;
+  padding:4px 8px;font-size:11.5px;font-family:monospace;letter-spacing:.05em}
+.lic-key-inp:focus{outline:none;border-color:var(--vscode-focusBorder)}
+.lic-activate-btn{background:var(--vscode-button-background);color:var(--vscode-button-foreground);
+  border:none;border-radius:3px;padding:4px 12px;font-size:11.5px;cursor:pointer;white-space:nowrap}
+.lic-activate-btn:hover{background:var(--vscode-button-hoverBackground)}
+.lic-activate-btn:disabled{opacity:.5;cursor:not-allowed}
+.lic-key-hint{font-size:10.5px;min-height:14px;margin-bottom:6px}
+.lic-hint-ok {color:#4ec9b0}
+.lic-hint-err{color:var(--vscode-errorForeground)}
+.lic-actions{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.lic-buy-btn{background:#0a4a8a!important;color:#9cf!important;border-color:#1a6abf!important}
+.lic-buy-btn:hover{background:#0d5ea8!important}
+.lic-offline-details{margin-top:8px;font-size:10.5px;color:var(--vscode-descriptionForeground)}
+.lic-offline-details summary{cursor:pointer;padding:3px 0}
+.lic-jwt-inp{width:100%;box-sizing:border-box;margin:4px 0;background:var(--vscode-input-background);
+  color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,rgba(128,128,128,.35));
+  border-radius:3px;padding:4px 8px;font-size:10px;font-family:monospace;resize:vertical}
+
+/* ── 업그레이드 오버레이 (작업 2+7+8) ───────────────────── */
+.upgrade-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:600;
+  display:none;align-items:center;justify-content:center}
+.upgrade-overlay.show{display:flex}
+.upgrade-dialog{background:var(--vscode-editor-background);border:1.5px solid var(--vscode-focusBorder);
+  border-radius:10px;padding:22px 24px;width:min(320px,90vw);position:relative;
+  box-shadow:0 12px 40px rgba(0,0,0,.6)}
+.upgrade-close{position:absolute;top:10px;right:12px;background:none;border:none;
+  color:var(--vscode-descriptionForeground);cursor:pointer;font-size:16px}
+.upgrade-icon{font-size:28px;text-align:center;margin-bottom:6px}
+.upgrade-title{font-size:14px;font-weight:700;text-align:center;margin-bottom:10px;
+  color:var(--vscode-editor-foreground)}
+.upgrade-body{font-size:11.5px;line-height:1.6;margin-bottom:12px;
+  color:var(--vscode-descriptionForeground);text-align:center}
+.why-ceviz{display:flex;flex-direction:column;gap:7px;margin-bottom:14px}
+.why-item{display:flex;gap:8px;align-items:flex-start}
+.why-icon{font-size:14px;flex-shrink:0;margin-top:1px}
+.why-item b{font-size:11px;color:var(--vscode-editor-foreground)}
+.why-sub{font-size:10px;color:var(--vscode-descriptionForeground)}
+.upgrade-btns{display:flex;gap:8px}
+.upgrade-buy-btn{flex:1;background:#0a4a8a;color:#9cf;border:none;border-radius:4px;
+  padding:8px;font-size:12px;font-weight:600;cursor:pointer}
+.upgrade-buy-btn:hover{background:#0d5ea8}
+.upgrade-later-btn{flex:1;background:var(--vscode-button-secondaryBackground);
+  color:var(--vscode-button-secondaryForeground);border:none;border-radius:4px;
+  padding:8px;font-size:12px;cursor:pointer}
+
+/* ── 넛지 배너 (작업 7) ─────────────────────────────────── */
+.lic-nudge-banner{position:fixed;bottom:0;left:0;right:0;z-index:350;
+  background:#3a2800;color:#ffe;padding:7px 10px;display:none;align-items:center;gap:8px}
+.lic-nudge-icon{font-size:14px;flex-shrink:0}
+.lic-nudge-text{flex:1;font-size:11px;line-height:1.4}
+.lic-nudge-buy{background:#0a4a8a;color:#9cf;border:none;border-radius:3px;
+  padding:3px 10px;font-size:11px;cursor:pointer;white-space:nowrap}
+.lic-nudge-dismiss{background:none;border:none;color:#ffe;cursor:pointer;font-size:14px;
+  flex-shrink:0;opacity:.8}

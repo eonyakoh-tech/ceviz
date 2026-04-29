@@ -2411,6 +2411,8 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
     <div class="dot" id="dot"></div>
     <span id="statusTxt">연결 중...</span>
     <span class="ws-badge" id="wsBadge"></span>
+    <!-- Phase 27: 라이선스 상태 배지 -->
+    <span class="lic-status-badge" id="licStatusBadge" title="라이선스 상태"></span>
   </div>
   <div class="token-bar" id="tokenBar">🔢 토큰 사용량: <span id="tokenCount">0</span> tokens <span class="today-cost-badge" id="todayCostBadge" style="display:none"></span></div>
   <div class="proj-bar" id="projBar" style="display:none">
@@ -2840,6 +2842,60 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
       </div>
     </div>
 
+    <!-- Section 8: 라이선스 (Phase 27) -->
+    <div class="cloud-section lic-section">
+      <div class="cloud-sec-title">🔑 라이선스</div>
+
+      <!-- 현재 상태 요약 -->
+      <div class="lic-status-row">
+        <span class="lic-plan-badge" id="licPlanBadge">체험판</span>
+        <span class="lic-trial-days" id="licTrialDays"></span>
+      </div>
+      <div class="lic-meta" id="licMeta"></div>
+
+      <!-- 키 입력 -->
+      <div class="lic-key-row">
+        <input class="lic-key-inp" id="licKeyInp" type="text"
+               placeholder="XXXX-XXXX-XXXX-XXXX" maxlength="36" spellcheck="false" autocomplete="off">
+        <button class="lic-activate-btn" id="licActivateBtn">활성화</button>
+      </div>
+      <div class="lic-key-hint" id="licKeyHint"></div>
+
+      <!-- 액션 버튼 -->
+      <div class="lic-actions" id="licActions">
+        <button class="cloud-btn-sm" id="licTransferBtn">🔄 라이선스 이전</button>
+        <button class="cloud-btn-sm lic-buy-btn" id="licBuyPersonalBtn" data-plan="personal">
+          Personal 구매 $49
+        </button>
+        <button class="cloud-btn-sm lic-buy-btn" id="licBuyProBtn" data-plan="pro">
+          Pro 구매 $99
+        </button>
+      </div>
+
+      <!-- JWT 오프라인 입력 (접힘) -->
+      <details class="lic-offline-details">
+        <summary>오프라인 라이선스 토큰 입력</summary>
+        <textarea class="lic-jwt-inp" id="licJwtInp" rows="3"
+                  placeholder="구매 후 이메일로 받은 JWT 토큰을 붙여넣으세요"></textarea>
+        <button class="cloud-btn-sm" id="licJwtVerifyBtn">JWT 검증</button>
+      </details>
+    </div>
+
+  </div>
+</div>
+
+<!-- 업그레이드 안내 오버레이 (Phase 27) -->
+<div class="upgrade-overlay" id="upgradeOverlay">
+  <div class="upgrade-dialog">
+    <button class="upgrade-close" id="upgradeClose">✕</button>
+    <div class="upgrade-icon">⭐</div>
+    <div class="upgrade-title" id="upgradeTitle">정식판 기능입니다</div>
+    <div class="upgrade-body" id="upgradeBody"></div>
+    <div class="upgrade-value" id="upgradeValue"></div>
+    <div class="upgrade-btns">
+      <button class="upgrade-buy-btn" id="upgradeBuyBtn">구매하기 →</button>
+      <button class="upgrade-later-btn" id="upgradeLaterBtn">나중에</button>
+    </div>
   </div>
 </div>
 

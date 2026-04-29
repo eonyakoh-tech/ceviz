@@ -785,6 +785,31 @@ window.addEventListener("message", e => {
             }
             break;
 
+        // ── Phase 27: 라이선스 ───────────────────────────────────────────────
+        case "licenseStatus":
+            _renderLicenseStatus(m);
+            break;
+
+        case "licenseActivating":
+            _onLicenseActivating();
+            break;
+
+        case "licenseActivateDone":
+            _onLicenseActivateDone(m);
+            break;
+
+        case "licenseDeactivateDone":
+            _onLicenseDeactivateDone(m);
+            break;
+
+        case "upgradePrompt":
+            _showUpgradeOverlay(m);
+            break;
+
+        case "licenseNudge":
+            _showLicenseNudge(m);
+            break;
+
         case "backendUpdateAvailable":
             _showUpdateBanner(m);
             break;
@@ -3263,5 +3288,314 @@ document.addEventListener("keydown", e => {
     if (e.key === "Escape") {
         const overlay = document.getElementById("classifyOverlay");
         if (overlay?.classList.contains("show")) { _cancelClassify(); }
+        const upgradeOverlay = document.getElementById("upgradeOverlay");
+        if (upgradeOverlay?.classList.contains("show")) { _closeUpgradeOverlay(); }
     }
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// Phase 27: 라이선스 시스템 UI
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── i18n (작업 11) ────────────────────────────────────────────────────────────
+const _LIC_I18N = {
+    ko: {
+        trial:    "체험판",
+        personal: "Personal",
+        pro:      "Pro",
+        founder:  "Lifetime Founder ⭐",
+        expired:  "만료됨",
+        trialLeft: n => `체험판 D-${n}`,
+        trialExpired: "체험판 만료",
+        activated: "활성화 완료",
+        activating: "활성화 중...",
+        deactivated: "비활성화 완료",
+        invalidFmt: "키 형식이 올바르지 않습니다 (XXXX-XXXX-XXXX-XXXX)",
+        upgradeTitle: "정식판 기능입니다",
+        upgradeBodyEvolution: "RAG 자기 개발 시스템은 Personal 이상 플랜에서 사용할 수 있습니다.",
+        upgradeBodyCloud: quota => `Cloud AI 일일 한도(${quota}회)를 초과했습니다. 정식판은 무제한입니다.`,
+        upgradeBodyVoice: "음성 입력은 Personal 이상 플랜에서 사용할 수 있습니다.",
+        upgradeBodyWhitepaper: "기술 백서 자동 생성은 Personal 이상 플랜에서 사용할 수 있습니다.",
+        upgradeBodyDefault: "이 기능은 Personal 이상 플랜에서 사용할 수 있습니다.",
+        buyBtn: "구매하기 →",
+        laterBtn: "나중에",
+        nudgeWelcome: days => `CEVIZ에 오신 것을 환영합니다! 14일 무료 체험판을 시작합니다. Local AI는 언제나 무료입니다.`,
+        nudgeD7: days => `체험판이 ${days}일 남았습니다. 만료 후에도 Local AI는 계속 사용 가능합니다.`,
+        nudgeD2: days => `체험판이 ${days}일 후 만료됩니다.`,
+        nudgeExpired: `체험판이 만료되었습니다. Local AI는 계속 사용 가능합니다.`,
+        whyCeviz: [
+            ["🔒", "데이터 100% 로컬 저장", "ChatGPT는 OpenAI 서버에 저장됩니다"],
+            ["📡", "오프라인에서도 작동", "인터넷 없어도 Local AI 사용 가능"],
+            ["🧠", "자기 개발 시스템 (시장 유일)", "백서 학습 → 자동 RAG 흡수"],
+            ["📖", "Obsidian 지식 베이스 통합", "개인 노트가 AI의 컨텍스트"],
+            ["💰", "일회성 결제, 영구 사용", "ChatGPT Plus $20/월 vs CEVIZ $49 영구"],
+            ["🔑", "BYOK Cloud AI", "자기 API 키로 비용 통제"],
+        ],
+    },
+    en: {
+        trial:    "Trial",
+        personal: "Personal",
+        pro:      "Pro",
+        founder:  "Lifetime Founder ⭐",
+        expired:  "Expired",
+        trialLeft: n => `Trial D-${n}`,
+        trialExpired: "Trial Expired",
+        activated: "Activated",
+        activating: "Activating...",
+        deactivated: "Deactivated",
+        invalidFmt: "Invalid key format (XXXX-XXXX-XXXX-XXXX)",
+        upgradeTitle: "Pro Feature",
+        upgradeBodyEvolution: "RAG Self-Development requires Personal plan or above.",
+        upgradeBodyCloud: quota => `Daily Cloud AI limit (${quota}) reached. Pro plan is unlimited.`,
+        upgradeBodyVoice: "Voice input requires Personal plan or above.",
+        upgradeBodyWhitepaper: "Whitepaper generation requires Personal plan or above.",
+        upgradeBodyDefault: "This feature requires Personal plan or above.",
+        buyBtn: "Buy Now →",
+        laterBtn: "Later",
+        nudgeWelcome: days => `Welcome to CEVIZ! Your 14-day trial has started. Local AI is always free.`,
+        nudgeD7: days => `${days} days left in your trial. Local AI stays free after expiry.`,
+        nudgeD2: days => `Your trial expires in ${days} days.`,
+        nudgeExpired: `Trial expired. Local AI remains available.`,
+        whyCeviz: [
+            ["🔒", "100% Local Data Storage", "ChatGPT stores your data on OpenAI servers"],
+            ["📡", "Works Offline", "Local AI works without internet"],
+            ["🧠", "Self-Development System (unique)", "Whitepaper → auto RAG absorption"],
+            ["📖", "Obsidian Knowledge Base", "Your notes become AI context"],
+            ["💰", "One-time payment, lifetime use", "ChatGPT Plus $20/mo vs CEVIZ $49 forever"],
+            ["🔑", "BYOK Cloud AI", "Control costs with your own API keys"],
+        ],
+    },
+};
+
+function _licT(key, ...args) {
+    const lang = document.documentElement.lang || "ko";
+    const dict = _LIC_I18N[lang] || _LIC_I18N.ko;
+    const val  = dict[key];
+    return typeof val === "function" ? val(...args) : (val ?? key);
+}
+
+// ── 플랜 배지 스타일 ─────────────────────────────────────────────────────────
+const _PLAN_BADGE_CLASS = {
+    trial:    "lic-badge-trial",
+    personal: "lic-badge-personal",
+    pro:      "lic-badge-pro",
+    founder:  "lic-badge-founder",
+    expired:  "lic-badge-expired",
+};
+
+// ── 라이선스 상태 렌더링 ─────────────────────────────────────────────────────
+function _renderLicenseStatus(m) {
+    // 사이드바 배지 (작업 4)
+    const badge = document.getElementById("licStatusBadge");
+    if (badge) {
+        badge.className = "lic-status-badge " + (_PLAN_BADGE_CLASS[m.plan] || "");
+        if (m.plan === "trial") {
+            badge.textContent = m.trialDaysLeft > 0
+                ? _licT("trialLeft", m.trialDaysLeft)
+                : _licT("trialExpired");
+        } else {
+            badge.textContent = _licT(m.plan);
+        }
+        badge.onclick = () => { switchTab("cloud"); };
+    }
+
+    // Cloud 탭 라이선스 섹션
+    const planBadge = document.getElementById("licPlanBadge");
+    if (planBadge) {
+        planBadge.textContent  = _licT(m.plan);
+        planBadge.className    = "lic-plan-badge " + (_PLAN_BADGE_CLASS[m.plan] || "");
+    }
+
+    const trialDaysEl = document.getElementById("licTrialDays");
+    if (trialDaysEl) {
+        trialDaysEl.textContent = m.plan === "trial"
+            ? (m.trialDaysLeft > 0 ? _licT("trialLeft", m.trialDaysLeft) : _licT("trialExpired"))
+            : "";
+    }
+
+    const metaEl = document.getElementById("licMeta");
+    if (metaEl) {
+        const lines = [];
+        if (m.keyMasked) { lines.push(`키: ${escapeHtml(m.keyMasked)}`); }
+        if (m.activatedAt && m.plan !== "trial") {
+            lines.push(`활성화: ${new Date(m.activatedAt).toLocaleDateString()}`);
+        }
+        if (m.deviceId) { lines.push(`기기 ID: ${escapeHtml(m.deviceId.slice(0, 12))}…`); }
+        metaEl.innerHTML = lines.map(l => `<div>${l}</div>`).join("");
+    }
+
+    // 구매 버튼 표시 여부
+    const actions = document.getElementById("licActions");
+    if (actions) {
+        const isPaid = ["personal", "pro", "founder"].includes(m.plan);
+        actions.querySelectorAll(".lic-buy-btn").forEach(btn => {
+            btn.style.display = isPaid ? "none" : "";
+        });
+        const transferBtn = document.getElementById("licTransferBtn");
+        if (transferBtn) { transferBtn.style.display = isPaid ? "" : "none"; }
+    }
+}
+
+function _onLicenseActivating() {
+    const btn  = document.getElementById("licActivateBtn");
+    const hint = document.getElementById("licKeyHint");
+    if (btn)  { btn.disabled = true; btn.textContent = _licT("activating"); }
+    if (hint) { hint.textContent = ""; hint.className = "lic-key-hint"; }
+}
+
+function _onLicenseActivateDone(m) {
+    const btn  = document.getElementById("licActivateBtn");
+    const hint = document.getElementById("licKeyHint");
+    const inp  = document.getElementById("licKeyInp");
+    if (btn) { btn.disabled = false; btn.textContent = "활성화"; }
+    if (m.ok) {
+        if (inp)  { inp.value = ""; }
+        if (hint) {
+            hint.textContent = `✅ ${_licT("activated")} — ${escapeHtml(m.planLabel || m.plan)}`;
+            hint.className   = "lic-key-hint lic-hint-ok";
+        }
+        showCtxToast(`✅ ${escapeHtml(m.planLabel || "")} 라이선스 활성화 완료`);
+    } else {
+        if (hint) {
+            hint.textContent = `❌ ${escapeHtml(m.error || "활성화 실패")}`;
+            hint.className   = "lic-key-hint lic-hint-err";
+        }
+    }
+}
+
+function _onLicenseDeactivateDone(m) {
+    if (m.ok) {
+        showCtxToast(`✅ ${_licT("deactivated")}`);
+    } else {
+        showCtxToast(`❌ ${escapeHtml(m.error || "오류")}`);
+    }
+}
+
+// ── 라이선스 키 실시간 형식 검증 ─────────────────────────────────────────────
+document.getElementById("licKeyInp")?.addEventListener("input", e => {
+    const val  = e.target.value.trim().toUpperCase();
+    const hint = document.getElementById("licKeyHint");
+    if (!val) { if (hint) { hint.textContent = ""; } return; }
+    const ok = /^[A-Z0-9]{4}(-[A-Z0-9]{4}){3}$/.test(val) ||
+               /^[A-Z0-9]{8}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{12}$/.test(val);
+    if (hint) {
+        hint.textContent = ok ? "" : _licT("invalidFmt");
+        hint.className   = ok ? "lic-key-hint" : "lic-key-hint lic-hint-err";
+    }
+});
+
+document.getElementById("licActivateBtn")?.addEventListener("click", () => {
+    const key = document.getElementById("licKeyInp")?.value?.trim().toUpperCase();
+    if (!key) { return; }
+    vscode.postMessage({ type: "licenseActivate", key });
+});
+
+document.getElementById("licTransferBtn")?.addEventListener("click", () => {
+    if (confirm("이 기기의 라이선스를 비활성화합니다. 다른 기기에서 다시 활성화할 수 있습니다. 계속하시겠습니까?")) {
+        vscode.postMessage({ type: "licenseDeactivate" });
+    }
+});
+
+document.querySelectorAll(".lic-buy-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+        const plan = btn.dataset.plan;
+        vscode.postMessage({ type: "licenseOpenStore", plan });
+    });
+});
+
+document.getElementById("licJwtVerifyBtn")?.addEventListener("click", () => {
+    const token = document.getElementById("licJwtInp")?.value?.trim();
+    if (!token) { return; }
+    vscode.postMessage({ type: "licenseJwtVerify", token });
+});
+
+// ── 업그레이드 오버레이 (작업 7+8) ───────────────────────────────────────────
+
+function _upgradeBodyText(feature, quotaLimit) {
+    switch (feature) {
+        case "evolution":          return _licT("upgradeBodyEvolution");
+        case "cloudCallsPerDay":   return _licT("upgradeBodyCloud", quotaLimit ?? 50);
+        case "voice":              return _licT("upgradeBodyVoice");
+        case "whitepaper":         return _licT("upgradeBodyWhitepaper");
+        default:                   return _licT("upgradeBodyDefault");
+    }
+}
+
+function _renderWhyCeviz() {
+    const items = _LIC_I18N[document.documentElement.lang || "ko"]?.whyCeviz
+                ?? _LIC_I18N.ko.whyCeviz;
+    return `<div class="why-ceviz">` +
+        items.map(([icon, title, sub]) =>
+            `<div class="why-item">
+                <span class="why-icon">${icon}</span>
+                <div><b>${escapeHtml(title)}</b><br>
+                <span class="why-sub">${escapeHtml(sub)}</span></div>
+            </div>`
+        ).join("") +
+        `</div>`;
+}
+
+function _showUpgradeOverlay(m) {
+    const overlay = document.getElementById("upgradeOverlay");
+    if (!overlay) { return; }
+
+    document.getElementById("upgradeTitle").textContent = _licT("upgradeTitle");
+    document.getElementById("upgradeBody").textContent  = _upgradeBodyText(m.feature, m.quotaLimit);
+    document.getElementById("upgradeValue").innerHTML   = _renderWhyCeviz();
+
+    const buyBtn = document.getElementById("upgradeBuyBtn");
+    if (buyBtn) {
+        buyBtn.onclick = () => {
+            vscode.postMessage({ type: "licenseOpenStore", plan: "personal" });
+            _closeUpgradeOverlay();
+        };
+    }
+
+    overlay.classList.add("show");
+}
+
+function _closeUpgradeOverlay() {
+    document.getElementById("upgradeOverlay")?.classList.remove("show");
+}
+
+document.getElementById("upgradeClose")?.addEventListener("click",  _closeUpgradeOverlay);
+document.getElementById("upgradeLaterBtn")?.addEventListener("click", _closeUpgradeOverlay);
+
+// ── 구매 넛지 알림 (작업 7) ──────────────────────────────────────────────────
+function _showLicenseNudge(m) {
+    const { nudge, trialDaysLeft } = m;
+    let text = "";
+    switch (nudge) {
+        case "welcome": text = _licT("nudgeWelcome", trialDaysLeft); break;
+        case "d7":      text = _licT("nudgeD7", trialDaysLeft);      break;
+        case "d2":      text = _licT("nudgeD2", trialDaysLeft);      break;
+        case "expired": text = _licT("nudgeExpired");                 break;
+        default: return;
+    }
+
+    let el = document.getElementById("licNudgeBanner");
+    if (!el) {
+        el = document.createElement("div");
+        el.id = "licNudgeBanner";
+        el.className = "lic-nudge-banner";
+        document.body.appendChild(el);
+    }
+
+    const isExpired = nudge === "expired";
+    el.innerHTML =
+        `<span class="lic-nudge-icon">${isExpired ? "⏰" : "💡"}</span>` +
+        `<span class="lic-nudge-text">${escapeHtml(text)}</span>` +
+        (isExpired
+            ? `<button class="lic-nudge-buy" id="licNudgeBuyBtn">구매하기</button>`
+            : "") +
+        `<button class="lic-nudge-dismiss" id="licNudgeDismissBtn">✕</button>`;
+    el.style.display = "flex";
+
+    document.getElementById("licNudgeBuyBtn")?.addEventListener("click", () => {
+        vscode.postMessage({ type: "licenseOpenStore", plan: "personal" });
+    });
+    document.getElementById("licNudgeDismissBtn")?.addEventListener("click", () => {
+        el.style.display = "none";
+        vscode.postMessage({ type: "licenseNudgeDismiss", nudge });
+    });
+}
