@@ -33,7 +33,8 @@ const I18N = {
         ttlLang:"언어 선택",ttlMic:"음성 입력 (한국어/영어)",ttlStop:"전송 취소 (Stop)",
         ttlEvo:"자기 개발 시스템",evoTitle:"📈 CEVIZ 자기 개발 시스템",evoHistLabel:"📋 개발 이력",
         ttlHelp:"사용 설명서",helpTitle:"📖 CEVIZ 사용 설명서",helpSearch:"섹션 검색... (Ctrl+F)",helpClose:"닫기",
-        helpSecs:["🚀 시작하기","⭐ 주요 기능","💬 채팅 모드","📈 자기 개발","📡 RSS Feed","📄 기술 백서","🔧 모델 관리","🧠 Vault 연동","⌨️ 단축키","❓ FAQ","🔨 트러블슈팅","🖥️ 환경 정보"],
+        helpSecs:["🚀 시작하기","⭐ 주요 기능","💬 채팅 모드","📈 자기 개발","📡 RSS Feed","📄 기술 백서","🔧 모델 관리","🧠 Vault 연동","⌨️ 단축키","❓ FAQ","🔨 트러블슈팅","🖥️ 환경 정보","☁️ Cloud AI 라우팅"],
+        ttlCloud:"☁️ Cloud AI 라우팅",
         langSelectTitle:"언어 선택",langSelectHint:"사용할 언어를 선택하세요",langSave:"확인",
     },
     en: {
@@ -66,7 +67,8 @@ const I18N = {
         ttlLang:"Select Language",ttlMic:"Voice Input (KO/EN)",ttlStop:"Cancel (Stop)",
         ttlEvo:"Self-Development System",evoTitle:"📈 CEVIZ Self-Development System",evoHistLabel:"📋 Dev History",
         ttlHelp:"User Manual",helpTitle:"📖 CEVIZ User Manual",helpSearch:"Search sections... (Ctrl+F)",helpClose:"Close",
-        helpSecs:["🚀 Getting Started","⭐ Key Features","💬 Chat Modes","📈 Self-Development","📡 RSS Feed","📄 Whitepaper","🔧 Model Mgmt","🧠 Vault","⌨️ Shortcuts","❓ FAQ","🔨 Troubleshoot","🖥️ Environment"],
+        helpSecs:["🚀 Getting Started","⭐ Key Features","💬 Chat Modes","📈 Self-Development","📡 RSS Feed","📄 Whitepaper","🔧 Model Mgmt","🧠 Vault","⌨️ Shortcuts","❓ FAQ","🔨 Troubleshoot","🖥️ Environment","☁️ Cloud AI Routing"],
+        ttlCloud:"☁️ Cloud AI Routing",
         langSelectTitle:"Select Language",langSelectHint:"Choose your preferred language",langSave:"Confirm",
     },
     tr: {
@@ -99,7 +101,8 @@ const I18N = {
         ttlLang:"Dil Seç",ttlMic:"Sesli Giriş",ttlStop:"İptal (Durdur)",
         ttlEvo:"Kendini Geliştirme Sistemi",evoTitle:"📈 CEVIZ Kendini Geliştirme Sistemi",evoHistLabel:"📋 Geliştirme Geçmişi",
         ttlHelp:"Kullanım Kılavuzu",helpTitle:"📖 CEVIZ Kullanım Kılavuzu",helpSearch:"Bölüm ara... (Ctrl+F)",helpClose:"Kapat",
-        helpSecs:["🚀 Başlarken","⭐ Temel Özellikler","💬 Sohbet Modu","📈 Kendini Geliştir","📡 RSS Feed","📄 Teknik Belge","🔧 Model Yönetimi","🧠 Vault","⌨️ Kısayollar","❓ SSS","🔨 Sorun Giderme","🖥️ Ortam Bilgisi"],
+        helpSecs:["🚀 Başlarken","⭐ Temel Özellikler","💬 Sohbet Modu","📈 Kendini Geliştir","📡 RSS Feed","📄 Teknik Belge","🔧 Model Yönetimi","🧠 Vault","⌨️ Kısayollar","❓ SSS","🔨 Sorun Giderme","🖥️ Ortam Bilgisi","☁️ Cloud AI Yönlendirme"],
+        ttlCloud:"☁️ Cloud AI Yönlendirme",
         langSelectTitle:"Dil Seçin",langSelectHint:"Tercih ettiğiniz dili seçin",langSave:"Onayla",
     },
     ar: {
@@ -132,7 +135,8 @@ const I18N = {
         ttlLang:"اختر اللغة",ttlMic:"الإدخال الصوتي",ttlStop:"إلغاء (إيقاف)",
         ttlEvo:"نظام التطوير الذاتي",evoTitle:"📈 CEVIZ نظام التطوير الذاتي",evoHistLabel:"📋 سجل التطوير",
         ttlHelp:"دليل المستخدم",helpTitle:"📖 CEVIZ دليل المستخدم",helpSearch:"بحث في الأقسام... (Ctrl+F)",helpClose:"إغلاق",
-        helpSecs:["🚀 البدء","⭐ الميزات","💬 أوضاع الدردشة","📈 التطوير الذاتي","📡 RSS","📄 الورقة البيضاء","🔧 النماذج","🧠 Vault","⌨️ الاختصارات","❓ الأسئلة","🔨 الاستكشاف","🖥️ البيئة"],
+        helpSecs:["🚀 البدء","⭐ الميزات","💬 أوضاع الدردشة","📈 التطوير الذاتي","📡 RSS","📄 الورقة البيضاء","🔧 النماذج","🧠 Vault","⌨️ الاختصارات","❓ الأسئلة","🔨 الاستكشاف","🖥️ البيئة","☁️ توجيه AI السحابي"],
+        ttlCloud:"☁️ توجيه AI السحابي",
         langSelectTitle:"اختر اللغة",langSelectHint:"اختر لغتك المفضلة",langSave:"تأكيد",
     },
     fa: {
@@ -165,7 +169,8 @@ const I18N = {
         ttlLang:"انتخاب زبان",ttlMic:"ورودی صوتی",ttlStop:"لغو (توقف)",
         ttlEvo:"سیستم خودتوسعه",evoTitle:"📈 CEVIZ سیستم خودتوسعه",evoHistLabel:"📋 تاریخچه توسعه",
         ttlHelp:"راهنمای کاربر",helpTitle:"📖 CEVIZ راهنمای کاربر",helpSearch:"جستجوی بخش... (Ctrl+F)",helpClose:"بستن",
-        helpSecs:["🚀 شروع","⭐ ویژگی‌ها","💬 حالت چت","📈 خودتوسعه","📡 RSS","📄 کاغذ سفید","🔧 مدل","🧠 Vault","⌨️ میانبرها","❓ پرسش‌ها","🔨 عیب‌یابی","🖥️ محیط"],
+        helpSecs:["🚀 شروع","⭐ ویژگی‌ها","💬 حالت چت","📈 خودتوسعه","📡 RSS","📄 کاغذ سفید","🔧 مدل","🧠 Vault","⌨️ میانبرها","❓ پرسش‌ها","🔨 عیب‌یابی","🖥️ محیط","☁️ مسیریابی Cloud AI"],
+        ttlCloud:"☁️ مسیریابی Cloud AI",
         langSelectTitle:"انتخاب زبان",langSelectHint:"زبان مورد نظر خود را انتخاب کنید",langSave:"تأیید",
     },
     ru: {
@@ -198,7 +203,8 @@ const I18N = {
         ttlLang:"Выбор языка",ttlMic:"Голосовой ввод",ttlStop:"Отмена (Стоп)",
         ttlEvo:"Система Саморазвития",evoTitle:"📈 CEVIZ Система Саморазвития",evoHistLabel:"📋 История разработки",
         ttlHelp:"Руководство пользователя",helpTitle:"📖 CEVIZ Руководство пользователя",helpSearch:"Поиск по разделам... (Ctrl+F)",helpClose:"Закрыть",
-        helpSecs:["🚀 Начало работы","⭐ Функции","💬 Режим чата","📈 Саморазвитие","📡 RSS","📄 Белая книга","🔧 Модели","🧠 Vault","⌨️ Горячие клавиши","❓ FAQ","🔨 Устранение","🖥️ Среда"],
+        helpSecs:["🚀 Начало работы","⭐ Функции","💬 Режим чата","📈 Саморазвитие","📡 RSS","📄 Белая книга","🔧 Модели","🧠 Vault","⌨️ Горячие клавиши","❓ FAQ","🔨 Устранение","🖥️ Среда","☁️ Маршрутизация Cloud AI"],
+        ttlCloud:"☁️ Маршрутизация Cloud AI",
         langSelectTitle:"Выбор языка",langSelectHint:"Выберите предпочитаемый язык",langSave:"Подтвердить",
     },
 };

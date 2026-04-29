@@ -542,6 +542,10 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                     this._sync();
                     await this._checkServerStatus();
                     this._view?.webview.postMessage({ type: "skillsSync", skills: this._skills });
+                    // Phase 22: 7일 경과 시 자동 모델 갱신 (백그라운드, 실패 무시)
+                    if (Date.now() - this._lastModelRefresh > 7 * 24 * 60 * 60 * 1000) {
+                        this._refreshCloudModels().catch(() => {});
+                    }
                     try {
                         const r = await axios.get(`${this._getUrl()}/models`, { timeout: 5000 });
                         this._view?.webview.postMessage({ type: "models", list: r.data.models });
@@ -2823,6 +2827,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
         <button class="help-nav-btn" id="helpNav10">❓ FAQ</button>
         <button class="help-nav-btn" id="helpNav11">🔨 트러블슈팅</button>
         <button class="help-nav-btn" id="helpNav12">🖥️ 환경 정보</button>
+        <button class="help-nav-btn" id="helpNav13">☁️ Cloud AI 라우팅</button>
         <div class="help-nav-sep"></div>
         <a class="help-nav-link" href="https://github.com/eonyakoh/ceviz" target="_blank">GitHub ↗</a>
       </nav>
@@ -3052,6 +3057,60 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
           <ul class="help-ul">
             <li>PN40: <code>~/ceviz/api_server.py</code>, <code>~/ceviz/evolution_router.py</code></li>
             <li>T480s: VS Code <code>settings.json</code> → <code>ceviz.serverIp</code></li>
+          </ul>
+        </div>
+
+        <!-- S13: Cloud AI 라우팅 -->
+        <div class="help-sec" id="helpSec13">
+          <div class="help-h2">☁️ Cloud AI 자동 라우팅 (Phase 22)</div>
+          <p class="help-p">☁️ Cloud 탭에서 Anthropic Claude와 Google Gemini API 키를 설정하면, 질문의 내용에 따라 최적 모델로 자동 라우팅됩니다. PN40을 거치지 않고 T480s에서 직접 Cloud AI를 호출합니다.</p>
+
+          <div class="help-h3">API 키 설정</div>
+          <ul class="help-ul">
+            <li><b>Anthropic Claude</b>: <a href="https://console.anthropic.com">console.anthropic.com</a>에서 발급 (sk-ant-... 형식)</li>
+            <li><b>Google Gemini</b>: <a href="https://aistudio.google.com">aistudio.google.com</a>에서 발급 (AIza... 형식)</li>
+            <li>키는 VS Code SecretStorage에만 저장됩니다 — globalState, 파일, 로그에 저장되지 않습니다</li>
+            <li>저장 즉시 API 검증이 실행됩니다</li>
+          </ul>
+
+          <div class="help-h3">자동 라우팅 동작 방식</div>
+          <ol class="help-ul">
+            <li>질문이 PN40의 <code>/classify-domain</code>으로 전송됩니다</li>
+            <li>키워드 매칭(40%) + gemma3:1b LLM 분류(60%)로 도메인을 결정합니다</li>
+            <li>신뢰도 60% 이상 → 자동 선택, 60% 미만 → 사용자 확인 다이얼로그</li>
+            <li>도메인별 매핑 모델로 직접 API 호출합니다</li>
+          </ol>
+
+          <div class="help-h3">기본 도메인 8개</div>
+          <table class="help-table">
+            <tr><th>도메인</th><th>Claude 기본 모델</th><th>Gemini 기본 모델</th></tr>
+            <tr><td>일상 대화</td><td>claude-sonnet-4-6</td><td>gemini-2.0-flash</td></tr>
+            <tr><td>코딩</td><td>claude-opus-4-7</td><td>gemini-2.5-pro</td></tr>
+            <tr><td>게임 개발</td><td>claude-opus-4-7</td><td>gemini-2.5-pro</td></tr>
+            <tr><td>영어 학습</td><td>claude-sonnet-4-6</td><td>gemini-2.0-flash</td></tr>
+            <tr><td>기술 백서</td><td>claude-opus-4-7</td><td>gemini-2.5-pro</td></tr>
+            <tr><td>빠른 즉답</td><td>claude-haiku-4-5</td><td>gemini-2.0-flash</td></tr>
+            <tr><td>긴 문서 분석</td><td>claude-sonnet-4-6</td><td>gemini-2.5-pro</td></tr>
+            <tr><td>이미지 분석</td><td>claude-sonnet-4-6</td><td>gemini-2.5-pro</td></tr>
+          </table>
+
+          <div class="help-h3">폴백 우선순위</div>
+          <ol class="help-ul">
+            <li>선택된 모델 (예: Claude Opus) 실패</li>
+            <li>→ 다른 제공자의 동급 모델 (예: Gemini Pro)</li>
+            <li>→ PN40 로컬 모델 (Ollama)</li>
+            <li>→ 모두 실패 시 오류 메시지 표시</li>
+          </ol>
+
+          <div class="help-h3">토큰 비용 추적</div>
+          <p class="help-p">Cloud AI 응답의 메타 줄에 토큰 수와 비용(USD)이 표시됩니다. Cloud 탭 → 사용량에서 오늘/이번달 누적 비용과 7일 차트를 확인할 수 있습니다.</p>
+
+          <div class="help-h3">PN40 도메인 분류기 설치</div>
+          <ul class="help-ul">
+            <li><code>cp pn40_domain_router.py ~/ceviz/domain_router.py</code></li>
+            <li>api_server.py에 추가: <code>from domain_router import router as domain_router</code></li>
+            <li><code>app.include_router(domain_router)</code></li>
+            <li><code>sudo systemctl restart ceviz-api</code></li>
           </ul>
         </div>
 
