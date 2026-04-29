@@ -13,6 +13,7 @@ interface Message {
     tokenUsage?: number;
     ragDocs?: number;
     domain?: string;
+    costUsd?: number;    // Phase 22: 직접 Cloud API 호출 비용
 }
 
 interface Session {
@@ -2208,7 +2209,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
     <span id="statusTxt">연결 중...</span>
     <span class="ws-badge" id="wsBadge"></span>
   </div>
-  <div class="token-bar" id="tokenBar">🔢 토큰 사용량: <span id="tokenCount">0</span> tokens</div>
+  <div class="token-bar" id="tokenBar">🔢 토큰 사용량: <span id="tokenCount">0</span> tokens <span class="today-cost-badge" id="todayCostBadge" style="display:none"></span></div>
   <div class="proj-bar" id="projBar" style="display:none">
     <span>📁</span>
     <span class="proj-bar-label" id="projBarLabel"></span>
@@ -3476,53 +3477,54 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
                 costUsd:      resp.costUsd,
             });
 
+            const totalTokens = resp.inputTokens + resp.outputTokens;
             const msg: Message = {
                 role: "assistant", content: resp.content,
                 agent:     provider === "anthropic" ? "Claude" : "Gemini",
                 tier:      2,
                 engine:    model,
-                tokenUsage: resp.inputTokens + resp.outputTokens,
+                tokenUsage: totalTokens,
+                costUsd:   resp.costUsd,
             };
             session.messages.push(msg);
             this._lastCloudResponse = msg;
             this._context.globalState.update(this._sessionsKey(), this._sessions);
-
             this._view?.webview.postMessage({
                 type:      "assistantMsg",
                 content:   resp.content,
-                agent:     provider === "anthropic" ? "Claude" : "Gemini",
+                agent:     msg.agent,
                 tier:      2,
                 engine:    model,
                 isCloud:   true,
-                tokenUsage: resp.inputTokens + resp.outputTokens,
+                tokenUsage: totalTokens,
                 costUsd:   resp.costUsd,
                 totalCostToday: this._todayCostUsd(),
             });
         } catch (e: any) {
-            session.messages.pop();
-            // 폴백: 다른 제공자 시도
+            // 주의: user 메시지는 _handleRoutedPrompt에서 이미 push됨 — 여기서 pop 금지
+            const errMsg = this._cloudErrorMessage(e, provider, adapter);
+
+            // 1단계 폴백: 다른 제공자 시도
             const fallbackProvider: "anthropic" | "gemini" = provider === "anthropic" ? "gemini" : "anthropic";
             const fallbackKey = await this._apiKeyGet(fallbackProvider);
             if (fallbackKey) {
                 const fallbackDomain = this._domainConfigs.find(
-                    d => d.modelMapping[provider] === model || d.modelMapping[fallbackProvider]
+                    d => d.modelMapping[fallbackProvider] !== undefined
                 );
                 const fallbackModel = fallbackDomain?.modelMapping[fallbackProvider];
                 if (fallbackModel) {
                     const fallbackAdapter: BaseAIAdapter =
                         fallbackProvider === "anthropic" ? this._anthropicAdapter : this._geminiAdapter;
-                    const errMsg = this._cloudErrorMessage(e, provider, adapter);
                     this._view?.webview.postMessage({
                         type: "routingFallback",
                         reason: `${errMsg} → ${fallbackProvider === "anthropic" ? "Claude" : "Gemini"} (${fallbackModel})로 재시도`
                     });
-                    session.messages.push({ role: "user", content: prompt });
                     await this._executeCloudCall(session, prompt, fallbackAdapter, fallbackModel, fallbackProvider);
                     return;
                 }
             }
-            // 최종 폴백: PN40
-            const errMsg = this._cloudErrorMessage(e, provider, adapter);
+
+            // 2단계 폴백: PN40 /prompt
             this._view?.webview.postMessage({
                 type: "routingFallback",
                 reason: `${errMsg} → PN40 로컬 모드로 폴백합니다.`

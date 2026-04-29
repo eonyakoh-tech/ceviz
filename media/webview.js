@@ -411,12 +411,19 @@ window.addEventListener("message", e => {
             break;
         case "assistantMsg":
             hideThink();
-            appendMsg("assistant", m.content, m.agent, m.tier, m.engine, m.isCloud, m.tokenUsage, m.ragDocs, m.domain);
+            appendMsg("assistant", m.content, m.agent, m.tier, m.engine, m.isCloud, m.tokenUsage, m.ragDocs, m.domain, m.costUsd);
             if (m.isCloud && m.tokenUsage) {
                 totalTokens = m.totalTokens || totalTokens;
                 document.getElementById("tokenCount").textContent = totalTokens;
             }
             if (m.isCloud) { lastCloudContent = m.content; }
+            if (m.totalCostToday !== undefined) {
+                const costEl = document.getElementById("todayCostBadge");
+                if (costEl) {
+                    costEl.textContent = "· $" + m.totalCostToday.toFixed(4) + " 오늘";
+                    costEl.style.display = "inline";
+                }
+            }
             updateTokenBarVisibility();
             break;
         case "learnComplete":
@@ -752,10 +759,10 @@ function renderChat() {
     area.innerHTML = "";
     const s = sessions.find(x => x.id === curId);
     if (!s) { return; }
-    s.messages.forEach(m => appendMsg(m.role, m.content, m.agent, m.tier, m.engine, m.tier === 2, m.tokenUsage, m.ragDocs, m.domain));
+    s.messages.forEach(m => appendMsg(m.role, m.content, m.agent, m.tier, m.engine, m.tier === 2, m.tokenUsage, m.ragDocs, m.domain, m.costUsd));
 }
 
-function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage, ragDocs, domain) {
+function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage, ragDocs, domain, costUsd) {
     const area = document.getElementById("chatArea");
     const div = document.createElement("div");
     div.className = "msg " + role;
@@ -779,7 +786,8 @@ function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage, ragD
         let metaTxt = (agent || "")
             + (tier !== undefined ? " · Tier" + tier : "")
             + (engine ? " · " + engine : "")
-            + (tokenUsage ? " · ~" + tokenUsage + " tokens" : "");
+            + (tokenUsage ? " · ~" + tokenUsage + " tokens" : "")
+            + (costUsd   ? " · $" + costUsd.toFixed(4) : "");
         if (ragDocs > 0) {
             const domainLabel = domain ? ` (${domain})` : "";
             metaTxt += ` · 📚 ${ragDocs}개 기억${domainLabel}`;
