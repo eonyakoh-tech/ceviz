@@ -38,7 +38,7 @@
 | 항목 | 내용 |
 |------|------|
 | 브랜치 | `extension-ui` |
-| 최신 Phase | Phase 22 Multi-Cloud AI 도메인 라우팅 완료 (2026-04-29) |
+| 최신 Phase | Phase 23 보안 강화 완료 (2026-04-29) |
 | 패키지 버전 | `ceviz-0.2.0` |
 | 백엔드 주소 | `100.69.155.43:8000` (기본값) |
 | 빌드 상태 | webpack 컴파일 정상 |
@@ -175,6 +175,17 @@
 - **보안**: API 키 SecretStorage 전용, 마스킹, 키 형식 사전 검증, PN40 프롬프트 인젝션 방어
 - **파일**: `src/panel.ts`, `media/webview.js`, `media/webview.css`, `pn40_domain_router.py`
 
+### ✅ Phase 23 — 보안 강화 (Security Hardening)
+- **완료**: 2026-04-29
+- **작업 1+2**: PN40 Bearer 토큰 인증 + IP 차단 리스트 + `.gitignore` API 키 보호
+- **작업 3**: PN40 Skills CRUD 백엔드 라우터 (`pn40_skills_patch.py`) — GET/POST/PUT/DELETE, `~/ceviz/skills/*.md` 영속
+- **작업 4+5**: XSS 방어 전수 (`escapeHtml` 적용 확대) + RSS 임시 파일 `finally` 삭제 보안
+- **작업 6+7+8**: EVOLUTION 패치 프롬프트 인젝션 방어 + CSP `nonce` 강화 + URL 화이트리스트 검증
+- **작업 9**: `sendPrompt()` API 키 감지 패턴 7종 (Claude/OpenAI/Gemini/xAI/GitHub/JWT) → 전송 차단 + `sec-warn-overlay` 경고 다이얼로그
+- **작업 10**: Cloud 탭 Section 7 — 보안 이벤트 로그 뷰어 (`getSecLog`/`clearSecLog`, `_renderSecLog()`, 최근 50건 표시)
+- **작업 11**: `_checkTokenAnomaly()` — 7일 평균 대비 5배·5000토큰 초과 시 `sec-anomaly-banner` 경고 (1시간 중복 방지)
+- **파일**: `src/panel.ts`, `media/webview.js`, `media/webview.css`, `pn40_skills_patch.py`
+
 ### 🔄 Phase 18 — RSS Feed 자동 수집 + Obsidian 저장
 - **상태**: 진행 중 (2026-04-27)
 - **아키텍처**: PN40 systemd user timer → rss_worker.py → vault_sync/ → Syncthing → T480s Vault
@@ -207,6 +218,7 @@
 | 2026-04-27 | Phase 20: CEVIZ 자기 개발 시스템 A~D단계 | EVOLUTION.md 신규, pn40_evolution_patch.py, 📈 버튼, 4단계 오버레이, 자동거부 12항목, 브랜치+컴파일 검증, 빌드·패키징 완료 |
 | 2026-04-28 | Phase 21: UI/UX 개선 & 사용성 강화 | 작업 1~6 전체 완료. 아이콘 교체(네온 뇌회로) · 자기 개발 명칭 · RAG 학습 · timeout 300s · 도움말 · 코딩 모델 설치. ceviz-0.2.0.vsix 재패키징 완료 |
 | 2026-04-29 | Phase 22: Multi-Cloud AI 도메인 라우팅 | 작업 1~14 전체 완료. SecretStorage API 키, BaseAIAdapter, PN40 분류기, 자동 라우팅, 확인 다이얼로그, 키워드 학습, 폴백 3단계, 토큰비용 UI, ☁️ Cloud 탭, 도움말 S13, i18n. ceviz-0.2.0.vsix 재패키징 완료 |
+| 2026-04-29 | Phase 23: 보안 강화 (Security Hardening) | 작업 1~11 전체 완료. PN40 Bearer 인증·IP차단, Skills CRUD 백엔드, XSS방어, RSS파일보안, EVOLUTION인젝션방어, CSP강화, URL화이트리스트, API키감지차단, 보안로그뷰어, 토큰이상감지. ceviz-0.2.0.vsix 재패키징 완료 |
 
 ---
 
