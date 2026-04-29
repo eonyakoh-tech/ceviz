@@ -38,7 +38,7 @@
 | 항목 | 내용 |
 |------|------|
 | 브랜치 | `extension-ui` |
-| 최신 Phase | Phase 23 보안 강화 완료 (2026-04-29) |
+| 최신 Phase | Phase 26 멀티 OS 배포 패키징 완료 (2026-04-29) |
 | 패키지 버전 | `ceviz-0.2.0` |
 | 백엔드 주소 | `100.69.155.43:8000` (기본값) |
 | 빌드 상태 | webpack 컴파일 정상 |
@@ -175,6 +175,20 @@
 - **보안**: API 키 SecretStorage 전용, 마스킹, 키 형식 사전 검증, PN40 프롬프트 인젝션 방어
 - **파일**: `src/panel.ts`, `media/webview.js`, `media/webview.css`, `pn40_domain_router.py`
 
+### ✅ Phase 26 — 멀티 OS 배포 패키징
+- **완료**: 2026-04-29
+- **작업 1**: `src/platform.ts` 신규 — getPlatform/homedir/expandTilde/cliExecutable/systemShell/cevizDataDir/projectsDir/defaultVaultSearchDirs/platformLabel/installScriptName
+- **작업 5**: `panel.ts` critical 수정 — process.env.HOME→homedir(), tilde→expandTilde(), claude/rg→cliExecutable(), Vault 탐색→defaultVaultSearchDirs(), 도움말 OS 분기
+- **작업 2**: `scripts/install-linux.sh` — 9단계, 멱등·롤백·검증, systemd 3종, --dry-run/--lang
+- **작업 3**: `scripts/install-macos.sh` — launchd plist 2종, Homebrew, iCloud Drive 지원
+- **작업 4**: `scripts/install-windows.ps1` — WSL2 우선→install-linux.sh 위임, 네이티브 폴백(winget+Task Scheduler+Defender예외)
+- **작업 6**: 설치 마법사 Step 1 OS 자동 감지 표시 (🐧🍎🪟 아이콘, 설치 스크립트명)
+- **작업 7**: `scripts/check-dependencies.sh/ps1` — 7종 의존성 버전 확인, --json, ready 시 자동 실행
+- **작업 8**: `package.json` keywords/categories 추가, README.md OS별 설치 섹션
+- **작업 9**: `_checkBackendUpdate()` (GitHub releases API 주간) + `_runBackendUpdate()` (backup→install→rollback), update.log
+- **작업 10**: `scripts/package-release.sh` — release/ 패키징, SHA256SUMS, README-install.md, gh release 안내
+- **파일**: `src/platform.ts`(신규), `src/panel.ts`, `media/webview.js`, `media/webview.css`, `package.json`, `README.md`, `scripts/install-linux.sh`, `scripts/install-macos.sh`, `scripts/install-windows.ps1`, `scripts/check-dependencies.sh`, `scripts/check-dependencies.ps1`, `scripts/package-release.sh`
+
 ### ✅ Phase 23 — 보안 강화 (Security Hardening)
 - **완료**: 2026-04-29
 - **작업 1+2**: PN40 Bearer 토큰 인증 + IP 차단 리스트 + `.gitignore` API 키 보호
@@ -219,6 +233,7 @@
 | 2026-04-28 | Phase 21: UI/UX 개선 & 사용성 강화 | 작업 1~6 전체 완료. 아이콘 교체(네온 뇌회로) · 자기 개발 명칭 · RAG 학습 · timeout 300s · 도움말 · 코딩 모델 설치. ceviz-0.2.0.vsix 재패키징 완료 |
 | 2026-04-29 | Phase 22: Multi-Cloud AI 도메인 라우팅 | 작업 1~14 전체 완료. SecretStorage API 키, BaseAIAdapter, PN40 분류기, 자동 라우팅, 확인 다이얼로그, 키워드 학습, 폴백 3단계, 토큰비용 UI, ☁️ Cloud 탭, 도움말 S13, i18n. ceviz-0.2.0.vsix 재패키징 완료 |
 | 2026-04-29 | Phase 23: 보안 강화 (Security Hardening) | 작업 1~11 전체 완료. PN40 Bearer 인증·IP차단, Skills CRUD 백엔드, XSS방어, RSS파일보안, EVOLUTION인젝션방어, CSP강화, URL화이트리스트, API키감지차단, 보안로그뷰어, 토큰이상감지. ceviz-0.2.0.vsix 재패키징 완료 |
+| 2026-04-29 | Phase 26: 멀티 OS 배포 패키징 | 작업 1~10 전체 완료. platform.ts, OS별 설치스크립트 3종, 의존성확인 2종, 마법사OS표시, 업데이트메커니즘, package-release.sh. ceviz-0.2.0.vsix 재패키징 완료 |
 
 ---
 
