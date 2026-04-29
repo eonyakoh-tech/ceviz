@@ -584,3 +584,6 @@ body[dir="rtl"] .drop-menu{text-align:right}
 .akey-val-btn{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground)}
 .akey-del-btn{background:none;color:#c00;border-color:rgba(200,40,40,.3)}
 .usage-summary{margin-bottom:6px}
+.pn40-auth-section{border-color:var(--vscode-focusBorder);background:rgba(0,100,200,.04)}
+.cloud-sec-desc{font-size:10.5px;color:var(--vscode-descriptionForeground);margin:0 0 8px;line-height:1.5}
+.pn40-auth-hint{font-size:10px;color:var(--vscode-descriptionForeground);background:var(--vscode-editor-inactiveSelectionBackground);border-radius:3px;padding:6px 8px;margin-top:8px;line-height:1.6}

@@ -745,6 +745,15 @@ window.addEventListener("message", e => {
             _renderCloudModelDropdowns();
             showCtxToast("☁️ 클라우드 모델 목록 갱신 완료");
             break;
+
+        // ── Phase 23: PN40 토큰 상태 ────────────────────────────────────────
+        case "pn40TokenStatus":
+            _renderPn40TokenStatus(m.isSet);
+            break;
+
+        case "pn40TokenResult":
+            _onPn40TokenResult(m);
+            break;
     }
 });
 
@@ -2894,6 +2903,42 @@ function _initCloudTab() {
     vscode.postMessage({ type: "tokenUsageGet" });
     vscode.postMessage({ type: "apiKeyGetStatus" });
 }
+
+// ── Phase 23: PN40 토큰 UI ───────────────────────────────────────────────────
+
+function _renderPn40TokenStatus(isSet) {
+    const badge = document.getElementById("pn40TokenBadge");
+    const inp   = document.getElementById("pn40TokenInp");
+    if (!badge) { return; }
+    if (isSet) {
+        badge.textContent = "✅ 설정됨";
+        badge.className = "akey-badge valid";
+        if (inp) { inp.placeholder = "토큰 변경 시 새 값 입력"; }
+    } else {
+        badge.textContent = "⬜ 미설정";
+        badge.className = "akey-badge unset";
+        if (inp) { inp.placeholder = "토큰을 붙여넣으세요..."; }
+    }
+}
+
+function _onPn40TokenResult(m) {
+    const inp = document.getElementById("pn40TokenInp");
+    if (inp && m.ok) { inp.value = ""; }
+    showCtxToast(m.msg || (m.ok ? "✅ 저장됨" : "❌ 오류"));
+    vscode.postMessage({ type: "pn40TokenGetStatus" });
+}
+
+document.getElementById("pn40TokenSaveBtn")?.addEventListener("click", () => {
+    const token = document.getElementById("pn40TokenInp")?.value?.trim();
+    if (!token) { showCtxToast("PN40 토큰을 입력하세요."); return; }
+    vscode.postMessage({ type: "pn40TokenSave", token });
+});
+
+document.getElementById("pn40TokenDelBtn")?.addEventListener("click", () => {
+    if (confirm("PN40 API 토큰을 삭제합니다. 이후 PN40 요청이 인증 없이 전송됩니다.")) {
+        vscode.postMessage({ type: "pn40TokenDelete" });
+    }
+});
 
 // ── Cloud 탭 이벤트 바인딩 ───────────────────────────────────────────────────
 

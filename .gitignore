@@ -5,3 +5,13 @@ node_modules
 *.vsix
 Chat window design.md
 pn40_router_patch.py
+
+# ── Phase 23: 보안 민감 파일 ─────────────────────────────────────────────────
+.env
+.env.*
+.api_token
+security.log
+*.log
+*.log.gz
+secrets/
+credentials/

@@ -319,6 +319,10 @@ class GeminiAdapter extends BaseAIAdapter {
 
 export class CevizPanel implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
+    // ── Phase 23: 인증 axios 인스턴스 ──────────────────────────────────────────
+    private _http = axios.create(); // PN40 API 호출 전용 — 토큰 헤더 자동 첨부
+    private _pn40Token: string = ""; // SecretStorage에서 로드한 토큰 캐시
+
     private _sessions: Session[] = [];
     private _currentSessionId = "";
     private _englishMode = false;
@@ -392,6 +396,8 @@ export class CevizPanel implements vscode.WebviewViewProvider {
         }
         if (this._sessions.length === 0) { this._createSession(); }
         else { this._currentSessionId = this._sessions[this._sessions.length - 1].id; }
+        // Phase 23: 저장된 PN40 토큰으로 axios 인스턴스 초기화 (비동기)
+        this._initHttpClient().catch(() => {});
     }
 
     private _createSession(): Session {
@@ -460,10 +466,57 @@ export class CevizPanel implements vscode.WebviewViewProvider {
         return `http://${ip}:8000`;
     }
 
+    // ── Phase 23: 인증 axios 인스턴스 초기화 ──────────────────────────────────
+
+    private async _initHttpClient(): Promise<void> {
+        const token = await this._context.secrets.get("ceviz.apiKey.pn40") ?? "";
+        this._pn40Token = token;
+        if (token) {
+            this._http.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+        } else {
+            delete this._http.defaults.headers.common["Authorization"];
+        }
+    }
+
+    private async _handlePn40TokenSave(rawToken: string): Promise<void> {
+        const token = (rawToken ?? "").trim();
+        if (!token || token.length < 10) {
+            this._view?.webview.postMessage({
+                type: "pn40TokenResult", ok: false,
+                msg: "토큰이 너무 짧습니다. ~/ceviz/.api_token 내용을 그대로 붙여넣으세요."
+            });
+            return;
+        }
+        await this._context.secrets.store("ceviz.apiKey.pn40", token);
+        await this._initHttpClient();
+        // PN40 /status 호출로 연결 검증 (토큰 인증 면제 엔드포인트)
+        const connected = this._isOnline;
+        this._view?.webview.postMessage({
+            type: "pn40TokenResult", ok: true,
+            msg: connected
+                ? "✅ PN40 API 토큰 저장 완료. 인증이 활성화되었습니다."
+                : "✅ 토큰 저장 완료. (PN40 서버 오프라인 — 재연결 시 자동 적용)"
+        });
+    }
+
+    private async _handlePn40TokenDelete(): Promise<void> {
+        await this._context.secrets.delete("ceviz.apiKey.pn40");
+        await this._initHttpClient();
+        this._view?.webview.postMessage({
+            type: "pn40TokenResult", ok: true,
+            msg: "PN40 API 토큰이 삭제되었습니다. 인증 없이 동작합니다."
+        });
+    }
+
+    private async _sendPn40TokenStatus(): Promise<void> {
+        const isSet = !!(await this._context.secrets.get("ceviz.apiKey.pn40"));
+        this._view?.webview.postMessage({ type: "pn40TokenStatus", isSet });
+    }
+
     private async _checkServerStatus() {
         const url = `${this._getUrl()}/status`;
         try {
-            const r = await axios.get(url, { timeout: 5000 });
+            const r = await this._http.get(url, { timeout: 5000 });
             const wasOnline = this._isOnline;
             this._isOnline = true;
             this._view?.webview.postMessage({ type: "serverStatus", data: r.data });
@@ -542,25 +595,27 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                     this._sync();
                     await this._checkServerStatus();
                     this._view?.webview.postMessage({ type: "skillsSync", skills: this._skills });
+                    // Phase 23: PN40 토큰 상태 전송
+                    await this._sendPn40TokenStatus();
                     // Phase 22: 7일 경과 시 자동 모델 갱신 (백그라운드, 실패 무시)
                     if (Date.now() - this._lastModelRefresh > 7 * 24 * 60 * 60 * 1000) {
                         this._refreshCloudModels().catch(() => {});
                     }
                     try {
-                        const r = await axios.get(`${this._getUrl()}/models`, { timeout: 5000 });
+                        const r = await this._http.get(`${this._getUrl()}/models`, { timeout: 5000 });
                         this._view?.webview.postMessage({ type: "models", list: r.data.models });
                     } catch {}
                     // RAG 통계 (있으면 전송, 없으면 무시)
                     try {
-                        const rs = await axios.get(`${this._getUrl()}/rag/stats`, { timeout: 3000 });
+                        const rs = await this._http.get(`${this._getUrl()}/rag/stats`, { timeout: 3000 });
                         this._view?.webview.postMessage({ type: "ragStats", stats: rs.data });
                     } catch {}
                     break;
 
                 case "ragReset":
                     try {
-                        await axios.post(`${this._getUrl()}/rag/reset`, { domain: msg.domain }, { timeout: 5000 });
-                        const rs = await axios.get(`${this._getUrl()}/rag/stats`, { timeout: 3000 });
+                        await this._http.post(`${this._getUrl()}/rag/reset`, { domain: msg.domain }, { timeout: 5000 });
+                        const rs = await this._http.get(`${this._getUrl()}/rag/stats`, { timeout: 3000 });
                         this._view?.webview.postMessage({ type: "ragStats", stats: rs.data });
                     } catch (e: any) {
                         this._view?.webview.postMessage({ type: "importResult", ok: false, msg: "RAG 초기화 실패: " + e.message });
@@ -677,7 +732,7 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                         this._context.globalState.update("ceviz.currentProject", pname);
                         const ctx = this._readContext(pname);
                         this._view?.webview.postMessage({ type: "projectCreated", name: pname, context: ctx });
-                        axios.post(`${this._getUrl()}/projects/${encodeURIComponent(pname)}/context`,
+                        this._http.post(`${this._getUrl()}/projects/${encodeURIComponent(pname)}/context`,
                             { content: ctx }, { timeout: 5000 }).catch(() => {});
                     }
                     break;
@@ -694,7 +749,7 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                     this._view?.webview.postMessage({
                         type: "projectLoaded", name: pname, context: ctx, lastLog, inProgress
                     });
-                    axios.get(`${this._getUrl()}/projects/${encodeURIComponent(pname)}/context`,
+                    this._http.get(`${this._getUrl()}/projects/${encodeURIComponent(pname)}/context`,
                         { timeout: 5000 }).catch(() => {});
                     break;
                 }
@@ -806,6 +861,18 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                     break;
 
                 // ── Phase 22: Multi-Cloud AI Domain Routing ──────────────
+
+                case "pn40TokenSave":
+                    await this._handlePn40TokenSave(msg.token);
+                    break;
+
+                case "pn40TokenDelete":
+                    await this._handlePn40TokenDelete();
+                    break;
+
+                case "pn40TokenGetStatus":
+                    await this._sendPn40TokenStatus();
+                    break;
 
                 case "apiKeySave":
                     await this._handleApiKeySave(msg.provider, msg.key);
@@ -970,7 +1037,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
 
         this._abortController = new AbortController();
         try {
-            const res = await axios.post(`${this._getUrl()}/prompt`,
+            const res = await this._http.post(`${this._getUrl()}/prompt`,
                 { prompt: finalPrompt, model: this._model },
                 { timeout: 200000, signal: this._abortController.signal }
             );
@@ -1210,7 +1277,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
 
     private async _learnFromCloud(response: string) {
         try {
-            const r = await axios.post(`${this._getUrl()}/evolution/absorb`,
+            const r = await this._http.post(`${this._getUrl()}/evolution/absorb`,
                 { content: response, source_path: "", collection: "general" },
                 { timeout: 300000 }
             );
@@ -1236,7 +1303,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
     private async _handleOrchestration(plan: string) {
         this._view?.webview.postMessage({ type: "orchStatus", status: "running" });
         try {
-            const response = await axios.post(
+            const response = await this._http.post(
                 `${this._getUrl()}/orchestrate`,
                 { plan, model: this._model },
                 { responseType: "stream", timeout: 600000 }
@@ -1282,9 +1349,9 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
         // non-blocking PN40 sync
         const url = `${this._getUrl()}/skills`;
         if (isEdit) {
-            axios.put(`${url}/${skill.id}`, skill, { timeout: 5000 }).catch(() => {});
+            this._http.put(`${url}/${skill.id}`, skill, { timeout: 5000 }).catch(() => {});
         } else {
-            axios.post(url, skill, { timeout: 5000 }).catch(() => {});
+            this._http.post(url, skill, { timeout: 5000 }).catch(() => {});
         }
     }
 
@@ -1292,7 +1359,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
         this._skills = this._skills.filter(s => s.id !== id);
         this._context.globalState.update("ceviz.skills", this._skills);
         this._view?.webview.postMessage({ type: "skillDeleted", skills: this._skills });
-        axios.delete(`${this._getUrl()}/skills/${id}`, { timeout: 5000 }).catch(() => {});
+        this._http.delete(`${this._getUrl()}/skills/${id}`, { timeout: 5000 }).catch(() => {});
     }
 
     private async _exportSkills() {
@@ -1665,7 +1732,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
 
     private async _evoAbsorb(content: string, filePath: string, collection: string): Promise<void> {
         try {
-            const r = await axios.post(`${this._getUrl()}/evolution/absorb`,
+            const r = await this._http.post(`${this._getUrl()}/evolution/absorb`,
                 { content, source_path: filePath, collection }, { timeout: 300000 });
             const d = r.data;
             this._view?.webview.postMessage({
@@ -1698,7 +1765,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
         }
         this._view?.webview.postMessage({ type: "evoProposing" });
         try {
-            const r = await axios.post(`${this._getUrl()}/evolution/propose-prompt`,
+            const r = await this._http.post(`${this._getUrl()}/evolution/propose-prompt`,
                 { content: this._evoLastAbsorbContent }, { timeout: 300000 });
             this._view?.webview.postMessage({
                 type: "evoPromptProposal",
@@ -1756,7 +1823,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
     private async _evoDetectModel(text: string): Promise<void> {
         this._view?.webview.postMessage({ type: "evoDetecting" });
         try {
-            const r = await axios.post(`${this._getUrl()}/evolution/detect-model`,
+            const r = await this._http.post(`${this._getUrl()}/evolution/detect-model`,
                 { content: text }, { timeout: 300000 });
             this._view?.webview.postMessage({
                 type: "evoModelDetected",
@@ -1804,7 +1871,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
     private async _evoProposeCode(oldCode: string, description: string, targetFile: string): Promise<void> {
         this._view?.webview.postMessage({ type: "evoProposing" });
         try {
-            const r = await axios.post(`${this._getUrl()}/evolution/propose-code`,
+            const r = await this._http.post(`${this._getUrl()}/evolution/propose-code`,
                 { old_code: oldCode, description, target_file: targetFile },
                 { timeout: 300000 });
             const { new_code, explanation } = r.data;
@@ -1985,7 +2052,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
 
     private async _rssGetFeeds() {
         try {
-            const r = await axios.get(`${this._getUrl()}/rss/feeds`, { timeout: 5000 });
+            const r = await this._http.get(`${this._getUrl()}/rss/feeds`, { timeout: 5000 });
             this._view?.webview.postMessage({ type: "rssFeeds", feeds: r.data.feeds || [] });
         } catch (e: any) {
             this._view?.webview.postMessage({ type: "rssFeeds", feeds: [], error: e.message });
@@ -1994,7 +2061,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
 
     private async _rssAddFeed(platform: string, url: string, name: string, interval: string, mode = "summary") {
         try {
-            await axios.post(`${this._getUrl()}/rss/feeds`,
+            await this._http.post(`${this._getUrl()}/rss/feeds`,
                 { platform, url, name, interval, mode }, { timeout: 10000 });
             await this._rssGetFeeds();
             this._view?.webview.postMessage({ type: "rssFeedSaved" });
@@ -2008,7 +2075,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
 
     private async _rssDeleteFeed(id: string) {
         try {
-            await axios.delete(`${this._getUrl()}/rss/feeds/${encodeURIComponent(id)}`,
+            await this._http.delete(`${this._getUrl()}/rss/feeds/${encodeURIComponent(id)}`,
                 { timeout: 5000 });
             await this._rssGetFeeds();
         } catch (e: any) {
@@ -2022,7 +2089,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
     private async _rssFetchNow() {
         this._view?.webview.postMessage({ type: "rssFetchStatus", status: "running" });
         try {
-            await axios.post(`${this._getUrl()}/rss/fetch/now`, {}, { timeout: 10000 });
+            await this._http.post(`${this._getUrl()}/rss/fetch/now`, {}, { timeout: 10000 });
             this._view?.webview.postMessage({ type: "rssFetchStatus", status: "triggered" });
             setTimeout(() => { if (this._isOnline) { this._rssGetNotifications(); } }, 30000);
         } catch (e: any) {
@@ -2034,7 +2101,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
 
     private async _rssGetNotifications() {
         try {
-            const r = await axios.get(`${this._getUrl()}/rss/notifications`, { timeout: 5000 });
+            const r = await this._http.get(`${this._getUrl()}/rss/notifications`, { timeout: 5000 });
             this._view?.webview.postMessage({
                 type: "rssNotifications",
                 notifications: r.data.notifications || [],
@@ -2045,7 +2112,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
 
     private async _rssAckAll() {
         try {
-            await axios.post(`${this._getUrl()}/rss/notifications/ack`, null, { timeout: 5000 });
+            await this._http.post(`${this._getUrl()}/rss/notifications/ack`, null, { timeout: 5000 });
             await this._rssGetNotifications();
         } catch (e: any) {
             this._view?.webview.postMessage({ type: "rssError", msg: e.message });
@@ -2074,7 +2141,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
 
     private async _rssUpdateSettings(settings: Record<string, string>) {
         try {
-            await axios.put(`${this._getUrl()}/rss/settings`, settings, { timeout: 5000 });
+            await this._http.put(`${this._getUrl()}/rss/settings`, settings, { timeout: 5000 });
         } catch (e: any) {
             this._view?.webview.postMessage({ type: "rssError", msg: e.message });
         }
@@ -2085,8 +2152,8 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
     private async _wizardGetInfo() {
         try {
             const [statusRes, modelsRes] = await Promise.allSettled([
-                axios.get(`${this._getUrl()}/status`, { timeout: 8000 }),
-                axios.get(`${this._getUrl()}/models`, { timeout: 8000 })
+                this._http.get(`${this._getUrl()}/status`, { timeout: 8000 }),
+                this._http.get(`${this._getUrl()}/models`, { timeout: 8000 })
             ]);
             const serverOk = statusRes.status === "fulfilled";
             if (!serverOk) {
@@ -2120,7 +2187,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
             type: "wizardInstallProgress", data: { status: "연결 중..." }
         });
         try {
-            const response = await axios.post(
+            const response = await this._http.post(
                 `${this._getUrl()}/models/pull`,
                 { name },
                 { responseType: "stream", timeout: 1800000 }
@@ -2156,7 +2223,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
 
     private async _wizardDeleteModel(name: string) {
         try {
-            await axios.delete(`${this._getUrl()}/models/delete`, {
+            await this._http.delete(`${this._getUrl()}/models/delete`, {
                 data: { name },
                 timeout: 30000
             });
@@ -2521,6 +2588,25 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
 <!-- Phase 22: Cloud AI 라우팅 탭 패널 -->
 <div class="cloud-area" id="cloudArea">
   <div class="cloud-scroll">
+
+    <!-- Section 0: PN40 API 인증 토큰 -->
+    <div class="cloud-section pn40-auth-section">
+      <div class="cloud-sec-title">🔐 PN40 API 인증 토큰</div>
+      <p class="cloud-sec-desc">PN40 서버 인증 토큰입니다. PN40에서 <code>cat ~/ceviz/.api_token</code> 으로 확인 후 입력하세요.</p>
+      <div class="akey-row" id="pn40TokenRow">
+        <div class="akey-label">PN40 Bearer 토큰</div>
+        <span class="akey-badge unset" id="pn40TokenBadge">⬜ 미설정</span>
+        <div class="akey-input-row">
+          <input type="password" class="akey-inp" id="pn40TokenInp" placeholder="토큰을 붙여넣으세요..." autocomplete="off" spellcheck="false">
+          <button class="akey-save-btn" id="pn40TokenSaveBtn">저장</button>
+          <button class="akey-del-btn" id="pn40TokenDelBtn">삭제</button>
+        </div>
+      </div>
+      <div class="pn40-auth-hint">
+        <b>PN40 측 설치:</b> <code>cp pn40_auth_patch.py ~/ceviz/auth.py</code>
+        → api_server.py에 통합 → <code>sudo systemctl restart ceviz-api</code>
+      </div>
+    </div>
 
     <!-- Section 1: API 키 관리 -->
     <div class="cloud-section">
@@ -3471,7 +3557,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
             .map(d => d.key);
         if (activeKeys.length === 0) { return null; }
         try {
-            const resp = await axios.post(
+            const resp = await this._http.post(
                 `${this._getUrl()}/classify-domain`,
                 { question: prompt.slice(0, 500), active_domains: activeKeys },
                 { timeout: 10_000 }
@@ -3684,7 +3770,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
                 reason: `${errMsg} → PN40 로컬 모드로 폴백합니다.`
             });
             try {
-                const res = await axios.post(`${this._getUrl()}/prompt`,
+                const res = await this._http.post(`${this._getUrl()}/prompt`,
                     { prompt, model: this._model },
                     { timeout: 200000 }
                 );
@@ -3712,7 +3798,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
         this._view?.webview.postMessage({ type: "thinking" });
         this._abortController = new AbortController();
         try {
-            const res = await axios.post(`${this._getUrl()}/prompt`,
+            const res = await this._http.post(`${this._getUrl()}/prompt`,
                 { prompt: finalPrompt, model: this._model },
                 { timeout: 200000, signal: this._abortController.signal }
             );
@@ -3871,7 +3957,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
         this._context.globalState.update("ceviz.domainConfigs", this._domainConfigs);
         // PN40에도 동기화 (실패해도 무시)
         try {
-            await axios.put(
+            await this._http.put(
                 `${this._getUrl()}/classify-domain/config`,
                 { domains: this._domainConfigs },
                 { timeout: 5_000 }
@@ -3900,7 +3986,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
         }
         // PN40에도 동기화
         try {
-            await axios.post(
+            await this._http.post(
                 `${this._getUrl()}/classify-domain/learn`,
                 { domain_key: domainKey, keywords },
                 { timeout: 5_000 }
