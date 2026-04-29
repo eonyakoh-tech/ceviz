@@ -1690,16 +1690,30 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
         return path.join(this._evoGetSourcePath(), "EVOLUTION.md");
     }
 
+    // Phase 23: EVOLUTION.md 인젝션 방어 — 사용자 입력 sanitize
+    private _evoSanitizeField(text: string): string {
+        return text
+            .slice(0, 500)                              // 길이 제한
+            .replace(/[<>]/g, "")                       // HTML 태그 문자 제거
+            .replace(/`{3,}/g, "` ` `")                 // 코드블록 트리플-백틱 분리
+            .replace(/\r?\n/g, " ")                     // 줄바꿈 → 공백 (마크다운 구조 보호)
+            .trim();
+    }
+
     private _evoWriteHistory(rec: EvoRecord): void {
         const mdPath = this._evoEvolutionMdPath();
         const now = new Date().toLocaleString("ko-KR", { hour12: false });
+        // 사용자/LLM 제공 필드는 모두 sanitize 후 기록
+        const safeTitle  = this._evoSanitizeField(rec.title);
+        const safeDetail = this._evoSanitizeField(rec.detail);
+        const safeBranch = rec.branch ? this._evoSanitizeField(rec.branch) : undefined;
         const lines = [
-            `\n## [${now}] ${rec.stage}단계: ${rec.title}`,
+            `\n## [${now}] ${rec.stage}단계: ${safeTitle}`,
             `- **단계**: ${rec.stage}`,
             `- **일시**: ${rec.date}`,
-            `- **내용**: ${rec.detail}`,
+            `- **내용**: ${safeDetail}`,
             `- **적용**: ${rec.applied ? "✅ 적용됨" : "❌ 거부됨"}`,
-            ...(rec.branch ? [`- **브랜치**: \`${rec.branch}\``] : []),
+            ...(safeBranch ? [`- **브랜치**: \`${safeBranch}\``] : []),
             "",
         ].join("\n");
         try { fs.appendFileSync(mdPath, lines, "utf8"); } catch {}
@@ -2254,7 +2268,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}' ${webview.cspSource};">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data:; font-src ${webview.cspSource}; connect-src 'none';">
 <link rel="stylesheet" href="${styleUri}">
 </head>
 <body>
@@ -4050,9 +4064,16 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
             }
             const adapter: BaseAIAdapter = provider === "anthropic"
                 ? this._anthropicAdapter : this._geminiAdapter;
+            // Phase 23 작업 8: 모델 목록 조회는 어댑터 BASE URL(화이트리스트)만 사용
+            // AnthropicAdapter.BASE = "https://api.anthropic.com"
+            // GeminiAdapter.BASE    = "https://generativelanguage.googleapis.com"
             try {
                 const models = await adapter.listModels(key);
-                results.push({ provider, models, ok: true });
+                // 응답 검증: 문자열 배열, 최대 200개
+                const validated = models
+                    .filter(m => typeof m === "string" && m.length > 0 && m.length < 100)
+                    .slice(0, 200);
+                results.push({ provider, models: validated, ok: true });
             } catch {
                 results.push({ provider, models: [], ok: false });
             }
@@ -4060,5 +4081,24 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
         this._lastModelRefresh = Date.now();
         this._context.globalState.update("ceviz.lastModelRefresh", this._lastModelRefresh);
         this._view?.webview.postMessage({ type: "cloudModels", results, refreshedAt: this._lastModelRefresh });
+    }
+
+    // ── Phase 23: 보안 이벤트 로그 (로컬, 외부 전송 금지) ────────────────────
+
+    private _securityLog(event: string, detail: string): void {
+        const entry = {
+            timestamp: new Date().toISOString(),
+            event,
+            detail: detail.slice(0, 200),
+        };
+        const log: Array<typeof entry> = this._context.globalState.get("ceviz.securityLog", []);
+        log.unshift(entry);
+        // 최근 500건만 유지
+        if (log.length > 500) { log.splice(500); }
+        this._context.globalState.update("ceviz.securityLog", log);
+    }
+
+    public getSecurityLog(): Array<{ timestamp: string; event: string; detail: string }> {
+        return this._context.globalState.get("ceviz.securityLog", []);
     }
 }
