@@ -2236,6 +2236,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
   <button class="tab" id="dashTab">🎛️ Soti</button>
   <button class="tab" id="skillTab">⚡ Skill</button>
   <button class="tab" id="rssTab">📡 RSS</button>
+  <button class="tab" id="cloudTab">☁️ Cloud</button>
 </div>
 
 <!-- 채팅 영역 -->
@@ -2510,6 +2511,100 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
       <button class="lang-opt" data-lang="ru">🇷🇺 Русский</button>
     </div>
     <button class="lang-confirm" id="langConfirm">확인</button>
+  </div>
+</div>
+
+<!-- Phase 22: Cloud AI 라우팅 탭 패널 -->
+<div class="cloud-area" id="cloudArea">
+  <div class="cloud-scroll">
+
+    <!-- Section 1: API 키 관리 -->
+    <div class="cloud-section">
+      <div class="cloud-sec-title">🔑 API 키 관리</div>
+
+      <div class="akey-row" id="apiKeyRow-anthropic">
+        <div class="akey-label">Anthropic Claude</div>
+        <span class="akey-badge unset" id="apiKeyBadge-anthropic">⬜ 미설정</span>
+        <div class="akey-input-row">
+          <input type="password" class="akey-inp" id="apiKeyInp-anthropic" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
+          <button class="akey-save-btn" data-prov="anthropic">저장</button>
+          <button class="akey-val-btn" id="apiKeyValBtn-anthropic" data-prov="anthropic">검증</button>
+          <button class="akey-del-btn" data-prov="anthropic">삭제</button>
+        </div>
+      </div>
+
+      <div class="akey-row" id="apiKeyRow-gemini">
+        <div class="akey-label">Google Gemini</div>
+        <span class="akey-badge unset" id="apiKeyBadge-gemini">⬜ 미설정</span>
+        <div class="akey-input-row">
+          <input type="password" class="akey-inp" id="apiKeyInp-gemini" placeholder="AIza..." autocomplete="off" spellcheck="false">
+          <button class="akey-save-btn" data-prov="gemini">저장</button>
+          <button class="akey-val-btn" id="apiKeyValBtn-gemini" data-prov="gemini">검증</button>
+          <button class="akey-del-btn" data-prov="gemini">삭제</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 4: 자동 라우팅 -->
+    <div class="cloud-section">
+      <div class="cloud-sec-title">⚡ 자동 라우팅</div>
+      <div class="cloud-row">
+        <span class="cloud-row-label">자동 라우팅</span>
+        <label class="toggle-lbl">
+          <input type="checkbox" id="routingEnabledTog" checked>
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+      <div class="cloud-row">
+        <span class="cloud-row-label">분류 신뢰도 임계값 <span id="routingThresholdVal">60%</span></span>
+        <input type="range" id="routingThresholdSlider" min="40" max="90" value="60" step="5" class="cloud-slider">
+      </div>
+    </div>
+
+    <!-- Section 2: 도메인 관리 -->
+    <div class="cloud-section">
+      <div class="cloud-sec-title">🗂️ 도메인 관리</div>
+      <div class="cloud-domain-actions">
+        <button class="cloud-btn-sm" id="domainAddBtn">+ 새 도메인</button>
+        <button class="cloud-btn-sm" id="domainRefreshBtn">↺ 도메인 새로고침</button>
+      </div>
+      <div class="cloud-table-wrap">
+        <table class="domain-table">
+          <thead><tr>
+            <th>활성</th><th>도메인</th><th>키워드</th>
+            <th>Claude 모델</th><th>Gemini 모델</th><th></th>
+          </tr></thead>
+          <tbody id="domainTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Section 5: 사용량 & 한도 -->
+    <div class="cloud-section">
+      <div class="cloud-sec-title">📊 사용량 & 한도</div>
+      <div id="tokenUsageSummary" class="usage-summary"></div>
+      <div class="usage-bar" id="tokenUsageBar"></div>
+      <div class="cloud-row">
+        <span class="cloud-row-label">일별 토큰 한도 (0=무제한)</span>
+        <input type="number" id="dailyLimitInp" class="cloud-num-inp" min="0" step="10000" value="0">
+      </div>
+      <div class="cloud-row">
+        <span class="cloud-row-label">월별 토큰 한도 (0=무제한)</span>
+        <input type="number" id="monthlyLimitInp" class="cloud-num-inp" min="0" step="100000" value="0">
+      </div>
+      <button class="cloud-btn-sm" id="tokenLimitSaveBtn">한도 저장</button>
+    </div>
+
+    <!-- Section 6: 모델 자동 갱신 -->
+    <div class="cloud-section">
+      <div class="cloud-sec-title">🔄 모델 자동 갱신</div>
+      <div class="cloud-row">
+        <span class="cloud-row-label">마지막 갱신</span>
+        <span class="cloud-row-value" id="lastModelRefreshTxt">미갱신</span>
+      </div>
+      <button class="cloud-btn-sm" id="modelRefreshBtn">지금 모델 목록 갱신</button>
+    </div>
+
   </div>
 </div>
 

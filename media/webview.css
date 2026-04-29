@@ -560,3 +560,27 @@ body[dir="rtl"] .drop-menu{text-align:right}
 .usage-bar-fill{width:16px;background:var(--vscode-button-background);border-radius:2px 2px 0 0;min-height:2px;transition:height .3s}
 .usage-bar-label{font-size:9px;color:var(--vscode-descriptionForeground)}
 .today-cost-badge{font-size:10px;color:var(--vscode-descriptionForeground);opacity:.8}
+.cloud-area{display:none;flex-direction:column;overflow:hidden;height:100%}
+.cloud-area.show{display:flex}
+.cloud-scroll{overflow-y:auto;flex:1;padding:8px 10px 20px}
+.cloud-section{margin-bottom:14px;border:1px solid var(--vscode-widget-border);border-radius:4px;padding:10px 12px}
+.cloud-sec-title{font-size:12px;font-weight:700;margin-bottom:8px;color:var(--vscode-editor-foreground)}
+.cloud-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:6px}
+.cloud-row-label{font-size:11px;color:var(--vscode-descriptionForeground);flex:1}
+.cloud-row-value{font-size:11px}
+.cloud-slider{flex:1;max-width:120px;accent-color:var(--vscode-focusBorder)}
+.cloud-num-inp{width:100px;font-size:11px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border);border-radius:3px;padding:2px 5px}
+.cloud-btn-sm{font-size:11px;padding:3px 9px;background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground);border:1px solid var(--vscode-widget-border);border-radius:3px;cursor:pointer;margin-right:4px}
+.cloud-btn-sm:hover{background:var(--vscode-button-secondaryHoverBackground)}
+.cloud-domain-actions{margin-bottom:6px}
+.cloud-table-wrap{overflow-x:auto}
+.akey-row{margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--vscode-widget-border)}
+.akey-row:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none}
+.akey-label{font-size:11.5px;font-weight:600;margin-bottom:4px}
+.akey-input-row{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:4px}
+.akey-inp{flex:1;min-width:120px;font-size:11px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border);border-radius:3px;padding:3px 6px}
+.akey-save-btn,.akey-val-btn,.akey-del-btn{font-size:10.5px;padding:3px 7px;border:1px solid var(--vscode-widget-border);border-radius:3px;cursor:pointer;white-space:nowrap}
+.akey-save-btn{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border-color:var(--vscode-button-background)}
+.akey-val-btn{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground)}
+.akey-del-btn{background:none;color:#c00;border-color:rgba(200,40,40,.3)}
+.usage-summary{margin-bottom:6px}

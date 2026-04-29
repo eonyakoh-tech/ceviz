@@ -956,16 +956,20 @@ function switchTab(tab) {
     const isDash  = tab === "dash";
     const isSkill = tab === "skill";
     const isRss   = tab === "rss";
+    const isCloud = tab === "cloud";
     document.getElementById("chatTab").classList.toggle("on", isChat);
     document.getElementById("dashTab").classList.toggle("on", isDash);
     document.getElementById("skillTab").classList.toggle("on", isSkill);
     document.getElementById("rssTab").classList.toggle("on", isRss);
+    document.getElementById("cloudTab").classList.toggle("on", isCloud);
     document.getElementById("chatArea").style.display = isChat ? "flex" : "none";
     document.getElementById("dashArea").classList.toggle("show", isDash);
     document.getElementById("skillArea").classList.toggle("show", isSkill);
     document.getElementById("rssArea").classList.toggle("show", isRss);
+    document.getElementById("cloudArea").classList.toggle("show", isCloud);
     document.getElementById("soticBtn").classList.toggle("on", isDash);
     document.getElementById("skillBtn").classList.toggle("on", isSkill);
+    if (isCloud) { _initCloudTab(); }
 }
 
 /* ── SKILL CRUD ── */
@@ -1116,6 +1120,7 @@ document.getElementById("rssTab").onclick = () => {
     vscode.postMessage({ type: "rssGetFeeds" });
     vscode.postMessage({ type: "rssGetNotifications" });
 };
+document.getElementById("cloudTab").onclick = () => switchTab("cloud");
 document.getElementById("soticBtn").onclick = () => switchTab("dash");
 document.getElementById("stopBtn").onclick = () => vscode.postMessage({ type: "cancelPrompt" });
 document.getElementById("newChatItem").onclick = () => { vscode.postMessage({ type: "newSession" }); closeDropdown(); };
@@ -2882,6 +2887,80 @@ function _initCloudTab() {
     vscode.postMessage({ type: "domainGetAll" });
     vscode.postMessage({ type: "tokenUsageGet" });
     vscode.postMessage({ type: "apiKeyGetStatus" });
+}
+
+// ── Cloud 탭 이벤트 바인딩 ───────────────────────────────────────────────────
+
+document.querySelectorAll(".akey-save-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+        const prov = btn.dataset.prov;
+        const inp  = document.getElementById(`apiKeyInp-${prov}`);
+        const key  = inp?.value?.trim();
+        if (!key) { showCtxToast("API 키를 입력하세요."); return; }
+        vscode.postMessage({ type: "apiKeySave", provider: prov, key });
+    });
+});
+
+document.querySelectorAll(".akey-val-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+        vscode.postMessage({ type: "apiKeyValidate", provider: btn.dataset.prov });
+    });
+});
+
+document.querySelectorAll(".akey-del-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+        const prov = btn.dataset.prov;
+        if (confirm(`${prov === "anthropic" ? "Anthropic Claude" : "Google Gemini"} API 키를 삭제합니다.`)) {
+            vscode.postMessage({ type: "apiKeyDelete", provider: prov });
+        }
+    });
+});
+
+document.getElementById("routingEnabledTog")?.addEventListener("change", e => {
+    _routingEnabled = e.target.checked;
+    vscode.postMessage({ type: "routingSetConfig", config: { enabled: _routingEnabled } });
+});
+
+document.getElementById("routingThresholdSlider")?.addEventListener("input", e => {
+    const val = parseInt(e.target.value);
+    document.getElementById("routingThresholdVal").textContent = val + "%";
+    vscode.postMessage({ type: "routingSetConfig", config: { threshold: val / 100 } });
+});
+
+document.getElementById("domainAddBtn")?.addEventListener("click", () => {
+    const key  = prompt("새 도메인 영어 키 (소문자, 언더스코어):")?.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_");
+    if (!key) { return; }
+    const name = prompt(`'${key}' 도메인의 한국어 표시명:`)?.trim();
+    if (!name) { return; }
+    const kwRaw = prompt("분류 키워드 (쉼표 구분, 5~20개):")?.trim();
+    if (!kwRaw) { return; }
+    const keywords = kwRaw.split(",").map(w => ({ word: w.trim(), weight: 1.0, learned: false })).filter(k => k.word);
+    vscode.postMessage({ type: "domainAdd", domain: { key, displayName: name, keywords } });
+});
+
+document.getElementById("domainRefreshBtn")?.addEventListener("click", () => {
+    vscode.postMessage({ type: "domainGetAll" });
+});
+
+document.getElementById("tokenLimitSaveBtn")?.addEventListener("click", () => {
+    const daily   = parseInt(document.getElementById("dailyLimitInp")?.value   || "0") || 0;
+    const monthly = parseInt(document.getElementById("monthlyLimitInp")?.value || "0") || 0;
+    vscode.postMessage({ type: "tokenLimitSet", daily, monthly });
+    showCtxToast("✅ 토큰 한도 저장됨");
+});
+
+document.getElementById("modelRefreshBtn")?.addEventListener("click", () => {
+    showCtxToast("☁️ 모델 목록 조회 중...");
+    vscode.postMessage({ type: "modelRefresh" });
+});
+
+// lastModelRefresh 표시 업데이트
+function _updateLastRefreshText(ts) {
+    const el = document.getElementById("lastModelRefreshTxt");
+    if (!el) { return; }
+    if (!ts) { el.textContent = "미갱신"; return; }
+    const d = new Date(ts);
+    el.textContent = d.toLocaleString();
 }
 
 // ── Esc 키로 분류 다이얼로그 닫기 ───────────────────────────────────────────
