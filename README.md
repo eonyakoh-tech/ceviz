@@ -25,12 +25,42 @@
 
 ## 설치
 
-```bash
-# 1. .vsix 파일 설치
-code --install-extension ceviz-0.2.0.vsix
+### VS Code Extension
 
-# 2. (선택) 백엔드 의존성 설치
-bash scripts/post-install.sh
+```bash
+code --install-extension ceviz-0.2.0.vsix
+```
+
+### 백엔드 설치 (OS별)
+
+**Linux (Ubuntu/Debian)**
+```bash
+bash scripts/install-linux.sh
+# 영어 출력: bash scripts/install-linux.sh --lang=en
+# 변경 없이 점검: bash scripts/install-linux.sh --dry-run
+```
+
+**macOS**
+```bash
+bash scripts/install-macos.sh
+```
+
+**Windows (WSL2 권장)**
+```powershell
+# PowerShell에서 실행
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+.\scripts\install-windows.ps1
+# WSL2 없이 네이티브 설치: .\scripts\install-windows.ps1 -ForceNative
+```
+
+### 의존성 확인
+
+```bash
+# Linux / macOS
+bash scripts/check-dependencies.sh
+
+# Windows (PowerShell)
+.\scripts\check-dependencies.ps1
 ```
 
 ## 설정

@@ -534,6 +534,18 @@ window.addEventListener("message", e => {
 
         case "wizardInfo":
             {
+                // Phase 26: OS 정보 업데이트
+                if (m.platform) {
+                    const osIcon  = document.getElementById("wizOsIcon");
+                    const osLabel = document.getElementById("wizOsLabel");
+                    const osScript = document.getElementById("wizOsScript");
+                    const iconMap = { Linux: "🐧", macOS: "🍎", Windows: "🪟" };
+                    if (osIcon)  { osIcon.textContent = iconMap[m.platform] || "💻"; }
+                    if (osLabel) { osLabel.textContent = "현재 OS: " + m.platform; }
+                    if (osScript && m.installScript) {
+                        osScript.textContent = "설치 스크립트: " + m.installScript;
+                    }
+                }
                 const spinEl  = document.getElementById("wizConnSpin");
                 const msgEl   = document.getElementById("wizConnMsg");
                 if (m.ok) {
@@ -762,8 +774,103 @@ window.addEventListener("message", e => {
         case "secLogResult":
             _renderSecLog(m.log);
             break;
+
+        case "platformInfo":
+            _applyPlatformInfo(m);
+            break;
+
+        case "depCheckResult":
+            if (!m.allOk && m.missing && m.missing.length > 0) {
+                _showDepWarning(m.missing);
+            }
+            break;
+
+        case "backendUpdateAvailable":
+            _showUpdateBanner(m);
+            break;
+
+        case "backendUpdateProgress":
+            _onUpdateProgress(m.step);
+            break;
+
+        case "backendUpdateDone":
+            _onUpdateDone(m);
+            break;
     }
 });
+
+// ── Phase 26: 플랫폼 정보 적용 ───────────────────────────────────────────────
+
+function _applyPlatformInfo(m) {
+    const iconMap = { Linux: "🐧", macOS: "🍎", Windows: "🪟" };
+    const osIcon   = document.getElementById("wizOsIcon");
+    const osLabel  = document.getElementById("wizOsLabel");
+    const osScript = document.getElementById("wizOsScript");
+    if (osIcon)  { osIcon.textContent  = iconMap[m.platform] || "💻"; }
+    if (osLabel) { osLabel.textContent = "현재 OS: " + (m.platform || ""); }
+    if (osScript && m.installScript) {
+        osScript.textContent = "설치 스크립트: " + m.installScript;
+    }
+}
+
+// ── Phase 26 작업 9: 백엔드 자동 업데이트 UI ─────────────────────────────────
+
+function _showUpdateBanner(m) {
+    let el = document.getElementById("updateBanner");
+    if (!el) {
+        el = document.createElement("div");
+        el.id = "updateBanner";
+        el.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:410;" +
+            "background:#0e4a2d;color:#fff;padding:6px 10px;font-size:11px;" +
+            "display:flex;align-items:center;gap:8px";
+        document.body.appendChild(el);
+    }
+    el.innerHTML =
+        `<span>🆕 <b>백엔드 업데이트 가능:</b> ${escapeHtml(m.latestTag)}</span>` +
+        `<button id="updateNowBtn" style="background:#1a6b40;border:none;color:#fff;` +
+        `padding:3px 10px;border-radius:3px;cursor:pointer;font-size:11px">지금 업데이트</button>` +
+        `<button style="margin-left:auto;background:none;border:none;color:#fff;cursor:pointer;` +
+        `font-size:13px" onclick="this.parentElement.remove()">✕</button>`;
+    document.getElementById("updateNowBtn")?.addEventListener("click", () => {
+        el.innerHTML = '<span>⏳ 업데이트 중... (백업 → 설치)</span>';
+        vscode.postMessage({ type: "backendUpdateRun" });
+    });
+}
+
+function _onUpdateProgress(step) {
+    const el = document.getElementById("updateBanner");
+    if (!el) { return; }
+    const labels = { backup: "📦 백업 중...", install: "🔄 설치 중 (최대 2분)..." };
+    el.innerHTML = `<span>${labels[step] || step}</span>`;
+}
+
+function _onUpdateDone(m) {
+    const el = document.getElementById("updateBanner");
+    if (m.ok) {
+        if (el) { el.remove(); }
+        showCtxToast("✅ 백엔드 업데이트 완료");
+    } else {
+        if (el) {
+            el.style.background = "#4a0e0e";
+            el.innerHTML = `<span>❌ 업데이트 실패 — 로그: ${escapeHtml(m.logFile || "")}</span>` +
+                `<button style="margin-left:auto;background:none;border:none;color:#fff;cursor:pointer;" ` +
+                `onclick="this.parentElement.remove()">✕</button>`;
+        }
+    }
+}
+
+function _showDepWarning(missing) {
+    let el = document.getElementById("depWarnBanner");
+    if (!el) {
+        el = document.createElement("div");
+        el.id = "depWarnBanner";
+        el.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:400;background:#4a3300;color:#fff;padding:6px 10px;font-size:11px;display:flex;align-items:center;gap:8px";
+        document.body.appendChild(el);
+    }
+    el.innerHTML = `<span>⚠️ <b>미설치 의존성:</b> ${escapeHtml(missing.join(", "))}</span>` +
+        `<button style="margin-left:auto;background:none;border:none;color:#fff;cursor:pointer;font-size:13px" ` +
+        `onclick="this.parentElement.remove()">✕</button>`;
+}
 
 function renderSessions() {
     const list = document.getElementById("sessList");

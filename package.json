@@ -6,7 +6,12 @@
   "publisher": "eonyakoh",
   "icon": "media/icon.png",
   "engines": { "vscode": "^1.80.0" },
-  "categories": ["Other"],
+  "categories": ["Other", "Machine Learning", "Education"],
+  "keywords": [
+    "ai", "local-ai", "ollama", "claude", "gemini",
+    "chatbot", "game-dev", "english-tutor", "rag",
+    "linux", "macos", "windows", "hybrid-ai"
+  ],
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {

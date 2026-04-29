@@ -620,6 +620,14 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                         const rs = await this._http.get(`${this._getUrl()}/rag/stats`, { timeout: 3000 });
                         this._view?.webview.postMessage({ type: "ragStats", stats: rs.data });
                     } catch {}
+                    // Phase 26: 플랫폼 정보 전송 + 의존성 자동 확인 (백그라운드)
+                    this._view?.webview.postMessage({
+                        type: "platformInfo",
+                        platform: platformLabel(),
+                        installScript: installScriptName(),
+                    });
+                    this._checkDependencies().catch(() => {});
+                    this._checkBackendUpdate().catch(() => {});
                     break;
 
                 case "ragReset":
@@ -973,6 +981,15 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                         type: "secLogResult",
                         log: [],
                     });
+                    break;
+
+                // ── Phase 26 작업 9: 백엔드 자동 업데이트 ───────────────────
+                case "backendUpdateCheck":
+                    await this._checkBackendUpdate();
+                    break;
+
+                case "backendUpdateRun":
+                    await this._runBackendUpdate();
                     break;
             }
         });
@@ -2195,7 +2212,8 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
                 const reason = (statusRes as PromiseRejectedResult).reason;
                 this._view?.webview.postMessage({
                     type: "wizardInfo", ok: false,
-                    error: reason?.message || "PN40 연결 실패"
+                    error: reason?.message || "PN40 연결 실패",
+                    platform: platformLabel(), installScript: installScriptName(),
                 });
                 return;
             }
@@ -2208,7 +2226,8 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
                 }
             }
             this._view?.webview.postMessage({
-                type: "wizardInfo", ok: true, installedModels: modelsList
+                type: "wizardInfo", ok: true, installedModels: modelsList,
+                platform: platformLabel(), installScript: installScriptName(),
             });
         } catch (e: any) {
             this._view?.webview.postMessage({
@@ -2893,10 +2912,15 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
       <div class="wiz-line"></div>
       <div class="wiz-dot" id="wizDot5"></div>
     </div>
-    <!-- Step 1: 환영 -->
+    <!-- Step 1: 환영 (Phase 26: OS 자동 감지 표시) -->
     <div class="wiz-step" id="wizStep1">
       <div class="wiz-step-title">환영합니다!</div>
       <div class="wiz-step-desc">PN40 AI 환경을 단계별로 설정합니다.<br>시작 전 PN40이 켜져 있는지 확인하세요.</div>
+      <div class="wiz-os-info" id="wizOsInfo">
+        <span class="wiz-os-icon" id="wizOsIcon">💻</span>
+        <span class="wiz-os-label" id="wizOsLabel">현재 OS: ${hs.plt}</span>
+        <span class="wiz-os-script" id="wizOsScript">${hs.installScript}</span>
+      </div>
       <div class="wiz-nav"><button class="wiz-btn-primary" id="wizStartBtn">시작하기 →</button></div>
     </div>
     <!-- Step 2: 서버 확인 -->
@@ -4175,6 +4199,124 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
         this._lastModelRefresh = Date.now();
         this._context.globalState.update("ceviz.lastModelRefresh", this._lastModelRefresh);
         this._view?.webview.postMessage({ type: "cloudModels", results, refreshedAt: this._lastModelRefresh });
+    }
+
+    // ── Phase 26: 의존성 자동 확인 ───────────────────────────────────────────
+
+    private async _checkDependencies(): Promise<void> {
+        const scriptDir = vscode.Uri.joinPath(this._extensionUri, "scripts");
+        const isWin = process.platform === "win32";
+        const scriptName = isWin ? "check-dependencies.ps1" : "check-dependencies.sh";
+        const scriptPath = vscode.Uri.joinPath(scriptDir, scriptName).fsPath;
+
+        const exe  = isWin ? "powershell.exe" : "/bin/sh";
+        const args = isWin
+            ? ["-NonInteractive", "-File", scriptPath, "-Json"]
+            : [scriptPath, "--json"];
+
+        await new Promise<void>((resolve) => {
+            cp.execFile(exe, args, { timeout: 15000 }, (err, stdout) => {
+                try {
+                    const parsed = JSON.parse(stdout || "{}");
+                    const missing = (parsed.results || [])
+                        .filter((r: any) => r.status !== "ok")
+                        .map((r: any) => r.name);
+                    if (missing.length > 0) {
+                        this._view?.webview.postMessage({
+                            type: "depCheckResult",
+                            allOk: false,
+                            missing,
+                        });
+                    }
+                } catch { }
+                resolve();
+            });
+        });
+    }
+
+    // ── Phase 26: 백엔드 자동 업데이트 확인 ──────────────────────────────────
+
+    private async _checkBackendUpdate(): Promise<void> {
+        const ONE_WEEK = 7 * 24 * 60 * 60 * 1000;
+        const lastCheck: number = this._context.globalState.get("ceviz.lastUpdateCheck", 0);
+        if (Date.now() - lastCheck < ONE_WEEK) { return; }
+
+        try {
+            const res = await this._http.get(
+                "https://api.github.com/repos/eonyakoh/ceviz/releases/latest",
+                { timeout: 8000, headers: { "User-Agent": "ceviz-extension" } }
+            );
+            const latestTag: string = res.data.tag_name ?? "";
+            const currentVer = "v0.2.0";
+            if (latestTag && latestTag !== currentVer) {
+                this._view?.webview.postMessage({
+                    type: "backendUpdateAvailable",
+                    latestTag,
+                    currentVer,
+                    releaseUrl: res.data.html_url ?? "",
+                });
+            }
+            this._context.globalState.update("ceviz.lastUpdateCheck", Date.now());
+        } catch { }
+    }
+
+    private async _runBackendUpdate(): Promise<void> {
+        const backupDir = path.join(cevizDataDir(), "backup",
+                                    new Date().toISOString().slice(0, 10));
+        const scriptDir = vscode.Uri.joinPath(this._extensionUri, "scripts").fsPath;
+        const isWin = process.platform === "win32";
+        const updateScript = path.join(scriptDir, isWin ? "install-windows.ps1" : (
+            process.platform === "darwin" ? "install-macos.sh" : "install-linux.sh"
+        ));
+        const logFile = path.join(cevizDataDir(), "update.log");
+        const timestamp = new Date().toISOString();
+
+        this._view?.webview.postMessage({ type: "backendUpdateProgress", step: "backup" });
+        try {
+            fs.mkdirSync(backupDir, { recursive: true });
+            for (const f of ["api_server.py", "rss_router.py", "rss_worker.py",
+                              "evolution_router.py", "domain_router.py"]) {
+                const src = path.join(cevizDataDir(), f);
+                if (fs.existsSync(src)) {
+                    fs.copyFileSync(src, path.join(backupDir, f));
+                }
+            }
+        } catch { }
+
+        this._view?.webview.postMessage({ type: "backendUpdateProgress", step: "install" });
+
+        const exe  = isWin ? "powershell.exe" : "/bin/sh";
+        const args = isWin ? ["-NonInteractive", "-File", updateScript] : [updateScript];
+
+        await new Promise<void>((resolve) => {
+            const child = cp.spawn(exe, args, { stdio: "pipe" });
+            let log = `[${timestamp}] update started\n`;
+
+            child.stdout?.on("data", (d: Buffer) => { log += d.toString(); });
+            child.stderr?.on("data", (d: Buffer) => { log += d.toString(); });
+
+            child.on("close", (code) => {
+                log += `[${new Date().toISOString()}] exit code: ${code}\n`;
+                try { fs.appendFileSync(logFile, log, "utf8"); } catch { }
+
+                if (code === 0) {
+                    this._view?.webview.postMessage({ type: "backendUpdateDone", ok: true });
+                } else {
+                    // 실패 시 백업에서 복원
+                    try {
+                        for (const f of fs.readdirSync(backupDir)) {
+                            fs.copyFileSync(path.join(backupDir, f),
+                                            path.join(cevizDataDir(), f));
+                        }
+                    } catch { }
+                    this._view?.webview.postMessage({
+                        type: "backendUpdateDone", ok: false,
+                        logFile,
+                    });
+                }
+                resolve();
+            });
+        });
     }
 
     // ── Phase 23: 보안 이벤트 로그 (로컬, 외부 전송 금지) ────────────────────
