@@ -3,6 +3,16 @@ import * as cp from "child_process";
 import * as path from "path";
 import * as fs from "fs";
 import axios from "axios";
+import {
+    expandTilde,
+    cliExecutable,
+    homedir,
+    projectsDir,
+    defaultVaultSearchDirs,
+    platformLabel,
+    installScriptName,
+    cevizDataDir,
+} from "./platform";
 
 interface Message {
     role: string;
@@ -1188,7 +1198,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
 
     private _checkClaudeCli(): Promise<{ ok: boolean; msg?: string }> {
         return new Promise((resolve) => {
-            cp.exec("claude --version", (err) => {
+            cp.execFile(cliExecutable("claude"), ["--version"], (err) => {
                 if (err) {
                     resolve({
                         ok: false,
@@ -1204,7 +1214,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
     private _streamClaudeCli(prompt: string) {
         const startTime = Date.now();
         // -p : print(non-interactive) 모드  --output-format text : 순수 텍스트 출력
-        const child = cp.spawn("claude", ["-p", prompt, "--output-format", "text"], {
+        const child = cp.spawn(cliExecutable("claude"), ["-p", prompt, "--output-format", "text"], {
             env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0" }
         });
         this._copilotProcess = child;
@@ -1418,16 +1428,11 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
 
     private _getVaultPath(): string {
         const raw = vscode.workspace.getConfiguration("ceviz").get<string>("vaultPath") || "";
-        return raw.replace(/^~/, process.env.HOME || "");
+        return expandTilde(raw);
     }
 
     private _detectVaults(): string[] {
-        const home = process.env.HOME || "";
-        const searchDirs = [
-            path.join(home, "Documents"),
-            path.join(home, "Obsidian"),
-            home
-        ];
+        const searchDirs = defaultVaultSearchDirs();
         const found: string[] = [];
         for (const dir of searchDirs) {
             // check if the search dir itself is a vault
@@ -1531,7 +1536,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
                 keyword,
                 dir
             ];
-            cp.execFile("rg", args, { maxBuffer: 2 * 1024 * 1024 }, (err, stdout) => {
+            cp.execFile(cliExecutable("rg"), args, { maxBuffer: 2 * 1024 * 1024 }, (err, stdout) => {
                 // rg exits with code 1 = no matches (not an error); code 2+ = real error
                 if (err && (err as any).code !== 1) {
                     reject(new Error("rg 실행 실패: " + err.message));
@@ -1572,7 +1577,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
     // ── PROJECT CONTEXT ──────────────────────────────────────────────────────
 
     private _getProjectsDir(): string {
-        return path.join(process.env.HOME || "", "ceviz", "projects");
+        return projectsDir();
     }
 
     private _getContextPath(name: string): string {
@@ -1698,8 +1703,8 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
 
     private _evoGetSourcePath(): string {
         const cfg = vscode.workspace.getConfiguration("ceviz").get<string>("projectSourcePath") || "";
-        return cfg.replace(/^~/, process.env.HOME || "")
-            || path.join(process.env.HOME || "", "ceviz-ui", "ceviz");
+        return expandTilde(cfg)
+            || path.join(homedir(), "ceviz-ui", "ceviz");
     }
 
     private _evoEvolutionMdPath(): string {
@@ -2270,9 +2275,36 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
         return Array.from({ length: 32 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
     }
 
+    /** OS별 도움말 스니펫 — _html() 내부에서 사용 */
+    private _helpSnippets() {
+        const plt = platformLabel();
+        const rgInstall =
+            plt === "macOS"   ? "brew install ripgrep" :
+            plt === "Windows" ? "winget install BurntSushi.ripgrep.MSVC" :
+                                "sudo apt install ripgrep";
+        const svcRestart =
+            plt === "macOS"   ? "launchctl kickstart -k gui/$(id -u)/com.ceviz.api" :
+            plt === "Windows" ? "Restart-ScheduledTask -TaskName CevizApi" :
+                                "sudo systemctl restart ceviz-api";
+        const svcStatus =
+            plt === "macOS"   ? "launchctl print gui/$(id -u)/com.ceviz.api" :
+            plt === "Windows" ? "Get-ScheduledTask -TaskName CevizApi" :
+                                "sudo systemctl status ceviz-api";
+        const rssStatus =
+            plt === "macOS"   ? "launchctl print gui/$(id -u)/com.ceviz.rss" :
+            plt === "Windows" ? "Get-ScheduledTask -TaskName CevizRss" :
+                                "systemctl --user status ceviz-rss.timer";
+        const installScript =
+            plt === "macOS"   ? "bash scripts/install-macos.sh" :
+            plt === "Windows" ? "scripts\\install-windows.ps1" :
+                                "bash scripts/install-linux.sh";
+        return { plt, rgInstall, svcRestart, svcStatus, rssStatus, installScript };
+    }
+
     private _html(): string {
         const nonce = this._getNonce();
         const webview = this._view!.webview;
+        const hs = this._helpSnippets();
         const scriptUri = webview.asWebviewUri(
             vscode.Uri.joinPath(this._extensionUri, "media", "webview.js")
         );
@@ -2634,7 +2666,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
       </div>
       <div class="pn40-auth-hint">
         <b>PN40 측 설치:</b> <code>cp pn40_auth_patch.py ~/ceviz/auth.py</code>
-        → api_server.py에 통합 → <code>sudo systemctl restart ceviz-api</code>
+        → api_server.py에 통합 → <code>${hs.svcRestart}</code>
       </div>
     </div>
 
@@ -2966,7 +2998,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
         <div class="help-sec on" id="helpSec1">
           <div class="help-h2">🚀 CEVIZ 시작하기</div>
           <div class="help-h3">1단계 — PN40 서버 연결 확인</div>
-          <p class="help-p">상태 표시줄이 <b>PN40 연결됨 · Ollama ✓</b>로 바뀌면 준비 완료입니다. 서버 IP는 VS Code 설정 <code>ceviz.serverIp</code>에서 변경할 수 있습니다 (기본값: 100.69.155.43:8000).</p>
+          <p class="help-p">상태 표시줄이 <b>PN40 연결됨 · Ollama ✓</b>로 바뀌면 준비 완료입니다. 서버 IP는 VS Code 설정 <code>ceviz.serverIp</code>에서 변경할 수 있습니다.</p>
           <div class="help-h3">2단계 — 설치 마법사 실행</div>
           <p class="help-p">명령 팔레트(<span class="help-kbd">Ctrl+Shift+P</span>)에서 <b>CEVIZ: 설치 마법사 실행</b>을 입력하거나 헤더 ⚙️ 버튼 클릭 → 설치 마법사를 선택합니다.</p>
           <p class="help-p">권장 모델 조합: <b>gemma3:4b</b> (채팅) + <b>nomic-embed-text</b> (RAG — 필수)</p>
@@ -3093,7 +3125,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
           <div class="help-h3">RSS 자동 저장</div>
           <p class="help-p">RSS 수집된 요약/백서는 Vault의 <code>vault_sync/</code> 폴더에 저장됩니다. Syncthing을 설정하면 PN40 ↔ T480s 간 자동 동기화됩니다.</p>
           <div class="help-h3">요구사항</div>
-          <p class="help-p">ripgrep(<code>rg</code>)이 시스템에 설치되어 있어야 합니다. <code>sudo apt install ripgrep</code>으로 설치하세요.</p>
+          <p class="help-p">ripgrep(<code>rg</code>)이 시스템에 설치되어 있어야 합니다. <code>${hs.rgInstall}</code>으로 설치하세요.</p>
         </div>
 
         <!-- S9: 단축키 -->
@@ -3136,10 +3168,10 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
           <div class="help-h2">🔨 트러블슈팅</div>
           <div class="help-h3">서버 연결 안됨 (빨간 점)</div>
           <ul class="help-ul">
-            <li>PN40이 켜져 있는지 확인: <code>ping 100.69.155.43</code></li>
+            <li>PN40이 켜져 있는지 확인: <code>ping &lt;serverIp&gt;</code></li>
             <li>Tailscale VPN 연결 확인: <code>tailscale status</code></li>
-            <li>API 서버 실행 확인: <code>curl http://100.69.155.43:8000/status</code></li>
-            <li>서버 재시작: <code>sudo systemctl restart ceviz-api</code></li>
+            <li>API 서버 실행 확인: <code>curl http://&lt;serverIp&gt;:8000/status</code></li>
+            <li>서버 재시작: <code>${hs.svcRestart}</code></li>
           </ul>
           <div class="help-h3">빌드 오류 (webpack)</div>
           <ul class="help-ul">
@@ -3167,7 +3199,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
           <div class="help-h2">🖥️ 환경 정보</div>
           <table class="help-table">
             <tr><th>항목</th><th>값</th></tr>
-            <tr><td>PN40 (서버)</td><td>Lenovo ThinkPad PN40 · Tailscale IP 100.69.155.43</td></tr>
+            <tr><td>PN40 (서버)</td><td>Lenovo ThinkPad PN40 · Tailscale IP (<code>ceviz.serverIp</code> 설정)</td></tr>
             <tr><td>T480s (클라이언트)</td><td>Lenovo ThinkPad T480s · VS Code Extension 개발</td></tr>
             <tr><td>API 포트</td><td>8000 (FastAPI + Uvicorn)</td></tr>
             <tr><td>Tailscale</td><td>P2P VPN · PN40 ↔ T480s 직접 연결</td></tr>
@@ -3178,9 +3210,9 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
           </table>
           <div class="help-h3">PN40 서비스 관리</div>
           <ul class="help-ul">
-            <li>API 서버: <code>sudo systemctl status ceviz-api</code></li>
-            <li>RSS 수집: <code>systemctl --user status ceviz-rss.timer</code></li>
-            <li>로그: <code>journalctl -u ceviz-api -f</code></li>
+            <li>API 서버: <code>${hs.svcStatus}</code></li>
+            <li>RSS 수집: <code>${hs.rssStatus}</code></li>
+            <li>로그: <code>journalctl -u ceviz-api -f</code> (Linux) / <code>log show --predicate 'process=="ceviz-api"'</code> (macOS)</li>
           </ul>
           <div class="help-h3">설정 파일 위치</div>
           <ul class="help-ul">
@@ -3239,7 +3271,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
             <li><code>cp pn40_domain_router.py ~/ceviz/domain_router.py</code></li>
             <li>api_server.py에 추가: <code>from domain_router import router as domain_router</code></li>
             <li><code>app.include_router(domain_router)</code></li>
-            <li><code>sudo systemctl restart ceviz-api</code></li>
+            <li><code>${hs.svcRestart}</code></li>
           </ul>
         </div>
 
