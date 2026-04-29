@@ -38,7 +38,7 @@
 | 항목 | 내용 |
 |------|------|
 | 브랜치 | `extension-ui` |
-| 최신 Phase | Phase 26 멀티 OS 배포 패키징 완료 (2026-04-29) |
+| 최신 Phase | Phase 27 라이선스 시스템 + LemonSqueezy 결제 통합 완료 (2026-04-29) |
 | 패키지 버전 | `ceviz-0.2.0` |
 | 백엔드 주소 | `100.69.155.43:8000` (기본값) |
 | 빌드 상태 | webpack 컴파일 정상 |
@@ -175,6 +175,16 @@
 - **보안**: API 키 SecretStorage 전용, 마스킹, 키 형식 사전 검증, PN40 프롬프트 인젝션 방어
 - **파일**: `src/panel.ts`, `media/webview.js`, `media/webview.css`, `pn40_domain_router.py`
 
+### ✅ Phase 27 — 라이선스 시스템 + LemonSqueezy 결제 통합
+- **완료**: 2026-04-29
+- **작업 1+6**: `src/license.ts` — LicenseManager 클래스, LemonSqueezy API(activate/validate/deactivate), JWT RS256 오프라인 검증(Node crypto), PLAN_LIMITS, 트라이얼 14일, 오프라인 유예 14일, 재검증 7일
+- **작업 2+7+8+10**: `panel.ts` — LicenseManager 초기화, _licenseGuard()/_cloudQuotaGuard() 기능 게이트, Cloud API 쿼터 추적, 넛지 UX(welcome/d7/d2/expired), upgradePrompt Why CEVIZ, 도움말 S14(플랜비교/BYOK/구매/환불/FAQ)
+- **작업 3+4+11**: `webview.js`/`webview.css` — Cloud 탭 Section 8 라이선스 UI(키입력/배지/메타/액션), 사이드바 lic-status-badge(trial주황/personal파랑/pro보라/founder금), upgradeOverlay(Why CEVIZ 6종), licenseNudge 배너, i18n 한국어+영어
+- **작업 5**: `pn40_license_webhook.py` — POST /license/webhook HMAC-SHA256 검증, order_created/license_key_created 이벤트, Telegram Bot 구매 알림, 마스킹
+- **작업 9**: `LICENSE` Proprietary 14조, `LEMONSQUEEZY-SETUP.md` 10단계 설정 가이드, `.gitignore` *.pem 추가
+- **플레이스홀더**: LEMONSQUEEZY_STORE_URL/PRODUCT_ID_* (LEMONSQUEEZY-SETUP.md 참조)
+- **파일**: `src/license.ts`(신규), `src/panel.ts`, `media/webview.js`, `media/webview.css`, `pn40_license_webhook.py`(신규), `LICENSE`, `LEMONSQUEEZY-SETUP.md`(신규), `.gitignore`
+
 ### ✅ Phase 26 — 멀티 OS 배포 패키징
 - **완료**: 2026-04-29
 - **작업 1**: `src/platform.ts` 신규 — getPlatform/homedir/expandTilde/cliExecutable/systemShell/cevizDataDir/projectsDir/defaultVaultSearchDirs/platformLabel/installScriptName
@@ -234,6 +244,7 @@
 | 2026-04-29 | Phase 22: Multi-Cloud AI 도메인 라우팅 | 작업 1~14 전체 완료. SecretStorage API 키, BaseAIAdapter, PN40 분류기, 자동 라우팅, 확인 다이얼로그, 키워드 학습, 폴백 3단계, 토큰비용 UI, ☁️ Cloud 탭, 도움말 S13, i18n. ceviz-0.2.0.vsix 재패키징 완료 |
 | 2026-04-29 | Phase 23: 보안 강화 (Security Hardening) | 작업 1~11 전체 완료. PN40 Bearer 인증·IP차단, Skills CRUD 백엔드, XSS방어, RSS파일보안, EVOLUTION인젝션방어, CSP강화, URL화이트리스트, API키감지차단, 보안로그뷰어, 토큰이상감지. ceviz-0.2.0.vsix 재패키징 완료 |
 | 2026-04-29 | Phase 26: 멀티 OS 배포 패키징 | 작업 1~10 전체 완료. platform.ts, OS별 설치스크립트 3종, 의존성확인 2종, 마법사OS표시, 업데이트메커니즘, package-release.sh. ceviz-0.2.0.vsix 재패키징 완료 |
+| 2026-04-29 | Phase 27: 라이선스 시스템 + LemonSqueezy | 작업 1~11 전체 완료. license.ts, 기능게이트, Cloud쿼터, 업그레이드UX, 사이드바배지, Webhook, Proprietary LICENSE, 설정가이드. ceviz-0.2.0.vsix 185KB 완료 |
 
 ---
 
