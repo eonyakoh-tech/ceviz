@@ -24,6 +24,11 @@ import {
     cevizDataDir,
 } from "./platform";
 
+interface WikiLink {
+    title: string;
+    relPath: string;
+}
+
 interface Message {
     role: string;
     content: string;
@@ -34,6 +39,7 @@ interface Message {
     ragDocs?: number;
     domain?: string;
     costUsd?: number;    // Phase 22: 직접 Cloud API 호출 비용
+    wikiLinks?: WikiLink[]; // Phase 24: 자동 감지된 Vault 위키링크
 }
 
 interface Session {
@@ -371,6 +377,11 @@ export class CevizPanel implements vscode.WebviewViewProvider {
     private _evoPendingOldCode = "";
     private _evoPendingTargetFile = "";
     private _evoPendingBranch = "";
+
+    // ── Phase 24: 자동 위키링크 인덱스 ───────────────────────────────────────
+    private _wikiIndex: Map<string, string> = new Map(); // normalized_title → relPath
+    private _wikiIndexBuiltAt = 0;
+    private readonly _WIKI_INDEX_TTL = 5 * 60 * 1000; // 5분 캐시
 
     // ── Phase 22: Multi-Cloud AI Domain Routing ──────────────────────────────
     private readonly _anthropicAdapter = new AnthropicAdapter();
@@ -756,6 +767,23 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                     await this._saveVaultPath(msg.path);
                     break;
 
+                case "wikiOpenNote": {
+                    const vaultPath = this._getVaultPath();
+                    if (!vaultPath || !msg.relPath) { break; }
+                    const fullPath = path.resolve(path.join(vaultPath, msg.relPath));
+                    const vaultResolved = path.resolve(vaultPath);
+                    if (!fullPath.startsWith(vaultResolved + path.sep) && fullPath !== vaultResolved) { break; }
+                    vscode.commands.executeCommand("vscode.open", vscode.Uri.file(fullPath));
+                    break;
+                }
+
+                case "wikiRebuildIndex":
+                    this._wikiIndexBuiltAt = 0; // TTL 강제 만료 → 다음 프롬프트에서 재빌드
+                    this._view?.webview.postMessage({ type: "wikiIndexReady", count: 0, rebuilding: true });
+                    await this._buildWikiIndex();
+                    this._view?.webview.postMessage({ type: "wikiIndexReady", count: this._wikiIndex.size });
+                    break;
+
                 case "projectList":
                     this._view?.webview.postMessage({
                         type: "projectsList",
@@ -1050,6 +1078,9 @@ export class CevizPanel implements vscode.WebviewViewProvider {
         const session = this._sessions.find(s => s.id === this._currentSessionId);
         if (!session) { return; }
 
+        // Phase 24: 위키 인덱스 갱신 (TTL 기반, 비차단)
+        this._buildWikiIndex().catch(() => {});
+
         let finalPrompt = prompt;
         // A·B단계: 활성 진화 시스템 프롬프트를 모든 요청에 선행 주입
         const evoPromptActive = this._evoSystemPromptHistory.length > 0
@@ -1084,6 +1115,11 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
 
 💬 답변
 [Answer the user's actual question in English. Adjust vocabulary and sentence complexity to match their CEFR level.]`;
+        }
+
+        // Phase 24: Vault 관련 노트 자동 컨텍스트 주입 (영어 튜터 모드 제외)
+        if (!this._englishMode) {
+            finalPrompt = await this._autoInjectVaultContext(finalPrompt);
         }
 
         // ── Phase 22: Cloud AI 자동 라우팅 인터셉트 ──────────────────────────
@@ -1142,6 +1178,8 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
             const ragDocs: number = d.rag_docs || 0;
             const domain: string  = d.domain  || "";
 
+            // Phase 24: 응답에서 위키링크 자동 감지
+            const wikiLinks = this._detectWikiLinks(d.result);
             const msg: Message = {
                 role: "assistant",
                 content: d.result,
@@ -1150,7 +1188,8 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
                 engine: d.engine,
                 tokenUsage: isCloud ? tokenEstimate : undefined,
                 ragDocs: ragDocs || undefined,
-                domain:  domain  || undefined
+                domain:  domain  || undefined,
+                wikiLinks: wikiLinks.length > 0 ? wikiLinks : undefined
             };
             session.messages.push(msg);
             this._lastCloudResponse = isCloud ? msg : null;
@@ -1167,7 +1206,8 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
                 tokenUsage: isCloud ? tokenEstimate : null,
                 totalTokens: this._totalTokens,
                 ragDocs,
-                domain
+                domain,
+                wikiLinks: wikiLinks.length > 0 ? wikiLinks : undefined
             });
             // 프로젝트 컨텍스트 자동 업데이트
             if (this._currentProject) {
@@ -1577,6 +1617,66 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
             }
         } catch {}
         return count;
+    }
+
+    // ── Phase 24: 위키 인덱스 빌드 ───────────────────────────────────────────
+    private async _buildWikiIndex(): Promise<void> {
+        const vaultPath = this._getVaultPath();
+        if (!vaultPath) { return; }
+        const now = Date.now();
+        if (now - this._wikiIndexBuiltAt < this._WIKI_INDEX_TTL && this._wikiIndex.size > 0) { return; }
+        const newIndex = new Map<string, string>();
+        const MAX_FILES = 5000;
+        const walk = (dir: string, rel: string) => {
+            if (newIndex.size >= MAX_FILES) { return; }
+            try {
+                const entries = fs.readdirSync(dir, { withFileTypes: true });
+                for (const entry of entries) {
+                    if (entry.name.startsWith(".")) { continue; }
+                    const entryRel = rel ? `${rel}/${entry.name}` : entry.name;
+                    if (entry.isDirectory()) {
+                        walk(path.join(dir, entry.name), entryRel);
+                    } else if (entry.name.endsWith(".md")) {
+                        const title = entry.name.slice(0, -3);
+                        newIndex.set(title.toLowerCase(), entryRel);
+                    }
+                }
+            } catch {}
+        };
+        walk(vaultPath, "");
+        this._wikiIndex = newIndex;
+        this._wikiIndexBuiltAt = now;
+    }
+
+    private _detectWikiLinks(text: string): WikiLink[] {
+        if (this._wikiIndex.size === 0) { return []; }
+        const found: WikiLink[] = [];
+        const textLower = text.toLowerCase();
+        for (const [norm, relPath] of this._wikiIndex) {
+            if (norm.length < 3) { continue; }
+            if (textLower.includes(norm)) {
+                found.push({ title: path.basename(relPath, ".md"), relPath });
+                if (found.length >= 5) { break; }
+            }
+        }
+        return found;
+    }
+
+    private async _autoInjectVaultContext(prompt: string): Promise<string> {
+        const vaultPath = this._getVaultPath();
+        if (!vaultPath) { return prompt; }
+        try {
+            const searchTerm = prompt.replace(/[^\w가-힣\s]/g, " ").trim().slice(0, 50);
+            if (!searchTerm) { return prompt; }
+            const results = await this._runRipgrep(searchTerm, vaultPath);
+            if (results.length === 0) { return prompt; }
+            const ctx = results.slice(0, 3)
+                .map(r => `[[${r.file.replace(/\.md$/, "")}]]\n${r.matches.join(" … ")}`)
+                .join("\n\n");
+            return `[Vault 관련 노트]\n${ctx}\n\n[요청]\n${prompt}`;
+        } catch {
+            return prompt;
+        }
     }
 
     private async _searchVault(keyword: string) {

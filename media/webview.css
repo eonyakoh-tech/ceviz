@@ -689,6 +689,15 @@ body[dir="rtl"] .drop-menu{text-align:right}
   color:var(--vscode-button-secondaryForeground);border:none;border-radius:4px;
   padding:8px;font-size:12px;cursor:pointer}
 
+/* ── Phase 24: 위키링크 배지 ────────────────────────────── */
+.wiki-links{margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;
+  font-size:11px;color:var(--vscode-descriptionForeground)}
+.wiki-badge{background:none;border:1px solid var(--vscode-textLink-foreground);
+  color:var(--vscode-textLink-foreground);border-radius:3px;padding:1px 6px;
+  font-size:11px;cursor:pointer;font-family:var(--vscode-editor-font-family,'monospace')}
+.wiki-badge:hover{background:var(--vscode-textLink-foreground);
+  color:var(--vscode-editor-background)}
+
 /* ── 넛지 배너 (작업 7) ─────────────────────────────────── */
 .lic-nudge-banner{position:fixed;bottom:0;left:0;right:0;z-index:350;
   background:#3a2800;color:#ffe;padding:7px 10px;display:none;align-items:center;gap:8px}

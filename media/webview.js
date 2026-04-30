@@ -417,7 +417,7 @@ window.addEventListener("message", e => {
             break;
         case "assistantMsg":
             hideThink();
-            appendMsg("assistant", m.content, m.agent, m.tier, m.engine, m.isCloud, m.tokenUsage, m.ragDocs, m.domain, m.costUsd);
+            appendMsg("assistant", m.content, m.agent, m.tier, m.engine, m.isCloud, m.tokenUsage, m.ragDocs, m.domain, m.costUsd, m.wikiLinks);
             if (m.isCloud && m.tokenUsage) {
                 totalTokens = m.totalTokens || totalTokens;
                 document.getElementById("tokenCount").textContent = totalTokens;
@@ -914,10 +914,10 @@ function renderChat() {
     area.innerHTML = "";
     const s = sessions.find(x => x.id === curId);
     if (!s) { return; }
-    s.messages.forEach(m => appendMsg(m.role, m.content, m.agent, m.tier, m.engine, m.tier === 2, m.tokenUsage, m.ragDocs, m.domain, m.costUsd));
+    s.messages.forEach(m => appendMsg(m.role, m.content, m.agent, m.tier, m.engine, m.tier === 2, m.tokenUsage, m.ragDocs, m.domain, m.costUsd, m.wikiLinks));
 }
 
-function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage, ragDocs, domain, costUsd) {
+function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage, ragDocs, domain, costUsd, wikiLinks) {
     const area = document.getElementById("chatArea");
     const div = document.createElement("div");
     div.className = "msg " + role;
@@ -959,6 +959,21 @@ function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage, ragD
             lb.title = "Cloud AI 처리 방식을 Local 모델에 단방향 학습";
             lb.onclick = () => { pendingLearnBtn = lb; lb.disabled = true; lb.textContent = "저장 중... (최대 5분)"; vscode.postMessage({ type: "learnFromCloud", response: content }); };
             meta.appendChild(lb);
+        }
+        // Phase 24: 위키링크 배지
+        if (wikiLinks && wikiLinks.length > 0) {
+            const wikiRow = document.createElement("div");
+            wikiRow.className = "wiki-links";
+            wikiRow.innerHTML = "🔗 ";
+            wikiLinks.forEach(lk => {
+                const badge = document.createElement("button");
+                badge.className = "wiki-badge";
+                badge.textContent = "[[" + lk.title + "]]";
+                badge.title = lk.relPath;
+                badge.onclick = () => vscode.postMessage({ type: "wikiOpenNote", relPath: lk.relPath });
+                wikiRow.appendChild(badge);
+            });
+            div.appendChild(wikiRow);
         }
     }
     area.appendChild(div);
