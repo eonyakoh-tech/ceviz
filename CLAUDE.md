@@ -38,7 +38,7 @@
 | 항목 | 내용 |
 |------|------|
 | 브랜치 | `extension-ui` |
-| 최신 Phase | Phase 27 라이선스 시스템 + LemonSqueezy 결제 통합 완료 (2026-04-29) |
+| 최신 Phase | Phase 25 Hybrid 지능형 라우팅 강화 완료 (2026-04-30) |
 | 패키지 버전 | `ceviz-0.2.0` |
 | 백엔드 주소 | `100.69.155.43:8000` (기본값) |
 | 빌드 상태 | webpack 컴파일 정상 |
@@ -218,6 +218,18 @@
 - **보안**: URL http(s) 검증, yt-dlp 인자 배열 실행, 경로 traversal 차단, 임시파일 finally 삭제, LLM 프롬프트 격리
 - **파일**: `src/panel.ts`, `media/webview.js`, `media/webview.css`, `pn40_rss_router.py`, `pn40_rss_worker.py`, `pn40_rss_setup.sh`
 
+### ✅ Phase 25 — Hybrid 지능형 라우팅 강화
+- **완료**: 2026-04-30
+- **작업 1**: `panel.ts` — `_assessComplexity(prompt)` 다차원 복잡도 점수 계산 (0~100: 길이·코드블록·질문수·전문키워드·다중문단)
+- **작업 2**: `panel.ts` — `_trackResponseQuality()` 최근 5회 응답 길이 추적, 평균 80자 미만 시 `hybridQualityWarning` 발송
+- **작업 3**: `panel.ts` — `_handlePrompt`에 복잡도 평가 + 에스컬레이션 제안 (≥45: 🟡 Hybrid 권장, ≥70: 🔴 Cloud 권장) + `complexityScore` 이벤트
+- **작업 4**: `panel.ts` — 요청 시작~종료 `responseMs` 측정 → `assistantMsg`에 포함
+- **작업 5**: `panel.ts` — HTML에 `.complexity-dot` + `.hybrid-escalation-bar` 요소 추가
+- **작업 6**: `webview.js` — `estimateComplexity()` 로컬 근사, `updateComplexityIndicator()` (🟢🟡🔴), `showHybridEscalationBanner()` (8초 자동 숨김)
+- **작업 7**: `webview.js` — `appendMsg` `responseMs` 파라미터 추가, meta 텍스트에 응답 시간(초) 표시
+- **작업 8**: `webview.css` — `.complexity-dot`, `.hybrid-escalation-bar`, `.esc-mid`, `.esc-high` 스타일
+- **파일**: `src/panel.ts`, `media/webview.js`, `media/webview.css`
+
 ### ✅ Phase 24 — 자동 위키링크 (지능 신경망 강화)
 - **완료**: 2026-04-30
 - **작업 1**: `panel.ts` — `WikiLink` 인터페이스, `_wikiIndex` 필드(Map), `_buildWikiIndex()`(Vault .md 제목 인덱싱, 5000파일·5분 TTL)
@@ -256,7 +268,7 @@
 | 2026-04-29 | Phase 23: 보안 강화 (Security Hardening) | 작업 1~11 전체 완료. PN40 Bearer 인증·IP차단, Skills CRUD 백엔드, XSS방어, RSS파일보안, EVOLUTION인젝션방어, CSP강화, URL화이트리스트, API키감지차단, 보안로그뷰어, 토큰이상감지. ceviz-0.2.0.vsix 재패키징 완료 |
 | 2026-04-29 | Phase 26: 멀티 OS 배포 패키징 | 작업 1~10 전체 완료. platform.ts, OS별 설치스크립트 3종, 의존성확인 2종, 마법사OS표시, 업데이트메커니즘, package-release.sh. ceviz-0.2.0.vsix 재패키징 완료 |
 | 2026-04-29 | Phase 27: 라이선스 시스템 + LemonSqueezy | 작업 1~11 전체 완료. license.ts, 기능게이트, Cloud쿼터, 업그레이드UX, 사이드바배지, Webhook, Proprietary LICENSE, 설정가이드. ceviz-0.2.0.vsix 185KB 완료 |
-| 2026-04-30 | 세션 시작 — 이전 상태 파악 및 다음 작업 계획 |  |
+| 2026-04-30 | origin push + Phase 24 자동 위키링크 + Phase 25 Hybrid 지능형 라우팅 | 49커밋 push, Phase 24(위키 인덱스+자동주입+링크배지), Phase 25(복잡도점수+응답시간+에스컬레이션배너), ceviz-0.2.0.vsix 187KB 완료 |
 
 ---
 

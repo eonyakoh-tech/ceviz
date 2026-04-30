@@ -417,7 +417,7 @@ window.addEventListener("message", e => {
             break;
         case "assistantMsg":
             hideThink();
-            appendMsg("assistant", m.content, m.agent, m.tier, m.engine, m.isCloud, m.tokenUsage, m.ragDocs, m.domain, m.costUsd, m.wikiLinks);
+            appendMsg("assistant", m.content, m.agent, m.tier, m.engine, m.isCloud, m.tokenUsage, m.ragDocs, m.domain, m.costUsd, m.wikiLinks, m.responseMs);
             if (m.isCloud && m.tokenUsage) {
                 totalTokens = m.totalTokens || totalTokens;
                 document.getElementById("tokenCount").textContent = totalTokens;
@@ -431,6 +431,15 @@ window.addEventListener("message", e => {
                 }
             }
             updateTokenBarVisibility();
+            break;
+        case "complexityScore":
+            updateComplexityIndicator(m.score);
+            break;
+        case "hybridEscalation":
+            showHybridEscalationBanner(m.message, m.score);
+            break;
+        case "hybridQualityWarning":
+            showHybridEscalationBanner(m.suggestion, 0);
             break;
         case "learnComplete":
             if (pendingLearnBtn) {
@@ -917,7 +926,7 @@ function renderChat() {
     s.messages.forEach(m => appendMsg(m.role, m.content, m.agent, m.tier, m.engine, m.tier === 2, m.tokenUsage, m.ragDocs, m.domain, m.costUsd, m.wikiLinks));
 }
 
-function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage, ragDocs, domain, costUsd, wikiLinks) {
+function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage, ragDocs, domain, costUsd, wikiLinks, responseMs) {
     const area = document.getElementById("chatArea");
     const div = document.createElement("div");
     div.className = "msg " + role;
@@ -942,7 +951,8 @@ function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage, ragD
             + (tier !== undefined ? " · Tier" + tier : "")
             + (engine ? " · " + engine : "")
             + (tokenUsage ? " · ~" + tokenUsage + " tokens" : "")
-            + (costUsd   ? " · $" + costUsd.toFixed(4) : "");
+            + (costUsd   ? " · $" + costUsd.toFixed(4) : "")
+            + (responseMs ? " · " + (responseMs / 1000).toFixed(1) + "s" : "");
         if (ragDocs > 0) {
             const domainLabel = domain ? ` (${domain})` : "";
             metaTxt += ` · 📚 ${ragDocs}개 기억${domainLabel}`;
@@ -1341,7 +1351,48 @@ document.getElementById("promptInput").addEventListener("keydown", e => {
 document.getElementById("promptInput").addEventListener("input", function() {
     this.style.height = "auto";
     this.style.height = Math.min(this.scrollHeight, 238) + "px";
+    // Phase 25: 로컬 복잡도 근사 → 인디케이터 갱신
+    updateComplexityIndicator(estimateComplexity(this.value));
 });
+
+// Phase 25: 복잡도 점수 근사 계산 (서버 응답 전 실시간 피드백)
+function estimateComplexity(text) {
+    if (!text) { return 0; }
+    let s = 0;
+    if (text.length > 150) { s += 15; }
+    if (text.length > 400) { s += 15; }
+    if (/```/.test(text)) { s += 15; }
+    s += Math.min((text.match(/\?/g) || []).length * 5, 15);
+    const kw = ["architecture","implement","algorithm","optimize","refactor","analyze",
+        "아키텍처","구현","알고리즘","최적화","리팩토링","딥러닝","분석","설계","비교","전략"];
+    s += Math.min(kw.filter(k => text.toLowerCase().includes(k)).length * 8, 30);
+    if ((text.match(/\n\n/g) || []).length >= 2) { s += 10; }
+    return Math.min(s, 100);
+}
+
+function updateComplexityIndicator(score) {
+    const dot = document.getElementById("complexityDot");
+    if (!dot) { return; }
+    if (score >= 70) {
+        dot.style.color = "#e05050"; dot.title = "복잡도 높음 (" + score + ") — Cloud AI 권장";
+    } else if (score >= 40) {
+        dot.style.color = "#d4a017"; dot.title = "복잡도 보통 (" + score + ") — Hybrid 권장";
+    } else {
+        dot.style.color = "#4caf50"; dot.title = "복잡도 낮음 (" + score + ") — Local OK";
+    }
+}
+
+let _escBarTimer = null;
+function showHybridEscalationBanner(msg, score) {
+    const bar = document.getElementById("hybridEscBar");
+    if (!bar) { return; }
+    if (score < 45) { bar.style.display = "none"; return; }
+    bar.textContent = msg;
+    bar.className = "hybrid-escalation-bar" + (score >= 70 ? " esc-high" : " esc-mid");
+    bar.style.display = "block";
+    if (_escBarTimer) { clearTimeout(_escBarTimer); }
+    _escBarTimer = setTimeout(() => { bar.style.display = "none"; }, 8000);
+}
 document.getElementById("newSessBtn").onclick = () => vscode.postMessage({ type: "newSession" });
 document.getElementById("chatTab").onclick = () => switchTab("chat");
 document.getElementById("dashTab").onclick = () => switchTab("dash");

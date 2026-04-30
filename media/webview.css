@@ -689,6 +689,14 @@ body[dir="rtl"] .drop-menu{text-align:right}
   color:var(--vscode-button-secondaryForeground);border:none;border-radius:4px;
   padding:8px;font-size:12px;cursor:pointer}
 
+/* ── Phase 25: 복잡도 인디케이터 & 에스컬레이션 배너 ────── */
+.complexity-dot{font-size:9px;line-height:1;opacity:.8;cursor:default;
+  transition:color .3s;flex-shrink:0;color:#4caf50;align-self:center}
+.hybrid-escalation-bar{padding:4px 8px;font-size:11px;border-radius:3px;
+  margin:2px 0;animation:fadeIn .3s}
+.esc-mid{background:#3a2e00;color:#ffe08a;border-left:3px solid #d4a017}
+.esc-high{background:#3a0000;color:#ffb0b0;border-left:3px solid #e05050}
+
 /* ── Phase 24: 위키링크 배지 ────────────────────────────── */
 .wiki-links{margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;
   font-size:11px;color:var(--vscode-descriptionForeground)}

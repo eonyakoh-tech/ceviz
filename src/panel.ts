@@ -383,6 +383,10 @@ export class CevizPanel implements vscode.WebviewViewProvider {
     private _wikiIndexBuiltAt = 0;
     private readonly _WIKI_INDEX_TTL = 5 * 60 * 1000; // 5분 캐시
 
+    // ── Phase 25: Hybrid 지능형 라우팅 ───────────────────────────────────────
+    private _recentResponseLengths: number[] = []; // 최근 5회 응답 길이 추적
+    private _lowQualityWarned = false; // 저품질 경고 중복 방지
+
     // ── Phase 22: Multi-Cloud AI Domain Routing ──────────────────────────────
     private readonly _anthropicAdapter = new AnthropicAdapter();
     private readonly _geminiAdapter    = new GeminiAdapter();
@@ -1145,16 +1149,24 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
             return;
         }
 
-        // Local 모드 고난도 감지
-        if (this._mode === "local") {
-            const hard = ["멀티모달","multimodal","고급 코드","복잡한 논리","딥러닝","아키텍처 설계"];
-            if (hard.some(k => prompt.includes(k))) {
+        // Phase 25: 복잡도 평가 → 웹뷰에 전달 (입력창 인디케이터 갱신)
+        const complexity = this._assessComplexity(prompt);
+        this._view?.webview.postMessage({ type: "complexityScore", score: complexity });
+
+        // Phase 25: Hybrid/Local 모드 고난도 감지 + 에스컬레이션 제안
+        if (this._mode === "local" || this._mode === "hybrid") {
+            if (complexity >= 70) {
                 this._view?.webview.postMessage({
-                    type: "assistantMsg",
-                    content: "⚠️ 이 태스크는 Cloud AI가 필요합니다. Hybrid 모드 전환을 권장합니다.",
-                    agent: "system", tier: 0
+                    type: "hybridEscalation",
+                    score: complexity,
+                    message: `🔴 복잡도 ${complexity}점 — Cloud AI 모드가 더 적합합니다. (현재: ${this._mode})`
                 });
-                return;
+            } else if (complexity >= 45) {
+                this._view?.webview.postMessage({
+                    type: "hybridEscalation",
+                    score: complexity,
+                    message: `🟡 복잡도 ${complexity}점 — Hybrid 모드를 권장합니다.`
+                });
             }
         }
 
@@ -1166,11 +1178,13 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
         this._view?.webview.postMessage({ type: "thinking" });
 
         this._abortController = new AbortController();
+        const reqStart = Date.now(); // Phase 25: 응답 시간 측정 시작
         try {
             const res = await this._http.post(`${this._getUrl()}/prompt`,
                 { prompt: finalPrompt, model: this._model },
                 { timeout: 200000, signal: this._abortController.signal }
             );
+            const responseMs = Date.now() - reqStart; // Phase 25: 응답 시간 (ms)
             const d = res.data;
             const isCloud = d.tier === 2;
             const tokenEstimate = isCloud ? Math.floor(finalPrompt.length / 4 + d.result.length / 4) : 0;
@@ -1196,6 +1210,9 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
             this._context.globalState.update(this._sessionsKey(), this._sessions);
             this._cacheResponse(prompt, d.result, d.agent, d.engine, d.tier);
 
+            // Phase 25: 품질 추적
+            this._trackResponseQuality(d.result.length);
+
             this._view?.webview.postMessage({
                 type: "assistantMsg",
                 content: d.result,
@@ -1207,7 +1224,8 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
                 totalTokens: this._totalTokens,
                 ragDocs,
                 domain,
-                wikiLinks: wikiLinks.length > 0 ? wikiLinks : undefined
+                wikiLinks: wikiLinks.length > 0 ? wikiLinks : undefined,
+                responseMs  // Phase 25: 응답 시간
             });
             // 프로젝트 컨텍스트 자동 업데이트
             if (this._currentProject) {
@@ -1270,6 +1288,47 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
             }
         } finally {
             this._abortController = undefined;
+        }
+    }
+
+    // ── Phase 25: 복잡도 평가 & 품질 추적 ────────────────────────────────────
+
+    private _assessComplexity(prompt: string): number {
+        let score = 0;
+        // 길이 점수
+        if (prompt.length > 150) { score += 15; }
+        if (prompt.length > 400) { score += 15; }
+        // 코드 블록
+        if (/```/.test(prompt)) { score += 15; }
+        // 질문 수
+        score += Math.min((prompt.match(/\?/g) || []).length * 5, 15);
+        // 전문 키워드
+        const techKw = [
+            "architecture","implement","algorithm","optimize","refactor","analyze","design",
+            "아키텍처","구현","알고리즘","최적화","리팩토링","딥러닝","분석","설계","비교","전략"
+        ];
+        score += Math.min(techKw.filter(k => prompt.toLowerCase().includes(k)).length * 8, 30);
+        // 다중 문단
+        if ((prompt.match(/\n\n/g) || []).length >= 2) { score += 10; }
+        return Math.min(score, 100);
+    }
+
+    private _trackResponseQuality(responseLen: number) {
+        this._recentResponseLengths.unshift(responseLen);
+        if (this._recentResponseLengths.length > 5) {
+            this._recentResponseLengths = this._recentResponseLengths.slice(0, 5);
+        }
+        if (this._recentResponseLengths.length < 3) { return; }
+        const avg = this._recentResponseLengths.reduce((a, b) => a + b, 0) / this._recentResponseLengths.length;
+        if (avg < 80 && !this._lowQualityWarned && this._mode !== "cloud") {
+            this._lowQualityWarned = true;
+            this._view?.webview.postMessage({
+                type: "hybridQualityWarning",
+                avg: Math.round(avg),
+                suggestion: "Cloud AI 또는 Hybrid 모드로 전환하면 더 풍부한 답변을 받을 수 있습니다."
+            });
+        } else if (avg >= 120) {
+            this._lowQualityWarned = false;
         }
     }
 
@@ -2735,10 +2794,12 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
   </div>
   <div class="inp-row">
     <textarea class="prompt" id="promptInput" placeholder="무엇을 만들어 드릴까요?" rows="1"></textarea>
+    <span class="complexity-dot" id="complexityDot" title="프롬프트 복잡도">●</span>
     <button class="mic-btn" id="micBtn" title="음성 입력 (한국어/영어)">🎙</button>
     <button class="send" id="sendBtn">↑</button>
     <button class="stop-btn" id="stopBtn" title="전송 취소 (Stop)">■</button>
   </div>
+  <div class="hybrid-escalation-bar" id="hybridEscBar" style="display:none"></div>
   <div class="bot-bar">
     <div class="mode-drop" id="modeDrop">
       <button class="mode-btn" id="modeBtn">
