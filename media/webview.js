@@ -372,6 +372,17 @@ let _routingThreshold = 0.60;
 let _tokenUsage = { today: { costUsd: 0, tokens: 0 }, monthly: { costUsd: 0, tokens: 0 } };
 let _cloudModels = { anthropic: [], gemini: [] };
 
+// ── Phase 28: 메시지 선택 & 세션 관리 상태 ──────────────────────────────────
+const _checkedMsgs = new Set(); // 선택된 메시지 인덱스
+let _monthlyBudgetUsd = 50;     // 월 예산 (설정값)
+let _sessCategories = [         // 카테고리 목록
+    { id: "general",  name: "일반",      color: "#888"    },
+    { id: "coding",   name: "코딩",      color: "#5a9fd4" },
+    { id: "english",  name: "영어 학습", color: "#4ec9b0" },
+    { id: "planning", name: "기획",      color: "#d4a017" },
+];
+let _sessCtxMenu = null; // 현재 열린 컨텍스트 메뉴 타겟 세션 id
+
 window.addEventListener("load", () => {
     console.log("CEVIZ: load fired, sending ready");
     vscode.postMessage({ type: "ready" });
@@ -430,6 +441,19 @@ window.addEventListener("message", e => {
                     costEl.style.display = "inline";
                 }
             }
+            // Phase 28 E4: 라우팅 경로 시각화 (meta에 추가)
+            if (m.routeInfo) {
+                const lastMsg = document.querySelector(".msg.assistant:last-child .meta");
+                if (lastMsg) {
+                    const badge = document.createElement("span");
+                    badge.className = "route-badge " + (m.routeInfo.tier === 2 ? "cloud" : "local");
+                    badge.title = m.routeInfo.detail || "";
+                    badge.textContent = (m.routeInfo.tier === 2 ? "☁️ " : "🖥️ ") + (m.routeInfo.domain || "") +
+                        (m.routeInfo.confidence ? " " + Math.round(m.routeInfo.confidence * 100) + "%" : "") +
+                        (m.responseMs ? " " + (m.responseMs / 1000).toFixed(1) + "s" : "");
+                    lastMsg.appendChild(badge);
+                }
+            }
             updateTokenBarVisibility();
             break;
         case "complexityScore":
@@ -484,6 +508,13 @@ window.addEventListener("message", e => {
             break;
         case "vaultInfo":
             renderVaultInfo(m);
+            // Phase 28 B: 인박스 경로 표시 업데이트
+            if (m.configured && m.vaultPath) {
+                const pathEl = document.getElementById("inboxDlgPath");
+                if (pathEl) {
+                    pathEl.textContent = "저장 위치: " + m.vaultPath + "/00_Inbox/";
+                }
+            }
             break;
         case "vaultDetect":
             renderVaultDetect(m.paths);
@@ -756,7 +787,38 @@ window.addEventListener("message", e => {
 
         case "tokenUsage":
             _tokenUsage = m;
+            if (m.monthlyBudgetUsd !== undefined) { _monthlyBudgetUsd = m.monthlyBudgetUsd; }
             _renderTokenUsage();
+            updateTokenBarExtended();
+            break;
+
+        case "inboxSaved":
+            closeInboxDialog();
+            clearInboxSelection();
+            document.getElementById("inboxDlgSaveBtn").disabled = false;
+            document.getElementById("inboxDlgSaveBtn").textContent = ".md 파일로 저장";
+            if (m.ok) {
+                const toastMsg = `✅ '${escapeHtml(m.fileName)}' 저장 완료\n→ ${escapeHtml(m.filePath)}`;
+                showCtxToast(toastMsg);
+            } else {
+                showCtxToast("❌ 저장 실패: " + escapeHtml(m.error || "알 수 없는 오류"));
+            }
+            break;
+
+        case "messageDeleted":
+            renderChat();
+            break;
+
+        case "sessionRenamed":
+            { const s = sessions.find(x => x.id === m.id); if (s) { s.title = m.title; } renderSessions(); }
+            break;
+
+        case "sessionPinned":
+            { const s = sessions.find(x => x.id === m.id); if (s) { s.pinned = m.pinned; } renderSessions(); }
+            break;
+
+        case "sessionStarred":
+            { const s = sessions.find(x => x.id === m.id); if (s) { s.starred = m.starred; } renderSessions(); }
             break;
 
         case "cloudModels":
@@ -909,18 +971,136 @@ function _showDepWarning(missing) {
 function renderSessions() {
     const list = document.getElementById("sessList");
     list.innerHTML = "";
-    [...sessions].reverse().forEach(s => {
+
+    // 고정 세션 먼저, 그 다음 나머지 (역시간순)
+    const pinned    = sessions.filter(s => s.pinned).reverse();
+    const unpinned  = sessions.filter(s => !s.pinned).reverse();
+    const ordered   = [...pinned, ...unpinned];
+
+    ordered.forEach(s => {
+        const wrap = document.createElement("div");
+        wrap.className = "sitem-wrap" + (s.id === curId ? " cur" : "");
+
+        // 고정 아이콘
+        if (s.pinned) {
+            const pinIcon = document.createElement("span");
+            pinIcon.className = "sitem-pin";
+            pinIcon.textContent = "📌";
+            wrap.appendChild(pinIcon);
+        }
+        // 별표 아이콘
+        if (s.starred) {
+            const starIcon = document.createElement("span");
+            starIcon.className = "sitem-star";
+            starIcon.textContent = "⭐";
+            wrap.appendChild(starIcon);
+        }
+
         const el = document.createElement("div");
-        el.className = "sitem" + (s.id === curId ? " cur" : "");
+        el.className = "sitem" + (s.id === curId ? " cur" : "") + (s.pinned ? " pinned" : "");
         el.textContent = s.title || "New Session";
         el.onclick = () => { curId = s.id; vscode.postMessage({ type: "switchSession", id: s.id }); };
-        list.appendChild(el);
+        wrap.appendChild(el);
+
+        // ⋮ 컨텍스트 메뉴 버튼
+        const menuBtn = document.createElement("button");
+        menuBtn.className = "sitem-menu-btn";
+        menuBtn.textContent = "⋮";
+        menuBtn.title = "세션 옵션";
+        menuBtn.onclick = (e) => { e.stopPropagation(); openSessCtxMenu(s.id, menuBtn); };
+        wrap.appendChild(menuBtn);
+
+        list.appendChild(wrap);
     });
+}
+
+// ── Phase 28 D: 세션 컨텍스트 메뉴 ──────────────────────────────────────────
+
+function openSessCtxMenu(sessId, anchor) {
+    closeSessCtxMenu();
+    _sessCtxMenu = sessId;
+    const menu = document.getElementById("sessCtxMenu");
+    if (!menu) { return; }
+    const s = sessions.find(x => x.id === sessId);
+    if (!s) { return; }
+
+    menu.innerHTML = "";
+
+    function addItem(icon, label, action, danger) {
+        const item = document.createElement("div");
+        item.className = "sess-ctx-item" + (danger ? " danger" : "");
+        item.innerHTML = `<span>${icon}</span><span>${escapeHtml(label)}</span>`;
+        item.onclick = () => { closeSessCtxMenu(); action(); };
+        menu.appendChild(item);
+    }
+    function addSep() {
+        const sep = document.createElement("div"); sep.className = "sess-ctx-sep";
+        menu.appendChild(sep);
+    }
+
+    addItem("⭐", s.starred ? "별표 해제" : "별표", () => {
+        vscode.postMessage({ type: "starSession", id: sessId, starred: !s.starred });
+    });
+    addItem("📌", s.pinned ? "고정 해제" : "고정", () => {
+        vscode.postMessage({ type: "pinSession", id: sessId, pinned: !s.pinned });
+    });
+    addItem("✏️", "이름 변경", () => startRenameSession(sessId));
+    addItem("📤", "대화 복사", () => {
+        const msgs = s.messages.map(m => (m.role === "user" ? "나: " : "AI: ") + m.content).join("\n\n");
+        navigator.clipboard.writeText(msgs).then(() => showCtxToast("✅ 대화 내용 복사됨"));
+    });
+    addSep();
+    addItem("🗑️", "삭제", () => {
+        if (!confirm(`"${s.title || "세션"}" 을(를) 삭제할까요?`)) { return; }
+        vscode.postMessage({ type: "deleteSession", id: sessId });
+    }, true);
+
+    // 위치 계산
+    const r = anchor.getBoundingClientRect();
+    menu.style.left = Math.max(0, r.right - 145) + "px";
+    menu.style.top  = (r.bottom + 2) + "px";
+    menu.classList.add("show");
+}
+
+function closeSessCtxMenu() {
+    const menu = document.getElementById("sessCtxMenu");
+    if (menu) { menu.classList.remove("show"); }
+    _sessCtxMenu = null;
+}
+
+function startRenameSession(sessId) {
+    const s = sessions.find(x => x.id === sessId);
+    if (!s) { return; }
+    const wrap = [...document.querySelectorAll(".sitem-wrap")].find(w => {
+        const el = w.querySelector(".sitem");
+        return el && el.textContent === (s.title || "New Session");
+    });
+    if (!wrap) { return; }
+    const el = wrap.querySelector(".sitem");
+    if (!el) { return; }
+    const old = s.title || "New Session";
+    el.contentEditable = "true";
+    el.textContent = old;
+    el.focus();
+    document.execCommand("selectAll");
+    const finish = () => {
+        el.contentEditable = "false";
+        const newTitle = el.textContent.trim();
+        if (!newTitle) { el.textContent = old; return; }
+        vscode.postMessage({ type: "renameSession", id: sessId, title: newTitle });
+    };
+    el.onblur = finish;
+    el.onkeydown = (e) => {
+        if (e.key === "Enter") { e.preventDefault(); el.blur(); }
+        if (e.key === "Escape") { el.textContent = old; el.blur(); }
+    };
 }
 
 function renderChat() {
     const area = document.getElementById("chatArea");
     area.innerHTML = "";
+    _checkedMsgs.clear();
+    updateInboxBar();
     const s = sessions.find(x => x.id === curId);
     if (!s) { return; }
     s.messages.forEach(m => appendMsg(m.role, m.content, m.agent, m.tier, m.engine, m.tier === 2, m.tokenUsage, m.ragDocs, m.domain, m.costUsd, m.wikiLinks));
@@ -928,23 +1108,115 @@ function renderChat() {
 
 function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage, ragDocs, domain, costUsd, wikiLinks, responseMs) {
     const area = document.getElementById("chatArea");
+    const msgIdx = area.querySelectorAll(".msg").length;
+
     const div = document.createElement("div");
     div.className = "msg " + role;
+    div.dataset.idx = msgIdx;
+
+    // ── 체크박스 (영역 B) ──────────────────────────────────────
+    const cbWrap = document.createElement("label");
+    cbWrap.className = "msg-cb-wrap";
+    cbWrap.title = "00_Inbox로 보내기 위해 선택";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.className = "msg-cb";
+    cb.addEventListener("change", () => {
+        if (cb.checked) { _checkedMsgs.add(msgIdx); }
+        else            { _checkedMsgs.delete(msgIdx); }
+        updateInboxBar();
+    });
+    cbWrap.appendChild(cb);
+    div.appendChild(cbWrap);
+
+    // ── 메시지 내용 래퍼 ─────────────────────────────────────
+    const inner = document.createElement("div");
+    inner.className = "msg-inner";
+
     const bub = document.createElement("div");
     bub.className = "bubble";
     bub.textContent = content;
+    inner.appendChild(bub);
+
+    // ── 액션 버튼 바 (영역 A) ────────────────────────────────
+    const actions = document.createElement("div");
+    actions.className = "msg-actions";
+
+    function makeActBtn(icon, tipText, cls) {
+        const b = document.createElement("button");
+        b.className = "act-btn" + (cls ? " " + cls : "");
+        b.textContent = icon;
+        b.title = tipText;
+        return b;
+    }
+
     if (role === "user") {
-        bub.title = "클릭하여 수정";
-        bub.onclick = () => {
+        const retryBtn   = makeActBtn("↻",  "이 프롬프트 재전송");
+        const editBtn    = makeActBtn("✏️", "수정 후 재전송");
+        const copyBtn    = makeActBtn("📋", "복사");
+        const delBtn     = makeActBtn("🗑️","삭제", "act-del");
+        const likeBtn    = makeActBtn("👍", "좋아요");
+        const dislikeBtn = makeActBtn("👎", "싫어요");
+
+        retryBtn.onclick = () => vscode.postMessage({ type: "sendPrompt", prompt: content });
+
+        editBtn.onclick = () => {
             const inp = document.getElementById("promptInput");
             inp.value = content;
             inp.style.height = "auto";
             inp.style.height = Math.min(inp.scrollHeight, 100) + "px";
             inp.focus();
         };
+
+        copyBtn.onclick = () => {
+            navigator.clipboard.writeText(content).then(() => {
+                copyBtn.textContent = "✅"; setTimeout(() => { copyBtn.textContent = "📋"; }, 1500);
+            });
+        };
+
+        delBtn.onclick = () => {
+            if (!confirm("이 메시지와 이어지는 AI 응답을 삭제할까요?")) { return; }
+            vscode.postMessage({ type: "deleteMessage", idx: msgIdx });
+        };
+
+        likeBtn.onclick = () => {
+            vscode.postMessage({ type: "messageFeedback", idx: msgIdx, value: 1 });
+            likeBtn.classList.add("act-active"); dislikeBtn.classList.remove("act-active");
+        };
+        dislikeBtn.onclick = () => {
+            vscode.postMessage({ type: "messageFeedback", idx: msgIdx, value: -1 });
+            dislikeBtn.classList.add("act-active"); likeBtn.classList.remove("act-active");
+        };
+
+        actions.append(retryBtn, editBtn, copyBtn, delBtn, likeBtn, dislikeBtn);
+
+    } else if (role === "assistant") {
+        const copyBtn    = makeActBtn("📋", "복사");
+        const likeBtn    = makeActBtn("👍", "좋은 답변");
+        const dislikeBtn = makeActBtn("👎", "아쉬운 답변");
+
+        copyBtn.onclick = () => {
+            navigator.clipboard.writeText(content).then(() => {
+                copyBtn.textContent = "✅"; setTimeout(() => { copyBtn.textContent = "📋"; }, 1500);
+            });
+        };
+        likeBtn.onclick = () => {
+            vscode.postMessage({ type: "messageFeedback", idx: msgIdx, value: 1, engine });
+            likeBtn.classList.add("act-active"); dislikeBtn.classList.remove("act-active");
+        };
+        dislikeBtn.onclick = () => {
+            vscode.postMessage({ type: "messageFeedback", idx: msgIdx, value: -1, engine });
+            dislikeBtn.classList.add("act-active"); likeBtn.classList.remove("act-active");
+        };
+        actions.append(copyBtn, likeBtn, dislikeBtn);
     }
-    div.appendChild(bub);
+
+    inner.appendChild(actions);
+
+    // ── 어시스턴트 메타 정보 ─────────────────────────────────
     if (role === "assistant") {
+        if (ragDocs > 0) { div.classList.add("rag-hit"); }
+
         const meta = document.createElement("div");
         meta.className = "meta";
         let metaTxt = (agent || "")
@@ -958,18 +1230,22 @@ function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage, ragD
             metaTxt += ` · 📚 ${ragDocs}개 기억${domainLabel}`;
         }
         meta.textContent = metaTxt;
-        div.appendChild(meta);
-        if (ragDocs > 0) {
-            div.classList.add("rag-hit");
-        }
+
         if (isCloud && content) {
             const lb = document.createElement("button");
             lb.className = "learn-btn";
             lb.textContent = "📚 RAG에 저장";
-            lb.title = "Cloud AI 처리 방식을 Local 모델에 단방향 학습";
-            lb.onclick = () => { pendingLearnBtn = lb; lb.disabled = true; lb.textContent = "저장 중... (최대 5분)"; vscode.postMessage({ type: "learnFromCloud", response: content }); };
+            lb.title = "Cloud AI 처리 방식을 Local 모델에 단방향 학습 (RAG용)";
+            lb.onclick = () => {
+                pendingLearnBtn = lb; lb.disabled = true;
+                lb.textContent = "저장 중... (최대 5분)";
+                vscode.postMessage({ type: "learnFromCloud", response: content });
+            };
             meta.appendChild(lb);
         }
+
+        inner.appendChild(meta);
+
         // Phase 24: 위키링크 배지
         if (wikiLinks && wikiLinks.length > 0) {
             const wikiRow = document.createElement("div");
@@ -983,11 +1259,78 @@ function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage, ragD
                 badge.onclick = () => vscode.postMessage({ type: "wikiOpenNote", relPath: lk.relPath });
                 wikiRow.appendChild(badge);
             });
-            div.appendChild(wikiRow);
+            inner.appendChild(wikiRow);
         }
     }
+
+    div.appendChild(inner);
     area.appendChild(div);
     area.scrollTop = area.scrollHeight;
+}
+
+// ── Phase 28 B: 00_Inbox 선택 카운터 & 저장 ─────────────────────────────────
+
+function updateInboxBar() {
+    const bar = document.getElementById("inboxBar");
+    const countEl = document.getElementById("inboxBarCount");
+    if (!bar || !countEl) { return; }
+    const n = _checkedMsgs.size;
+    if (n === 0) {
+        bar.classList.remove("show");
+    } else {
+        bar.classList.add("show");
+        const s = sessions.find(x => x.id === curId);
+        const msgs = s ? s.messages : [];
+        let userN = 0, aiN = 0;
+        _checkedMsgs.forEach(idx => {
+            if (msgs[idx]) { msgs[idx].role === "user" ? userN++ : aiN++; }
+        });
+        countEl.textContent = `📋 ${n}개 선택됨 (사용자 ${userN} + AI ${aiN})`;
+    }
+}
+
+function clearInboxSelection() {
+    _checkedMsgs.clear();
+    document.querySelectorAll(".msg-cb").forEach(cb => { cb.checked = false; });
+    updateInboxBar();
+}
+
+function showInboxDialog() {
+    const s = sessions.find(x => x.id === curId);
+    const msgs = (s ? s.messages : []);
+    let userN = 0, aiN = 0;
+    _checkedMsgs.forEach(idx => {
+        if (msgs[idx]) { msgs[idx].role === "user" ? userN++ : aiN++; }
+    });
+    document.getElementById("inboxDlgInfo").textContent = `선택된 메시지: ${_checkedMsgs.size}개 (사용자 ${userN} + AI ${aiN})`;
+    document.getElementById("inboxTitleInp").value = s ? (s.title || "CEVIZ 채팅 기록") : "CEVIZ 채팅 기록";
+    document.getElementById("inboxDlgOverlay").classList.add("show");
+    setTimeout(() => document.getElementById("inboxTitleInp").focus(), 60);
+}
+
+function closeInboxDialog() {
+    document.getElementById("inboxDlgOverlay").classList.remove("show");
+}
+
+function doSaveToInbox() {
+    const title = document.getElementById("inboxTitleInp").value.trim();
+    if (!title) { document.getElementById("inboxTitleInp").focus(); return; }
+    const inclMeta = document.getElementById("inboxOptMeta").checked;
+    const inclSrc  = document.getElementById("inboxOptSrc").checked;
+    const s = sessions.find(x => x.id === curId);
+    const msgs = (s ? s.messages : []);
+    const selectedMsgs = [];
+    [..._checkedMsgs].sort((a, b) => a - b).forEach(idx => {
+        if (msgs[idx]) { selectedMsgs.push({ idx, ...msgs[idx] }); }
+    });
+    const saveBtn = document.getElementById("inboxDlgSaveBtn");
+    saveBtn.disabled = true; saveBtn.textContent = "저장 중...";
+    vscode.postMessage({
+        type: "saveSelectedToInbox",
+        title, messages: selectedMsgs,
+        inclMeta, inclSrc,
+        sessionModel: s ? s.model : "",
+    });
 }
 
 // ── CLAUDE CLI 스트리밍 버블 ───────────────────────────────────────────────
@@ -1069,6 +1412,26 @@ function updateTokenBarVisibility() {
     } else {
         bar.classList.remove("show");
     }
+    // Phase 28 C: 모델명 + 비용 + 월 예산 표시
+    updateTokenBarExtended();
+}
+
+function updateTokenBarExtended() {
+    const row2 = document.getElementById("tokenBarRow2");
+    if (!row2) { return; }
+    const today   = (_tokenUsage && _tokenUsage.today)   || { costUsd: 0 };
+    const monthly = (_tokenUsage && _tokenUsage.monthly) || { costUsd: 0 };
+    const budget  = _monthlyBudgetUsd || 50;
+    const pct     = budget > 0 ? Math.min(100, (monthly.costUsd / budget) * 100) : 0;
+    const barCls  = pct >= 90 ? "danger" : pct >= 70 ? "warn" : "";
+    const currentModel = mode === "cloud" ? (model || "cloud") : model;
+    row2.innerHTML =
+        `<span class="token-model-badge">${escapeHtml(currentModel)}</span>` +
+        (today.costUsd > 0 ? `<span class="token-cost-badge">오늘 $${today.costUsd.toFixed(4)}</span>` : "") +
+        (monthly.costUsd > 0 ?
+            `<div class="token-budget-bar-wrap" title="월 $${monthly.costUsd.toFixed(3)} / $${budget}">` +
+            `<div class="token-budget-bar ${barCls}" style="width:${pct.toFixed(1)}%"></div></div>` +
+            `<span style="font-size:9px;color:var(--vscode-descriptionForeground)">${pct.toFixed(1)}%</span>` : "");
 }
 
 function updateRagStats(stats) {
@@ -1183,6 +1546,38 @@ function sendPrompt() {
     inp.value = ""; inp.style.height = "auto";
     vscode.postMessage({ type: "sendPrompt", prompt: finalPrompt, mode, model });
 }
+
+// ── Phase 28 B: 인박스 바 이벤트 바인딩 ─────────────────────────────────────
+(function () {
+    const saveBtn   = document.getElementById("inboxSaveBtn");
+    const clearBtn  = document.getElementById("inboxClearBtn");
+    const cancelBtn = document.getElementById("inboxDlgCancelBtn");
+    const doSaveBtn = document.getElementById("inboxDlgSaveBtn");
+    if (saveBtn)   { saveBtn.onclick   = showInboxDialog; }
+    if (clearBtn)  { clearBtn.onclick  = clearInboxSelection; }
+    if (cancelBtn) { cancelBtn.onclick = closeInboxDialog; }
+    if (doSaveBtn) { doSaveBtn.onclick = doSaveToInbox; }
+
+    // 00_Inbox 경로 표시
+    const overlay = document.getElementById("inboxDlgOverlay");
+    if (overlay) {
+        overlay.addEventListener("click", e => { if (e.target === overlay) { closeInboxDialog(); } });
+    }
+
+    const titleInp = document.getElementById("inboxTitleInp");
+    if (titleInp) {
+        titleInp.addEventListener("keydown", e => {
+            if (e.key === "Enter") { doSaveToInbox(); }
+            if (e.key === "Escape") { closeInboxDialog(); }
+        });
+    }
+})();
+
+// ── Phase 28 D: 세션 컨텍스트 메뉴 닫기 ─────────────────────────────────────
+document.addEventListener("click", e => {
+    const menu = document.getElementById("sessCtxMenu");
+    if (menu && !menu.contains(e.target)) { closeSessCtxMenu(); }
+});
 
 function closeVaultPanel() {
     if (!vaultOpen) { return; }

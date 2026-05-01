@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -38,6 +39,10 @@ CLASSIFIER_MODEL = "gemma3:1b"
 KEYWORD_SCORE_WEIGHT = 0.4
 LLM_SCORE_WEIGHT = 0.6
 MAX_KEYWORDS_PER_DOMAIN = 50
+
+# ── Phase 28 E3: 분류 결과 LRU 캐시 (최근 100개 프롬프트 패턴) ───────────────
+_CLASSIFY_CACHE: "OrderedDict[str, dict]" = OrderedDict()
+_CLASSIFY_CACHE_MAX = 100
 # 프롬프트 인젝션 방어: 허용 불가 패턴
 _INJECTION_PATTERNS = re.compile(
     r"(ignore\s+previous|forget\s+(all|everything)|system\s*:|<\s*/?(?:script|iframe|svg))",
@@ -127,6 +132,18 @@ def _default_domains() -> list[dict[str, Any]]:
             "keywords": [
                 kw("이미지", 1.0), kw("사진", 1.0), kw("그림", 0.5),
                 kw("스크린샷", 1.0), kw("분석해", 0.5),
+            ],
+            "modelMapping": {"anthropic": "claude-sonnet-4-6", "gemini": "gemini-2.5-pro"},
+        },
+        {
+            "key": "research_factual", "displayName": "사실 자료 조사",
+            "enabled": True, "isBuiltin": True,
+            "keywords": [
+                kw("자료 조사", 1.0), kw("사실 확인", 1.0), kw("역사", 1.0),
+                kw("근거", 1.0), kw("출처", 1.0), kw("참고문헌", 1.0),
+                kw("찾아줘", 0.8), kw("검색해", 0.8), kw("조사해", 1.0),
+                kw("최신 정보", 1.0), kw("실제로", 0.5), kw("확인해줘", 0.8),
+                kw("역사적 사실", 1.0), kw("언제 시작", 0.8), kw("비교해줘", 0.7),
             ],
             "modelMapping": {"anthropic": "claude-sonnet-4-6", "gemini": "gemini-2.5-pro"},
         },
@@ -288,11 +305,32 @@ class LearnRequest(BaseModel):
 
 # ── 라우터 엔드포인트 ─────────────────────────────────────────────────────────
 
+def _cache_key(question: str, active_domains: list[str] | None) -> str:
+    """LRU 캐시 키: 첫 80자 + 도메인 해시."""
+    prefix = re.sub(r"\s+", " ", question[:80]).lower()
+    suffix = ",".join(sorted(active_domains)) if active_domains else "all"
+    return prefix + "|" + suffix
+
+
+def _cache_get(key: str) -> dict | None:
+    if key in _CLASSIFY_CACHE:
+        _CLASSIFY_CACHE.move_to_end(key)
+        return _CLASSIFY_CACHE[key]
+    return None
+
+
+def _cache_put(key: str, result: dict) -> None:
+    _CLASSIFY_CACHE[key] = result
+    _CLASSIFY_CACHE.move_to_end(key)
+    while len(_CLASSIFY_CACHE) > _CLASSIFY_CACHE_MAX:
+        _CLASSIFY_CACHE.popitem(last=False)
+
+
 @router.post("")
 async def classify_domain(req: ClassifyRequest):
     """
     질문을 받아 도메인 분류 결과 반환.
-    응답: { domain, confidence, alternatives: [{domain, confidence}] }
+    응답: { domain, confidence, alternatives: [{domain, confidence}], cached: bool }
     """
     question = _sanitize_text(req.question)
     domains = _load_config()
@@ -309,6 +347,12 @@ async def classify_domain(req: ClassifyRequest):
 
     domain_keys = [d["key"] for d in enabled_domains]
 
+    # Phase 28 E3: LRU 캐시 확인 (0ms 응답)
+    ck = _cache_key(req.question, req.active_domains)
+    cached = _cache_get(ck)
+    if cached is not None:
+        return {**cached, "cached": True}
+
     # 1차: 키워드 매칭 (동기, 즉시)
     keyword_scores = {d["key"]: _keyword_score(question, d) for d in enabled_domains}
 
@@ -319,21 +363,24 @@ async def classify_domain(req: ClassifyRequest):
     ranked = _combine_scores(keyword_scores, llm_scores, domain_keys)
 
     if not ranked:
-        return {"domain": domain_keys[0], "confidence": 0.0, "alternatives": []}
+        return {"domain": domain_keys[0], "confidence": 0.0, "alternatives": [], "cached": False}
 
     top_domain, top_confidence = ranked[0]
     alternatives = [
         {"domain": dk, "confidence": round(sc, 4)}
-        for dk, sc in ranked[1:4]  # 상위 3개 대안
+        for dk, sc in ranked[1:4]
         if sc > 0.0
     ]
-    return {
+    result = {
         "domain":       top_domain,
         "confidence":   round(top_confidence, 4),
         "alternatives": alternatives,
-        "keyword_scores": {k: round(v, 4) for k, v in keyword_scores.items()},  # 디버그용
+        "keyword_scores": {k: round(v, 4) for k, v in keyword_scores.items()},
         "llm_scores":     {k: round(v, 4) for k, v in llm_scores.items()},
+        "cached": False,
     }
+    _cache_put(ck, result)
+    return result
 
 
 @router.post("/learn")

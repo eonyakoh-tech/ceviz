@@ -715,3 +715,113 @@ body[dir="rtl"] .drop-menu{text-align:right}
   padding:3px 10px;font-size:11px;cursor:pointer;white-space:nowrap}
 .lic-nudge-dismiss{background:none;border:none;color:#ffe;cursor:pointer;font-size:14px;
   flex-shrink:0;opacity:.8}
+
+/* ── Phase 28: 메시지 구조 개편 ─────────────────────────── */
+.msg{max-width:100%;display:flex;align-items:flex-start;gap:4px;position:relative}
+.msg.user{flex-direction:row-reverse}
+.msg.assistant{flex-direction:row}
+.msg-cb-wrap{display:flex;align-items:flex-start;padding-top:6px;flex-shrink:0;opacity:0;transition:opacity .15s}
+.msg:hover .msg-cb-wrap,.msg-cb-wrap:has(:checked){opacity:1}
+.msg-cb{width:13px;height:13px;cursor:pointer;accent-color:var(--vscode-focusBorder);flex-shrink:0}
+.msg-inner{display:flex;flex-direction:column;max-width:calc(100% - 24px);min-width:0}
+
+/* ── Phase 28 A: 메시지 액션 버튼 ─────────────────────── */
+.msg-actions{display:flex;gap:1px;margin-top:2px;opacity:0;height:0;overflow:hidden;transition:opacity .15s,height .15s;pointer-events:none}
+.msg:hover .msg-actions{opacity:1;height:22px;pointer-events:all}
+.act-btn{background:none;border:1px solid var(--vscode-panel-border);color:var(--vscode-descriptionForeground);
+  border-radius:3px;padding:1px 5px;font-size:10px;cursor:pointer;line-height:1.6;
+  transition:all .1s;white-space:nowrap}
+.act-btn:hover{background:var(--vscode-toolbar-hoverBackground);color:var(--vscode-foreground);border-color:var(--vscode-focusBorder)}
+.act-btn.act-del:hover{border-color:#c44;color:#c44}
+.act-btn.act-active{background:var(--vscode-focusBorder);color:#fff;border-color:var(--vscode-focusBorder)}
+.msg.user .msg-actions{justify-content:flex-end}
+.msg.assistant .msg-actions{justify-content:flex-start}
+
+/* ── Phase 28 B: 00_Inbox 저장 ────────────────────────── */
+.inbox-bar{display:none;padding:4px 8px;background:var(--vscode-editor-inactiveSelectionBackground);
+  border-top:1px solid var(--vscode-panel-border);flex-shrink:0;gap:6px;align-items:center}
+.inbox-bar.show{display:flex}
+.inbox-bar-count{font-size:11px;color:var(--vscode-foreground);flex:1}
+.inbox-save-btn{background:var(--vscode-button-background);color:var(--vscode-button-foreground);
+  border:none;border-radius:3px;padding:3px 10px;font-size:11px;cursor:pointer}
+.inbox-save-btn:hover{background:var(--vscode-button-hoverBackground)}
+.inbox-clear-btn{background:none;border:1px solid var(--vscode-panel-border);
+  color:var(--vscode-descriptionForeground);border-radius:3px;padding:3px 8px;font-size:11px;cursor:pointer}
+.inbox-clear-btn:hover{border-color:#c44;color:#c44}
+
+.inbox-dlg-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:700;
+  display:none;align-items:center;justify-content:center}
+.inbox-dlg-overlay.show{display:flex}
+.inbox-dlg{background:var(--vscode-editor-background);border:1.5px solid var(--vscode-focusBorder);
+  border-radius:10px;padding:20px;width:min(340px,92vw);display:flex;flex-direction:column;gap:10px;
+  box-shadow:0 12px 40px rgba(0,0,0,.6)}
+.inbox-dlg-title{font-size:13px;font-weight:700;color:var(--vscode-editor-foreground)}
+.inbox-dlg-info{font-size:11px;color:var(--vscode-descriptionForeground)}
+.inbox-dlg label{font-size:11px;color:var(--vscode-foreground);display:flex;flex-direction:column;gap:3px}
+.inbox-title-inp{background:var(--vscode-input-background);color:var(--vscode-input-foreground);
+  border:1px solid var(--vscode-input-border,rgba(128,128,128,.35));border-radius:3px;
+  padding:5px 8px;font-size:12px;font-family:var(--vscode-font-family)}
+.inbox-title-inp:focus{outline:1px solid var(--vscode-focusBorder);border-color:transparent}
+.inbox-dlg-opts{display:flex;flex-direction:column;gap:4px}
+.inbox-dlg-opts label{flex-direction:row;align-items:center;gap:6px;cursor:pointer}
+.inbox-dlg-opts input[type=checkbox]{width:12px;height:12px;accent-color:var(--vscode-focusBorder)}
+.inbox-dlg-path{font-size:10px;color:var(--vscode-descriptionForeground);
+  background:var(--vscode-editor-inactiveSelectionBackground);padding:3px 6px;border-radius:3px;
+  word-break:break-all}
+.inbox-dlg-btns{display:flex;gap:8px;margin-top:4px}
+.inbox-dlg-save{flex:1;background:var(--vscode-button-background);color:var(--vscode-button-foreground);
+  border:none;border-radius:4px;padding:7px;font-size:12px;cursor:pointer;font-weight:600}
+.inbox-dlg-save:hover{background:var(--vscode-button-hoverBackground)}
+.inbox-dlg-save:disabled{opacity:.5;cursor:not-allowed}
+.inbox-dlg-cancel{flex:0.6;background:var(--vscode-button-secondaryBackground);
+  color:var(--vscode-button-secondaryForeground);border:none;border-radius:4px;
+  padding:7px;font-size:12px;cursor:pointer}
+
+/* ── Phase 28 C: 향상된 토큰 바 ───────────────────────── */
+.token-bar-row2{font-size:9.5px;color:var(--vscode-descriptionForeground);margin-top:2px;
+  display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.token-model-badge{background:var(--vscode-badge-background);color:var(--vscode-badge-foreground);
+  border-radius:3px;padding:0 4px;font-size:9px}
+.token-cost-badge{color:#7ec;font-size:9px}
+.token-budget-bar-wrap{flex:1;height:3px;background:var(--vscode-panel-border);border-radius:2px;min-width:40px;overflow:hidden}
+.token-budget-bar{height:100%;background:#4caf50;border-radius:2px;transition:width .3s}
+.token-budget-bar.warn{background:#d4a017}
+.token-budget-bar.danger{background:#e05050}
+
+/* ── Phase 28 D: 세션 관리 강화 ───────────────────────── */
+.sitem-wrap{display:flex;align-items:center;gap:2px;padding-right:2px}
+.sitem-wrap .sitem{flex:1;min-width:0}
+.sitem-menu-btn{background:none;border:none;color:var(--vscode-descriptionForeground);cursor:pointer;
+  font-size:12px;padding:1px 3px;border-radius:3px;opacity:0;flex-shrink:0;line-height:1}
+.sitem-wrap:hover .sitem-menu-btn,.sitem-wrap.cur .sitem-menu-btn{opacity:.7}
+.sitem-menu-btn:hover{opacity:1;background:var(--vscode-toolbar-hoverBackground)}
+.sitem-pin{font-size:9px;flex-shrink:0;opacity:.8}
+.sitem-star{font-size:10px;flex-shrink:0}
+.sitem.pinned{border-left:2px solid #5a9fd4;padding-left:4px}
+.sitem.starred::before{content:"⭐ ";font-size:9px}
+
+.sess-ctx{position:fixed;z-index:800;background:var(--vscode-editor-background);
+  border:1px solid var(--vscode-panel-border);border-radius:6px;padding:4px 0;
+  box-shadow:0 4px 16px rgba(0,0,0,.4);min-width:140px;display:none}
+.sess-ctx.show{display:block}
+.sess-ctx-item{padding:5px 12px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:6px;
+  color:var(--vscode-foreground);white-space:nowrap}
+.sess-ctx-item:hover{background:var(--vscode-list-hoverBackground)}
+.sess-ctx-item.danger:hover{color:#c44;background:rgba(200,50,50,.1)}
+.sess-ctx-sep{height:1px;background:var(--vscode-panel-border);margin:3px 0}
+
+.cat-group{display:flex;flex-direction:column;gap:1px}
+.cat-hdr{display:flex;align-items:center;gap:4px;padding:2px 6px 1px;
+  font-size:9px;font-weight:700;color:var(--vscode-descriptionForeground);
+  text-transform:uppercase;letter-spacing:.4px;cursor:pointer;user-select:none}
+.cat-hdr-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.cat-hdr-chevron{margin-left:auto;font-size:8px;transition:transform .15s}
+.cat-group.collapsed .cat-hdr-chevron{transform:rotate(-90deg)}
+.cat-group.collapsed .cat-items{display:none}
+
+/* ── Phase 28 E: 라우팅 시각화 ────────────────────────── */
+.route-badge{font-size:9.5px;padding:1px 5px;border-radius:3px;display:inline-flex;
+  align-items:center;gap:3px;border:1px solid var(--vscode-panel-border)}
+.route-badge.local{border-color:#4caf50;color:#4caf50}
+.route-badge.cloud{border-color:#5a9fd4;color:#5a9fd4}
+.route-badge.fallback{border-color:#d4a017;color:#d4a017}

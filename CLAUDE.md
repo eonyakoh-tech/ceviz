@@ -38,7 +38,7 @@
 | 항목 | 내용 |
 |------|------|
 | 브랜치 | `extension-ui` |
-| 최신 Phase | Phase 25 Hybrid 지능형 라우팅 강화 완료 (2026-04-30) |
+| 최신 Phase | Phase 28 채팅 UI/UX 전면 개편 완료 (2026-05-01) |
 | 패키지 버전 | `ceviz-0.2.0` |
 | 백엔드 주소 | `100.69.155.43:8000` (기본값) |
 | 빌드 상태 | webpack 컴파일 정상 |
@@ -218,6 +218,16 @@
 - **보안**: URL http(s) 검증, yt-dlp 인자 배열 실행, 경로 traversal 차단, 임시파일 finally 삭제, LLM 프롬프트 격리
 - **파일**: `src/panel.ts`, `media/webview.js`, `media/webview.css`, `pn40_rss_router.py`, `pn40_rss_worker.py`, `pn40_rss_setup.sh`
 
+### ✅ Phase 28 — 채팅 UI/UX 전면 개편 & Hybrid 강화
+- **완료**: 2026-05-01
+- **영역 A**: 메시지 액션 버튼 — 호버 시 ↻재시도/✏️수정/📋복사/🗑️삭제/👍👎 피드백
+- **영역 B**: 00_Inbox 저장 — 체크박스 선택, 저장 다이얼로그, .md 파일 생성, 경로 traversal 방어, 파일 보호
+- **영역 C**: 토큰 표시 개선 — 모델명 배지, 오늘 비용, 월 예산 바, `_monthlyBudgetUsd` 설정
+- **영역 D**: 세션 관리 강화 — ⋮ 컨텍스트 메뉴, 인라인 이름 변경, 고정(Pin), 별표(Star), 정렬
+- **영역 E**: Hybrid 라우팅 강화 — research_factual 도메인 추가, 자료조사 키워드 자동 Cloud 위임, LRU 캐시(100개), 라우팅 시각화 배지
+- **영역 F**: PRINCIPLES.md 생성 (5대 원칙), Activity Bar SVG 아이콘(`icon-activitybar.svg`)
+- **파일**: `src/panel.ts`, `media/webview.js`, `media/webview.css`, `pn40_domain_router.py`, `PRINCIPLES.md`(신규), `media/icon-activitybar.svg`(신규), `package.json`
+
 ### ✅ Phase 25 — Hybrid 지능형 라우팅 강화
 - **완료**: 2026-04-30
 - **작업 1**: `panel.ts` — `_assessComplexity(prompt)` 다차원 복잡도 점수 계산 (0~100: 길이·코드블록·질문수·전문키워드·다중문단)
@@ -269,6 +279,7 @@
 | 2026-04-29 | Phase 26: 멀티 OS 배포 패키징 | 작업 1~10 전체 완료. platform.ts, OS별 설치스크립트 3종, 의존성확인 2종, 마법사OS표시, 업데이트메커니즘, package-release.sh. ceviz-0.2.0.vsix 재패키징 완료 |
 | 2026-04-29 | Phase 27: 라이선스 시스템 + LemonSqueezy | 작업 1~11 전체 완료. license.ts, 기능게이트, Cloud쿼터, 업그레이드UX, 사이드바배지, Webhook, Proprietary LICENSE, 설정가이드. ceviz-0.2.0.vsix 185KB 완료 |
 | 2026-04-30 | origin push + Phase 24 자동 위키링크 + Phase 25 Hybrid 지능형 라우팅 | 49커밋 push, Phase 24(위키 인덱스+자동주입+링크배지), Phase 25(복잡도점수+응답시간+에스컬레이션배너), ceviz-0.2.0.vsix 187KB 완료 |
+| 2026-05-01 | Phase 28: 채팅 UI/UX 전면 개편 | 영역 A~F 전체 완료. 메시지 액션·00_Inbox 저장·토큰 표시·세션 관리·Hybrid 강화·PRINCIPLES.md·SVG 아이콘. 빌드 651KB 성공 |
 
 ---
 

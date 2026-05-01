@@ -49,6 +49,17 @@ interface Session {
     createdAt: string;
     mode: string;
     model: string;
+    pinned?:  boolean;
+    starred?: boolean;
+    categoryId?: string;
+}
+
+interface MessageFeedbackRecord {
+    sessionId: string;
+    msgIdx:    number;
+    value:     1 | -1;
+    engine?:   string;
+    timestamp: string;
 }
 
 interface VaultResult {
@@ -387,6 +398,9 @@ export class CevizPanel implements vscode.WebviewViewProvider {
     private _recentResponseLengths: number[] = []; // 최근 5회 응답 길이 추적
     private _lowQualityWarned = false; // 저품질 경고 중복 방지
 
+    // ── Phase 28: 월 예산 & 피드백 ──────────────────────────────────────────
+    private _monthlyBudgetUsd = 50;    // USD 기본값
+
     // ── Phase 22: Multi-Cloud AI Domain Routing ──────────────────────────────
     private readonly _anthropicAdapter = new AnthropicAdapter();
     private readonly _geminiAdapter    = new GeminiAdapter();
@@ -421,6 +435,7 @@ export class CevizPanel implements vscode.WebviewViewProvider {
         this._lastModelRefresh = this._context.globalState.get("ceviz.lastModelRefresh", 0);
         this._dailyTokenLimit   = this._context.globalState.get("ceviz.dailyTokenLimit",   0);
         this._monthlyTokenLimit = this._context.globalState.get("ceviz.monthlyTokenLimit", 0);
+        this._monthlyBudgetUsd  = this._context.globalState.get("ceviz.monthlyBudgetUsd",  50);
         // API 키 상태 플래그 복원 (실제 키는 SecretStorage에만 존재)
         const savedApiStatuses: ApiKeyStatus[] = this._context.globalState.get("ceviz.apiKeyStatuses", []);
         for (const saved of savedApiStatuses) {
@@ -1074,6 +1089,40 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                 case "licenseNudgeDismiss":
                     this._license.markNudgeShown(msg.nudge);
                     break;
+
+                // ── Phase 28 A: 메시지 액션 ─────────────────────────────────
+                case "deleteMessage":
+                    this._deleteMessage(msg.idx);
+                    break;
+
+                case "messageFeedback":
+                    this._recordMessageFeedback(msg.idx, msg.value, msg.engine);
+                    break;
+
+                // ── Phase 28 B: 00_Inbox 저장 ───────────────────────────────
+                case "saveSelectedToInbox":
+                    await this._saveSelectedToInbox(msg.title, msg.messages, msg.inclMeta, msg.inclSrc, msg.sessionModel);
+                    break;
+
+                // ── Phase 28 C: 월 예산 설정 ────────────────────────────────
+                case "setMonthlyBudget":
+                    this._monthlyBudgetUsd = Math.max(0, Number(msg.usd) || 0);
+                    this._context.globalState.update("ceviz.monthlyBudgetUsd", this._monthlyBudgetUsd);
+                    this._sendTokenUsage();
+                    break;
+
+                // ── Phase 28 D: 세션 관리 강화 ──────────────────────────────
+                case "renameSession":
+                    this._renameSession(msg.id, msg.title);
+                    break;
+
+                case "pinSession":
+                    this._pinSession(msg.id, msg.pinned);
+                    break;
+
+                case "starSession":
+                    this._starSession(msg.id, msg.starred);
+                    break;
             }
         });
     }
@@ -1152,6 +1201,26 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
         // Phase 25: 복잡도 평가 → 웹뷰에 전달 (입력창 인디케이터 갱신)
         const complexity = this._assessComplexity(prompt);
         this._view?.webview.postMessage({ type: "complexityScore", score: complexity });
+
+        // Phase 28 E2: Hybrid 모드 자료 조사 키워드 자동 Cloud 위임
+        if (this._mode === "hybrid" && !this._englishMode) {
+            const researchKw = ["조사해", "찾아줘", "검색해", "확인해줘", "역사적 사실",
+                "정확한 정보", "참고 자료", "근거가 뭐", "출처", "최신 정보",
+                "비교해줘", "장단점", "역사에서", "언제 시작", "실제로 맞아"];
+            const lowerPrompt = prompt.toLowerCase();
+            const matchedKw = researchKw.find(kw => lowerPrompt.includes(kw));
+            if (matchedKw) {
+                const hasKey = await this._hasAnyCloudApiKey();
+                if (hasKey) {
+                    this._view?.webview.postMessage({
+                        type: "hybridEscalation", score: 80,
+                        message: `💡 자료 조사 요청 감지 ("${matchedKw}") → Cloud AI(Claude Sonnet 4.6)로 처리`
+                    });
+                    await this._handleRoutedPrompt(session, prompt, finalPrompt);
+                    return;
+                }
+            }
+        }
 
         // Phase 25: Hybrid/Local 모드 고난도 감지 + 에스컬레이션 제안
         if (this._mode === "local" || this._mode === "hybrid") {
@@ -1648,6 +1717,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
                 type: "vaultInfo",
                 configured: true,
                 path: rawPath,
+                vaultPath,  // Phase 28 B: 절대 경로 (인박스 경로 표시용)
                 count,
                 lastSync: new Date().toLocaleTimeString("ko-KR")
             });
@@ -2573,7 +2643,9 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
     <!-- Phase 27: 라이선스 상태 배지 -->
     <span class="lic-status-badge" id="licStatusBadge" title="라이선스 상태"></span>
   </div>
-  <div class="token-bar" id="tokenBar">🔢 토큰 사용량: <span id="tokenCount">0</span> tokens <span class="today-cost-badge" id="todayCostBadge" style="display:none"></span></div>
+  <div class="token-bar" id="tokenBar">🔢 토큰 사용량: <span id="tokenCount">0</span> tokens <span class="today-cost-badge" id="todayCostBadge" style="display:none"></span>
+    <div class="token-bar-row2" id="tokenBarRow2"></div>
+  </div>
   <div class="proj-bar" id="projBar" style="display:none">
     <span>📁</span>
     <span class="proj-bar-label" id="projBarLabel"></span>
@@ -2603,8 +2675,38 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
   <button class="tab" id="cloudTab">☁️ Cloud</button>
 </div>
 
+<!-- Phase 28 B: 00_Inbox 선택 바 -->
+<div class="inbox-bar" id="inboxBar">
+  <span class="inbox-bar-count" id="inboxBarCount">0개 선택됨</span>
+  <button class="inbox-save-btn" id="inboxSaveBtn">📥 00_Inbox로 보내기</button>
+  <button class="inbox-clear-btn" id="inboxClearBtn">선택 해제</button>
+</div>
+
 <!-- 채팅 영역 -->
 <div class="chat" id="chatArea"></div>
+
+<!-- Phase 28 D: 세션 컨텍스트 메뉴 (floating) -->
+<div class="sess-ctx" id="sessCtxMenu"></div>
+
+<!-- Phase 28 B: 00_Inbox 저장 다이얼로그 -->
+<div class="inbox-dlg-overlay" id="inboxDlgOverlay">
+  <div class="inbox-dlg">
+    <div class="inbox-dlg-title">📥 Obsidian 00_Inbox로 저장</div>
+    <div class="inbox-dlg-info" id="inboxDlgInfo">선택된 메시지: 0개</div>
+    <label>파일 제목:
+      <input type="text" class="inbox-title-inp" id="inboxTitleInp" placeholder="예: 사산 왕조 페르시아 자료조사" maxlength="200" />
+    </label>
+    <div class="inbox-dlg-opts">
+      <label><input type="checkbox" id="inboxOptMeta" checked /> 메타데이터 포함 (날짜, 모델, 토큰)</label>
+      <label><input type="checkbox" id="inboxOptSrc" checked /> 출처 표시 (CEVIZ 채팅 기록)</label>
+    </div>
+    <div class="inbox-dlg-path" id="inboxDlgPath">저장 위치: 로드 중...</div>
+    <div class="inbox-dlg-btns">
+      <button class="inbox-dlg-cancel" id="inboxDlgCancelBtn">취소</button>
+      <button class="inbox-dlg-save" id="inboxDlgSaveBtn">.md 파일로 저장</button>
+    </div>
+  </div>
+</div>
 
 <!-- Vault 패널 -->
 <div class="vault-panel" id="vaultPanel">
@@ -4460,8 +4562,9 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
             today:   sumRecords(todayRecords),
             monthly: sumRecords(monthlyRecords),
             daily7:  this._tokenUsageLast7Days(),
-            dailyLimit:   this._dailyTokenLimit,
-            monthlyLimit: this._monthlyTokenLimit,
+            dailyLimit:      this._dailyTokenLimit,
+            monthlyLimit:    this._monthlyTokenLimit,
+            monthlyBudgetUsd: this._monthlyBudgetUsd,
         });
     }
 
@@ -4756,5 +4859,156 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
 
     public getSecurityLog(): Array<{ timestamp: string; event: string; detail: string }> {
         return this._context.globalState.get("ceviz.securityLog", []);
+    }
+
+    // ── Phase 28 A: 메시지 삭제 ──────────────────────────────────────────────
+
+    private _deleteMessage(idx: number): void {
+        const session = this._sessions.find(s => s.id === this._currentSessionId);
+        if (!session || typeof idx !== "number") { return; }
+        if (idx < 0 || idx >= session.messages.length) { return; }
+        // 사용자 메시지 삭제 시 이어지는 어시스턴트 메시지도 함께 삭제
+        const role = session.messages[idx].role;
+        if (role === "user" && idx + 1 < session.messages.length && session.messages[idx + 1].role === "assistant") {
+            session.messages.splice(idx, 2);
+        } else {
+            session.messages.splice(idx, 1);
+        }
+        this._context.globalState.update(this._sessionsKey(), this._sessions);
+        this._view?.webview.postMessage({ type: "messageDeleted" });
+    }
+
+    // ── Phase 28 A: 메시지 피드백 기록 ──────────────────────────────────────
+
+    private _recordMessageFeedback(idx: number, value: 1 | -1, engine?: string): void {
+        const record: MessageFeedbackRecord = {
+            sessionId: this._currentSessionId,
+            msgIdx:    idx,
+            value,
+            engine,
+            timestamp: new Date().toISOString(),
+        };
+        const log: MessageFeedbackRecord[] = this._context.globalState.get("ceviz.feedbackLog", []);
+        log.push(record);
+        // 최근 500건만 유지
+        if (log.length > 500) { log.splice(0, log.length - 500); }
+        this._context.globalState.update("ceviz.feedbackLog", log);
+    }
+
+    // ── Phase 28 B: 00_Inbox 저장 ────────────────────────────────────────────
+
+    private async _saveSelectedToInbox(
+        title: string,
+        messages: Array<{ idx: number; role: string; content: string; agent?: string; engine?: string; tokenUsage?: number }>,
+        inclMeta: boolean,
+        inclSrc:  boolean,
+        sessionModel: string,
+    ): Promise<void> {
+        const vaultPath = this._getVaultPath();
+        if (!vaultPath) {
+            this._view?.webview.postMessage({
+                type: "inboxSaved", ok: false,
+                error: "Vault 경로가 설정되지 않았습니다. 설정에서 ceviz.vaultPath를 지정해주세요.",
+            });
+            return;
+        }
+
+        // 00_Inbox 폴더 보장
+        const inboxDir = path.join(vaultPath, "00_Inbox");
+        await fs.promises.mkdir(inboxDir, { recursive: true });
+
+        // 경로 traversal 방어
+        const resolvedInbox = path.resolve(inboxDir);
+        const resolvedVault = path.resolve(vaultPath);
+        if (!resolvedInbox.startsWith(resolvedVault + path.sep) && resolvedInbox !== resolvedVault) {
+            this._view?.webview.postMessage({ type: "inboxSaved", ok: false, error: "잘못된 경로" });
+            return;
+        }
+
+        // 파일명 sanitization
+        const safeTitle = title.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").slice(0, 200).trim() || "untitled";
+        const today = new Date().toISOString().slice(0, 10);
+        let filePath = path.join(resolvedInbox, `${safeTitle}.md`);
+
+        // 기존 파일 보호 (덮어쓰기 금지)
+        let v = 2;
+        while (fs.existsSync(filePath)) {
+            filePath = path.join(resolvedInbox, `${safeTitle}_v${v}.md`);
+            v++;
+        }
+
+        // 사용한 총 토큰 집계
+        const totalTok = messages.reduce((s, m) => s + (m.tokenUsage || 0), 0);
+        const usedModel = sessionModel || messages.find(m => m.engine)?.engine || "unknown";
+
+        // YAML frontmatter
+        let md = "---\n";
+        md += `title: "${safeTitle.replace(/"/g, '\\"')}"\n`;
+        md += `date: ${today}\n`;
+        if (inclSrc)  { md += `source: CEVIZ Chat\n`; }
+        if (inclMeta) {
+            md += `model: ${usedModel}\n`;
+            if (totalTok > 0) { md += `total_tokens: ${totalTok}\n`; }
+        }
+        md += "---\n\n";
+        md += `# ${safeTitle}\n\n`;
+
+        // 메시지 내용 (XSS 없음 — .md 파일이므로 textContent 그대로 사용)
+        for (const m of messages) {
+            if (m.role === "user") {
+                md += `## 💬 사용자 질문\n> ${m.content.replace(/\n/g, "\n> ")}\n\n`;
+            } else {
+                md += `## 🤖 AI 응답\n${m.content}\n\n`;
+            }
+        }
+
+        if (inclSrc) {
+            md += `---\n*Generated by CEVIZ on ${today}*\n`;
+        }
+
+        await fs.promises.writeFile(filePath, md, "utf8");
+        const fileName = path.basename(filePath);
+
+        this._view?.webview.postMessage({
+            type: "inboxSaved", ok: true,
+            fileName, filePath,
+        });
+
+        // VS Code 토스트 알림
+        const openAction = "Obsidian에서 열기";
+        vscode.window.showInformationMessage(
+            `✅ CEVIZ: '${fileName}' → 00_Inbox 저장 완료`,
+            openAction
+        ).then(sel => {
+            if (sel === openAction) {
+                vscode.commands.executeCommand("vscode.open", vscode.Uri.file(filePath));
+            }
+        });
+    }
+
+    // ── Phase 28 D: 세션 관리 (이름 변경 / 고정 / 별표) ─────────────────────
+
+    private _renameSession(id: string, title: string): void {
+        const s = this._sessions.find(x => x.id === id);
+        if (!s || !title?.trim()) { return; }
+        s.title = title.trim().slice(0, 60);
+        this._context.globalState.update(this._sessionsKey(), this._sessions);
+        this._view?.webview.postMessage({ type: "sessionRenamed", id, title: s.title });
+    }
+
+    private _pinSession(id: string, pinned: boolean): void {
+        const s = this._sessions.find(x => x.id === id);
+        if (!s) { return; }
+        s.pinned = !!pinned;
+        this._context.globalState.update(this._sessionsKey(), this._sessions);
+        this._view?.webview.postMessage({ type: "sessionPinned", id, pinned: s.pinned });
+    }
+
+    private _starSession(id: string, starred: boolean): void {
+        const s = this._sessions.find(x => x.id === id);
+        if (!s) { return; }
+        s.starred = !!starred;
+        this._context.globalState.update(this._sessionsKey(), this._sessions);
+        this._view?.webview.postMessage({ type: "sessionStarred", id, starred: s.starred });
     }
 }
