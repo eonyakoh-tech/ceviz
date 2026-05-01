@@ -2,7 +2,7 @@
   "name": "ceviz",
   "displayName": "CEVIZ",
   "description": "Local Personal Hybrid AI — Local/Cloud/Hybrid AI chat in VS Code sidebar",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "ceviz-ai",
   "repository": { "type": "git", "url": "https://github.com/eonyakoh-tech/ceviz" },
   "icon": "media/icon.png",
