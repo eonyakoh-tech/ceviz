@@ -25,3 +25,6 @@ Chat window design.md
 media/icon_original.png
 media/walnut.svg.bak
 EVOLUTION.md
+__pycache__/**
+*.pyc
+*.pyo
