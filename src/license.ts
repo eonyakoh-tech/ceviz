@@ -118,8 +118,13 @@ const OFFLINE_GRACE_DAYS = 14;
  * openssl rsa -in private.pem -pubout -out public.pem
  */
 const RSA_PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
-PLACEHOLDER_REPLACE_WITH_REAL_RSA2048_PUBLIC_KEY
-See LEMONSQUEEZY-SETUP.md for key generation instructions.
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAy5FMtA+nCeMlYx6xVIWM
+2aIwiAL+PNAZrpgut2eS3ADsr4pDocZBhft0xWztO+o88eiZswcJTOsJTVe9OT6m
+Hlao/JU1ljR34sZIOkyYzm055J5Clg/SfDmtx3Ex0XbQH+tRNITv6JIebtIjsntU
+UbcRGVnICx9ZvwakWcSiEmt6zQ+kqrYSneyGXs4UcgqlwaIY6wGWrz9lJ1OvlCJF
+HwUgELQtUYbpVYVCWkRAK1mIMcoiR3CG+lZO1ciac7MZjUP0ylv1edTsNH8es66q
+fALB45IXjsoAwVVuyMLFnC0XQUzKsE/NhbdY+fzxQjxoZpevTXEjnNhGPoChxppW
+MwIDAQAB
 -----END PUBLIC KEY-----`;
 
 // ── 헬퍼 ──────────────────────────────────────────────────────────────────────
