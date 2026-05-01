@@ -280,7 +280,7 @@
 | 2026-04-29 | Phase 27: 라이선스 시스템 + LemonSqueezy | 작업 1~11 전체 완료. license.ts, 기능게이트, Cloud쿼터, 업그레이드UX, 사이드바배지, Webhook, Proprietary LICENSE, 설정가이드. ceviz-0.2.0.vsix 185KB 완료 |
 | 2026-04-30 | origin push + Phase 24 자동 위키링크 + Phase 25 Hybrid 지능형 라우팅 | 49커밋 push, Phase 24(위키 인덱스+자동주입+링크배지), Phase 25(복잡도점수+응답시간+에스컬레이션배너), ceviz-0.2.0.vsix 187KB 완료 |
 | 2026-05-01 | Phase 28: 채팅 UI/UX 전면 개편 | 영역 A~F 전체 완료. 메시지 액션·00_Inbox 저장·토큰 표시·세션 관리·Hybrid 강화·PRINCIPLES.md·SVG 아이콘. 빌드 651KB 성공 |
-| 2026-05-01 | 세션 재개 — 상태 파악 및 다음 작업 확인 | icon.png + package.json(publisher→ceviz-ai, repository URL) 미커밋 확인. origin 1커밋 앞섬(미push). |
+| 2026-05-01 | 세션 재개 — Marketplace 배포 준비 완료 | publisher→ceviz-ai·아이콘 128px 리사이즈(4.34MB→16.8KB)·__pycache__ 제외·vsix 190KB·tag v0.2.0·GitHub Release 생성. VSCE_PAT 입력 시 즉시 publish 가능. |
 
 ---
 
@@ -299,7 +299,8 @@
 - [x] Phase 9: 프로젝트 컨텍스트 자동 관리 완료
 - [x] Phase 10: 파일 컨텍스트 주입 완료
 - [x] Phase 11 ~ Phase 16: 모두 완료
-- [ ] Marketplace 실제 배포: `VSCE_PAT` secret 설정 후 `release.yml` 주석 해제 → `git tag v0.2.0 && git push --tags`
+- [x] GitHub Release v0.2.0 생성 완료 (2026-05-01) — https://github.com/eonyakoh-tech/ceviz/releases/tag/v0.2.0
+- [ ] Marketplace 실제 배포: `VSCE_PAT` secret 설정 후 `vsce publish` 실행 (태그·릴리즈는 완료)
 - [ ] RAG 육성 시스템 PN40 배포: `cp engine.py ~/ceviz/ && pip install chromadb && python pn40_rag_patch.py` 후 api_server.py 수동 패치
 
 ---
