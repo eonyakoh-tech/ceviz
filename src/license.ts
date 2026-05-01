@@ -127,6 +127,9 @@ fALB45IXjsoAwVVuyMLFnC0XQUzKsE/NhbdY+fzxQjxoZpevTXEjnNhGPoChxppW
 MwIDAQAB
 -----END PUBLIC KEY-----`;
 
+// SHA-256(machineId) — 평문을 소스에 저장하지 않음
+const DEV_MACHINE_HASH = "677b77b29fbed1660c7731fe2acc60dda93b0fac3645aed5ddbb4e3a4c5d7bd6";
+
 // ── 헬퍼 ──────────────────────────────────────────────────────────────────────
 
 /** XXXX-XXXX-XXXX-XXXX 또는 LemonSqueezy UUID 형식 수용 */
@@ -164,6 +167,26 @@ export class LicenseManager {
         private readonly machineId: string,
     ) {}
 
+    // ── 개발자 머신 감지 ─────────────────────────────────────────────────────
+
+    private _isDevMachine(): boolean {
+        return crypto.createHash("sha256").update(this.machineId).digest("hex") === DEV_MACHINE_HASH;
+    }
+
+    private _devFounderState(): LicenseState {
+        return {
+            plan:            "founder",
+            keyMasked:       "DEV-****-****-FREE",
+            deviceId:        this.machineId,
+            activatedAt:     "2026-01-01T00:00:00.000Z",
+            lastValidatedAt: new Date().toISOString(),
+            expiresAt:       null,
+            trialStartDate:  null,
+            instanceId:      "dev",
+            variantId:       null,
+        };
+    }
+
     // ── 초기화 ───────────────────────────────────────────────────────────────
 
     /**
@@ -171,6 +194,7 @@ export class LicenseManager {
      * 트라이얼 시작일을 기록하고 캐시 상태를 반환.
      */
     async initialize(): Promise<LicenseState> {
+        if (this._isDevMachine()) { return this._devFounderState(); }
         this._ensureTrialStart();
         const cached = this._getCachedState();
         if (cached) { return cached; }
@@ -214,6 +238,7 @@ export class LicenseManager {
     }
 
     isTrialExpired(): boolean {
+        if (this._isDevMachine()) { return false; }
         const state = this._getCachedState();
         if (state && state.plan !== "trial") { return false; }
         return this.trialDaysLeft() <= 0;
@@ -226,6 +251,9 @@ export class LicenseManager {
      * Local AI(local 모드)는 항상 허용.
      */
     check(feature: keyof typeof PLAN_LIMITS["trial"]): LicenseCheckResult {
+        if (this._isDevMachine()) {
+            return { allowed: true, plan: "founder", trialDaysLeft: 0 };
+        }
         const state   = this._getCachedState() ?? this._buildTrialState();
         const plan    = this.isTrialExpired() ? "expired" : state.plan;
         const limits  = PLAN_LIMITS[plan];
@@ -239,6 +267,9 @@ export class LicenseManager {
 
     /** Cloud 일일 호출 횟수 확인 */
     checkCloudQuota(): { allowed: boolean; used: number; limit: number } {
+        if (this._isDevMachine()) {
+            return { allowed: true, used: 0, limit: Infinity };
+        }
         const state = this._getCachedState() ?? this._buildTrialState();
         const plan  = this.isTrialExpired() ? "expired" : state.plan;
         const limit = PLAN_LIMITS[plan].cloudCallsPerDay;
@@ -278,6 +309,7 @@ export class LicenseManager {
      * null = 표시 안 함.
      */
     getPendingNudge(): "welcome" | "d7" | "d2" | "expired" | null {
+        if (this._isDevMachine()) { return null; }
         const state = this._getCachedState() ?? this._buildTrialState();
         if (state.plan !== "trial") { return null; }
 
@@ -357,6 +389,7 @@ export class LicenseManager {
 
     /** 라이선스 재검증 (7일마다 백그라운드 실행) */
     async revalidate(): Promise<void> {
+        if (this._isDevMachine()) { return; }
         const state = this._getCachedState();
         if (!state || state.plan === "trial" || !state.instanceId) { return; }
 
@@ -479,6 +512,7 @@ export class LicenseManager {
     // ── 상태 조회 ─────────────────────────────────────────────────────────────
 
     getCurrentPlan(): LicensePlan {
+        if (this._isDevMachine()) { return "founder"; }
         const state = this._getCachedState();
         if (!state)                 { return "trial"; }
         if (this.isTrialExpired() && state.plan === "trial") { return "expired"; }
@@ -499,6 +533,17 @@ export class LicenseManager {
         lastValidatedAt: string;
         deviceId: string;
     } {
+        if (this._isDevMachine()) {
+            return {
+                plan:            "founder",
+                planLabel:       PLAN_LABELS["founder"],
+                trialDaysLeft:   0,
+                keyMasked:       "DEV-****-****-FREE",
+                activatedAt:     "2026-01-01T00:00:00.000Z",
+                lastValidatedAt: new Date().toISOString(),
+                deviceId:        this.machineId,
+            };
+        }
         const state = this.getState();
         const plan  = this.getCurrentPlan();
         return {
