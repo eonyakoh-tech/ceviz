@@ -102,14 +102,17 @@ export const PLAN_LIMITS: Record<LicensePlan, {
 // ── 상수 ──────────────────────────────────────────────────────────────────────
 
 const LS_API_BASE      = "https://api.lemonsqueezy.com/v1/licenses";
-const SECRET_KEY       = "ceviz.licenseKey";
-const STATE_GKEY       = "ceviz.licenseState";
-const TRIAL_START_GKEY = "ceviz.trialStartDate";
-const SHOWN_NUDGE_GKEY = "ceviz.licenseNudgeShown";
+const SECRET_KEY         = "ceviz.licenseKey";
+const JWT_SECRET_KEY     = "ceviz.licenseJwt";       // 오프라인 JWT 저장
+const STATE_GKEY         = "ceviz.licenseState";
+const TRIAL_START_GKEY   = "ceviz.trialStartDate";
+const SHOWN_NUDGE_GKEY   = "ceviz.licenseNudgeShown";
+const JWT_FETCHED_GKEY   = "ceviz.licenseJwtFetchedAt"; // 마지막 JWT 갱신 시각
 
-const TRIAL_DAYS       = 14;
-const REVALIDATE_DAYS  = 7;
+const TRIAL_DAYS         = 14;
+const REVALIDATE_DAYS    = 7;
 const OFFLINE_GRACE_DAYS = 14;
+const JWT_REFRESH_DAYS   = 30; // JWT 갱신 주기 (30일)
 
 /**
  * RSA-2048 공개키 (플레이스홀더).
@@ -198,6 +201,15 @@ export class LicenseManager {
         this._ensureTrialStart();
         const cached = this._getCachedState();
         if (cached) { return cached; }
+
+        // globalState가 초기화된 경우 (재설치 등) → JWT로 상태 복원 시도
+        const jwt = await this.secrets.get(JWT_SECRET_KEY);
+        if (jwt) {
+            const result = await this.verifyOfflineJwt(jwt);
+            if (result.ok) {
+                return this._getCachedState() ?? this._buildTrialState();
+            }
+        }
         return this._buildTrialState();
     }
 
@@ -422,10 +434,30 @@ export class LicenseManager {
         } catch {
             // 네트워크 실패 시 캐시 유지 (OFFLINE_GRACE_DAYS 범위 내)
             if (daysSince > OFFLINE_GRACE_DAYS) {
-                const degraded: LicenseState = { ...state, plan: "expired" };
-                await this.globalState.update(STATE_GKEY, degraded);
+                // JWT 폴백: 오프라인 서명 검증으로 만료 방지
+                const jwtFallback = await this._tryJwtFallback(state);
+                if (!jwtFallback) {
+                    const degraded: LicenseState = { ...state, plan: "expired" };
+                    await this.globalState.update(STATE_GKEY, degraded);
+                }
             }
         }
+    }
+
+    /** 오프라인 유예 초과 시 저장된 JWT로 만료 방지 */
+    private async _tryJwtFallback(state: LicenseState): Promise<boolean> {
+        try {
+            const jwt = await this.secrets.get(JWT_SECRET_KEY);
+            if (!jwt) { return false; }
+            const result = await this.verifyOfflineJwt(jwt);
+            if (result.ok) {
+                // JWT 유효 → 마지막 검증 시각 갱신 (만료 카운트 리셋)
+                const updated: LicenseState = { ...state, lastValidatedAt: new Date().toISOString() };
+                await this.globalState.update(STATE_GKEY, updated);
+                return true;
+            }
+        } catch {}
+        return false;
     }
 
     /** 라이선스 비활성화 (기기 이전) */
@@ -446,7 +478,60 @@ export class LicenseManager {
 
         await this.secrets.delete(SECRET_KEY);
         await this.globalState.update(STATE_GKEY, undefined);
+        await this.clearStoredJwt(); // JWT도 함께 삭제
         return { ok: true };
+    }
+
+    // ── JWT 발급 요청 (PN40 경유) ─────────────────────────────────────────────
+
+    /**
+     * 활성화 성공 후 PN40 서버에서 오프라인 JWT를 발급받아 SecretStorage에 저장.
+     * 실패해도 활성화 결과에 영향 없음 (백그라운드 실행).
+     */
+    async fetchAndStoreJwt(serverUrl: string): Promise<boolean> {
+        if (this._isDevMachine()) { return false; }
+        const key   = await this.secrets.get(SECRET_KEY);
+        const state = this._getCachedState();
+        if (!key || !state || state.plan === "trial") { return false; }
+
+        try {
+            const res = await axios.post(
+                `${serverUrl}/license/issue-jwt`,
+                {
+                    license_key:  key,
+                    machine_id:   this.machineId,
+                    instance_id:  state.instanceId ?? "",
+                },
+                {
+                    headers: { Accept: "application/json" },
+                    timeout: 15_000,
+                    validateStatus: (s) => s < 500,
+                }
+            );
+
+            const jwt: string | undefined = res.data?.jwt;
+            if (!jwt) { return false; }
+
+            await this.secrets.store(JWT_SECRET_KEY, jwt);
+            await this.globalState.update(JWT_FETCHED_GKEY, new Date().toISOString());
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    /** JWT 갱신이 필요한지 (30일 주기) */
+    shouldRefreshJwt(): boolean {
+        const last = this.globalState.get<string>(JWT_FETCHED_GKEY);
+        if (!last) { return true; }
+        const daysSince = (Date.now() - new Date(last).getTime()) / 86_400_000;
+        return daysSince >= JWT_REFRESH_DAYS;
+    }
+
+    /** 라이선스 비활성화 시 JWT도 삭제 */
+    async clearStoredJwt(): Promise<void> {
+        await this.secrets.delete(JWT_SECRET_KEY);
+        await this.globalState.update(JWT_FETCHED_GKEY, undefined);
     }
 
     // ── 오프라인 JWT 폴백 (Task 6) ────────────────────────────────────────────

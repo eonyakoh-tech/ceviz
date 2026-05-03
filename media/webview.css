@@ -656,8 +656,22 @@ body[dir="rtl"] .drop-menu{text-align:right}
 .lic-actions{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
 .lic-buy-btn{background:#0a4a8a!important;color:#9cf!important;border-color:#1a6abf!important}
 .lic-buy-btn:hover{background:#0d5ea8!important}
+/* ── JWT 오프라인 보호 상태 행 ───────────────────────────── */
+.lic-jwt-status-row{display:none;align-items:center;gap:6px;margin:5px 0;flex-wrap:wrap}
+.lic-jwt-badge{font-size:10px;padding:2px 7px;border-radius:3px;border:1px solid;
+  color:var(--vscode-descriptionForeground);border-color:var(--vscode-panel-border)}
+.lic-jwt-badge.jwt-ok{color:#4caf50;border-color:#4caf50;background:rgba(76,175,80,.1)}
+.lic-jwt-badge.jwt-warn{color:#d4a017;border-color:#d4a017;background:rgba(212,160,23,.08)}
+.cloud-btn-xs{background:none;border:1px solid var(--vscode-panel-border);
+  color:var(--vscode-descriptionForeground);border-radius:3px;padding:1px 6px;
+  font-size:9.5px;cursor:pointer;white-space:nowrap}
+.cloud-btn-xs:hover{border-color:var(--vscode-focusBorder);color:var(--vscode-foreground)}
+.cloud-btn-xs:disabled{opacity:.5;cursor:not-allowed}
+
 .lic-offline-details{margin-top:8px;font-size:10.5px;color:var(--vscode-descriptionForeground)}
 .lic-offline-details summary{cursor:pointer;padding:3px 0}
+.lic-offline-desc{font-size:9.5px;color:var(--vscode-descriptionForeground);
+  margin:4px 0;line-height:1.4;opacity:.8}
 .lic-jwt-inp{width:100%;box-sizing:border-box;margin:4px 0;background:var(--vscode-input-background);
   color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,rgba(128,128,128,.35));
   border-radius:3px;padding:4px 8px;font-size:10px;font-family:monospace;resize:vertical}

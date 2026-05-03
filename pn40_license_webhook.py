@@ -29,8 +29,9 @@ import hmac
 import json
 import logging
 import os
-from datetime import datetime
-from typing import Any
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any, Optional
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -43,6 +44,14 @@ router = APIRouter(prefix="/license", tags=["license"])
 _WEBHOOK_SECRET: str  = os.environ.get("LEMONSQUEEZY_WEBHOOK_SECRET", "")
 _TG_TOKEN: str        = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 _TG_CHAT_ID: str      = os.environ.get("TELEGRAM_CHAT_ID", "")
+_JWT_PRIVATE_KEY_PATH = os.environ.get(
+    "JWT_PRIVATE_KEY_PATH",
+    str(Path.home() / "ceviz" / "jwt_private.pem"),
+)
+
+# ── JWT 선발급 캐시 (key_masked → jwt) ────────────────────────────────────────
+# 구매 즉시 발급된 JWT를 저장 → Extension이 나중에 /license/issue-jwt로 가져감
+_JWT_STORE_PATH = Path.home() / "ceviz" / "jwt_store.json"
 
 # ── 서명 검증 ─────────────────────────────────────────────────────────────────
 
@@ -136,21 +145,106 @@ async def _handle_order_created(data: dict[str, Any]) -> None:
     await _telegram_notify(msg)
 
 
+def _load_private_key() -> Optional[str]:
+    """RSA 개인키 로드."""
+    p = Path(_JWT_PRIVATE_KEY_PATH).expanduser()
+    if not p.exists():
+        return None
+    try:
+        return p.read_text(encoding="utf-8")
+    except Exception:
+        return None
+
+
+def _issue_jwt_sync(
+    plan: str,
+    key_masked: str,
+    instance_id: str = "",
+    variant_name: str = "",
+) -> Optional[str]:
+    """구매 즉시 device_id 없이 선발급 JWT 생성 (Extension 활성화 전 단계)."""
+    private_key = _load_private_key()
+    if not private_key:
+        return None
+    try:
+        import jwt as pyjwt  # type: ignore
+        now = datetime.now(timezone.utc)
+        payload = {
+            "iss":          "ceviz",
+            "iat":          int(now.timestamp()),
+            "exp":          int((now + timedelta(days=365)).timestamp()),
+            "plan":         plan,
+            "device_id":    None,   # 기기 미등록 상태 (활성화 시 갱신됨)
+            "instance_id":  instance_id,
+            "key_masked":   key_masked,
+            "variant_name": variant_name,
+        }
+        token = pyjwt.encode(payload, private_key, algorithm="RS256")
+        return token if isinstance(token, str) else token.decode("utf-8")
+    except Exception as e:
+        logger.warning("선발급 JWT 생성 실패: %s", e)
+        return None
+
+
+def _save_jwt_store(key_masked: str, jwt: str, plan: str) -> None:
+    """JWT 스토어 파일에 저장 (Extension이 나중에 조회)."""
+    try:
+        _JWT_STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        store: dict = {}
+        if _JWT_STORE_PATH.exists():
+            try:
+                store = json.loads(_JWT_STORE_PATH.read_text(encoding="utf-8"))
+            except Exception:
+                store = {}
+        store[key_masked] = {
+            "jwt":        jwt,
+            "plan":       plan,
+            "issued_at":  datetime.now(timezone.utc).isoformat(),
+        }
+        _JWT_STORE_PATH.write_text(json.dumps(store, indent=2), encoding="utf-8")
+    except Exception as e:
+        logger.warning("JWT 스토어 저장 실패: %s", e)
+
+
+def _plan_from_variant(variant_name: str) -> str:
+    n = (variant_name or "").lower()
+    if "founder" in n: return "founder"
+    if "pro"     in n: return "pro"
+    return "personal"
+
+
 async def _handle_license_key_created(data: dict[str, Any]) -> None:
     """
     license_key_created: 라이선스 키 발급 이벤트.
-    키 마스킹 후 로그 기록.
+    - 키 마스킹 후 로그 기록
+    - JWT 선발급 (개인키 있을 시) → jwt_store.json 저장
     """
-    attrs   = data.get("data", {}).get("attributes", {})
-    key_raw = attrs.get("key", "")
-    key     = _mask_key(key_raw)
-    status  = attrs.get("status", "?")
-    expires = attrs.get("expires_at", "never")
+    attrs        = data.get("data", {}).get("attributes", {})
+    key_raw      = attrs.get("key", "")
+    key          = _mask_key(key_raw)
+    status       = attrs.get("status", "?")
+    expires      = attrs.get("expires_at", "never")
+    instance_id  = str(data.get("data", {}).get("id", ""))
+    variant_name = attrs.get("product_name", "")
+    plan         = _plan_from_variant(attrs.get("product_name", "") + " " + attrs.get("name", ""))
 
     logger.info(
-        "license_key_created | key=%s | status=%s | expires=%s",
-        key, status, expires
+        "license_key_created | key=%s | plan=%s | status=%s | expires=%s",
+        key, plan, status, expires
     )
+
+    # JWT 선발급
+    jwt = _issue_jwt_sync(
+        plan=plan,
+        key_masked=key,
+        instance_id=instance_id,
+        variant_name=variant_name,
+    )
+    if jwt:
+        _save_jwt_store(key, jwt, plan)
+        logger.info("JWT 선발급 완료: key=%s", key)
+    else:
+        logger.info("JWT 선발급 생략 (개인키 없음 또는 pyjwt 미설치)")
 
 
 # ── Webhook 엔드포인트 ────────────────────────────────────────────────────────
@@ -202,8 +296,17 @@ async def license_webhook(request: Request) -> Response:
 @router.get("/webhook/status")
 async def webhook_status() -> dict:
     """Webhook 설정 상태 확인 (개발/디버그용)."""
+    jwt_store_count = 0
+    if _JWT_STORE_PATH.exists():
+        try:
+            store = json.loads(_JWT_STORE_PATH.read_text(encoding="utf-8"))
+            jwt_store_count = len(store)
+        except Exception:
+            pass
     return {
-        "webhook_secret_set": bool(_WEBHOOK_SECRET),
-        "telegram_bot_set":   bool(_TG_TOKEN),
-        "telegram_chat_set":  bool(_TG_CHAT_ID),
+        "webhook_secret_set":   bool(_WEBHOOK_SECRET),
+        "telegram_bot_set":     bool(_TG_TOKEN),
+        "telegram_chat_set":    bool(_TG_CHAT_ID),
+        "jwt_private_key_set":  Path(_JWT_PRIVATE_KEY_PATH).expanduser().exists(),
+        "jwt_store_count":      jwt_store_count,
     }

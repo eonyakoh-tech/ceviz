@@ -271,6 +271,7 @@
 | 날짜 | 작업 목표 | 완료 요약 |
 |------|----------|----------|
 | 2026-05-03 | Upgrade&Update 문서 4종 분석·구현 (P1~P4) | design.md·Confidence배지·/goal루프·LLM Wiki 전체 완료. ceviz-0.2.3.vsix 223KB |
+| 2026-05-03 | LemonSqueezy JWT 인프라 완성 | JWT 발급(pn40_license_jwt.py)·Webhook 강화·license.ts 오프라인 폴백·panel.ts 연동. ceviz-0.2.3.vsix 224KB |
 | 2026-04-24 | Phase 8 커밋·패키징·설치 | `ceviz-0.2.0.vsix` 패키징, VS Code 재설치, `extension-ui` 브랜치 커밋 완료 |
 | 2026-04-24 | CLAUDE.md 자동 업데이트 규칙 설정 | CLAUDE.md 전면 재작성, Stop 훅 설정 완료 |
 | 2026-04-24 | Phase 9: 프로젝트 컨텍스트 자동 관리 | CONTEXT.md 생성·갱신, 모달 UI, 키워드 감지, 세션 복원, ceviz-0.2.0.vsix 재설치 완료 |
@@ -311,6 +312,10 @@
 - [x] GitHub Release v0.2.0 생성 완료 (2026-05-01) — https://github.com/eonyakoh-tech/ceviz/releases/tag/v0.2.0
 - [ ] Marketplace 실제 배포: `VSCE_PAT` secret 설정 후 `vsce publish` 실행 (태그·릴리즈는 완료)
 - [ ] RAG 육성 시스템 PN40 배포: `cp engine.py ~/ceviz/ && pip install chromadb && python pn40_rag_patch.py` 후 api_server.py 수동 패치
+- [ ] **LemonSqueezy 상품 3개 생성** → Checkout URL 획득 → `src/license.ts` STORE_URL 교체
+- [ ] PN40 JWT 서비스 배포: `pip install pyjwt cryptography && python pn40_license_jwt.py`
+- [ ] PN40 Webhook 배포: `python pn40_license_webhook.py` (api_server.py에 라우터 등록)
+- [ ] Test mode → Live mode 전환: `CEVIZ_TEST_MODE=false` 환경변수 설정
 
 ---
 

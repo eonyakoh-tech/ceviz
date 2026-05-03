@@ -694,6 +694,10 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                     this._sendLicenseStatus();
                     this._license.revalidate().catch(() => {});
                     this._checkLicenseNudge();
+                    // JWT 갱신 주기 도래 시 백그라운드 갱신
+                    if (this._license.shouldRefreshJwt()) {
+                        this._license.fetchAndStoreJwt(this._getUrl()).catch(() => {});
+                    }
                     break;
 
                 case "ragReset":
@@ -1120,6 +1124,12 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                 case "licenseNudgeDismiss":
                     this._license.markNudgeShown(msg.nudge);
                     break;
+
+                case "licenseRefreshJwt": {
+                    const ok = await this._license.fetchAndStoreJwt(this._getUrl());
+                    this._view?.webview.postMessage({ type: "licenseJwtRefreshDone", ok });
+                    break;
+                }
 
                 // ── Phase 28 A: 메시지 액션 ─────────────────────────────────
                 case "deleteMessage":
@@ -3391,11 +3401,23 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
         </button>
       </div>
 
-      <!-- JWT 오프라인 입력 (접힘) -->
+      <!-- JWT 오프라인 보호 상태 (신규) -->
+      <div class="lic-jwt-status-row" id="licJwtStatusRow">
+        <span class="lic-jwt-badge" id="licJwtBadge" title="오프라인 JWT 보호 상태">
+          🔓 오프라인 보호 없음
+        </span>
+        <button class="cloud-btn-xs" id="licJwtRefreshBtn" title="PN40에서 오프라인 JWT 갱신">↻ JWT 갱신</button>
+      </div>
+
+      <!-- JWT 오프라인 직접 입력 (접힘) -->
       <details class="lic-offline-details">
-        <summary>오프라인 라이선스 토큰 입력</summary>
+        <summary>오프라인 라이선스 토큰 수동 입력</summary>
+        <div class="lic-offline-desc">
+          PN40 서버 없이 직접 JWT를 붙여넣을 때 사용합니다.
+          jwt_store.json에 저장된 값 또는 구매 후 Telegram으로 받은 토큰을 입력하세요.
+        </div>
         <textarea class="lic-jwt-inp" id="licJwtInp" rows="3"
-                  placeholder="구매 후 이메일로 받은 JWT 토큰을 붙여넣으세요"></textarea>
+                  placeholder="eyJ... (JWT 토큰 전체)"></textarea>
         <button class="cloud-btn-sm" id="licJwtVerifyBtn">JWT 검증</button>
       </details>
     </div>
@@ -4903,6 +4925,14 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
                 plan: result.plan,
                 planLabel: PLAN_LABELS[result.plan!],
             });
+            // 오프라인 JWT 발급 요청 (백그라운드, 실패 무시)
+            this._license.fetchAndStoreJwt(this._getUrl())
+                .then(ok => {
+                    if (ok) {
+                        this._view?.webview.postMessage({ type: "licenseJwtIssued" });
+                    }
+                })
+                .catch(() => {});
         } else {
             this._view?.webview.postMessage({
                 type: "licenseActivateDone",

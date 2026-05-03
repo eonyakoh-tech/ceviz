@@ -900,6 +900,15 @@ window.addEventListener("message", e => {
             _onLicenseDeactivateDone(m);
             break;
 
+        // JWT 발급 결과 표시
+        case "licenseJwtIssued":
+            _setLicenseJwtBadge(true);
+            break;
+
+        case "licenseJwtRefreshDone":
+            _setLicenseJwtBadge(m.ok);
+            break;
+
         case "upgradePrompt":
             _showUpgradeOverlay(m);
             break;
@@ -3991,6 +4000,13 @@ function _renderLicenseStatus(m) {
         const transferBtn = document.getElementById("licTransferBtn");
         if (transferBtn) { transferBtn.style.display = isPaid ? "" : "none"; }
     }
+
+    // JWT 배지: 유료 플랜이면 표시, 트라이얼은 숨김
+    const jwtRow = document.getElementById("licJwtStatusRow");
+    if (jwtRow) {
+        const showJwt = ["personal", "pro", "founder"].includes(m.plan);
+        jwtRow.style.display = showJwt ? "flex" : "none";
+    }
 }
 
 function _onLicenseActivating() {
@@ -4065,6 +4081,28 @@ document.getElementById("licJwtVerifyBtn")?.addEventListener("click", () => {
     if (!token) { return; }
     vscode.postMessage({ type: "licenseJwtVerify", token });
 });
+
+// JWT 수동 갱신 버튼
+document.getElementById("licJwtRefreshBtn")?.addEventListener("click", () => {
+    const btn = document.getElementById("licJwtRefreshBtn");
+    if (btn) { btn.disabled = true; btn.textContent = "갱신 중..."; }
+    vscode.postMessage({ type: "licenseRefreshJwt" });
+});
+
+/** JWT 보호 배지 업데이트 */
+function _setLicenseJwtBadge(ok) {
+    const badge = document.getElementById("licJwtBadge");
+    const btn   = document.getElementById("licJwtRefreshBtn");
+    if (!badge) { return; }
+    if (ok === true) {
+        badge.textContent = "🔒 오프라인 보호 활성";
+        badge.className   = "lic-jwt-badge jwt-ok";
+    } else if (ok === false) {
+        badge.textContent = "⚠ JWT 갱신 실패";
+        badge.className   = "lic-jwt-badge jwt-warn";
+    }
+    if (btn) { btn.disabled = false; btn.textContent = "↻ JWT 갱신"; }
+}
 
 // ── 업그레이드 오버레이 (작업 7+8) ───────────────────────────────────────────
 
