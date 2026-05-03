@@ -825,3 +825,50 @@ body[dir="rtl"] .drop-menu{text-align:right}
 .route-badge.local{border-color:#4caf50;color:#4caf50}
 .route-badge.cloud{border-color:#5a9fd4;color:#5a9fd4}
 .route-badge.fallback{border-color:#d4a017;color:#d4a017}
+
+/* ── P2: 신뢰도(Confidence) 배지 ────────────────────────── */
+.conf-row{margin-top:3px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.conf-badge{font-size:9.5px;padding:1px 6px;border-radius:3px;border:1px solid;
+  font-weight:600;white-space:nowrap}
+.conf-badge.conf-high{color:#4caf50;border-color:#4caf50;background:rgba(76,175,80,.1)}
+.conf-badge.conf-mid{color:#d4a017;border-color:#d4a017;background:rgba(212,160,23,.1)}
+.conf-badge.conf-low{color:#e05050;border-color:#e05050;background:rgba(224,80,80,.12);
+  animation:confPulse 2s infinite}
+.conf-warn-txt{font-size:9.5px;color:#e05050;opacity:.9}
+@keyframes confPulse{0%,100%{opacity:1}50%{opacity:.6}}
+
+/* ── P3: /goal 자율 루프 배너 ────────────────────────────── */
+.goal-banner{display:none;padding:5px 8px;align-items:center;gap:6px;flex-shrink:0;
+  background:var(--vscode-editor-inactiveSelectionBackground);
+  border-bottom:1px solid var(--vscode-panel-border);font-size:11px}
+.goal-banner.goal-active{border-left:3px solid #5a9fd4}
+.goal-banner.goal-complete{border-left:3px solid #4caf50}
+.goal-icon{font-size:13px;flex-shrink:0}
+.goal-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.goal-meta{font-size:9.5px;color:var(--vscode-descriptionForeground);flex-shrink:0;white-space:nowrap}
+.goal-status-badge{font-size:9px;padding:1px 5px;border-radius:10px;font-weight:700;
+  flex-shrink:0;white-space:nowrap}
+.goal-active .goal-status-badge{background:#1e3a5f;color:#7ec8e3}
+.goal-complete .goal-status-badge{background:rgba(76,175,80,.15);color:#4caf50}
+.goal-clear-btn{background:none;border:none;color:var(--vscode-descriptionForeground);
+  cursor:pointer;font-size:12px;padding:1px 3px;border-radius:3px;flex-shrink:0;opacity:.7}
+.goal-clear-btn:hover{opacity:1;color:#c44}
+
+/* ── P4: LLM Wiki 섹션 ───────────────────────────────────── */
+.llm-wiki-section{padding:6px 8px;border-top:1px solid var(--vscode-panel-border);flex-shrink:0}
+.llm-wiki-hdr{display:flex;align-items:baseline;gap:6px;margin-bottom:5px}
+.llm-wiki-title{font-size:11px;font-weight:700;color:var(--vscode-foreground)}
+.llm-wiki-desc{font-size:9.5px;color:var(--vscode-descriptionForeground);opacity:.7}
+.llm-wiki-btns{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:5px}
+.llm-wiki-btn{background:var(--vscode-button-secondaryBackground);
+  color:var(--vscode-button-secondaryForeground);border:none;border-radius:3px;
+  padding:3px 8px;font-size:10px;cursor:pointer;white-space:nowrap}
+.llm-wiki-btn:hover{background:var(--vscode-button-secondaryHoverBackground)}
+.llm-wiki-btn:disabled{opacity:.5;cursor:not-allowed}
+.llm-wiki-status{font-size:10px;padding:3px 6px;border-radius:3px;margin-bottom:4px}
+.llm-wiki-status.wiki-ok{background:rgba(76,175,80,.12);color:#4caf50}
+.llm-wiki-status.wiki-err{background:rgba(224,80,80,.12);color:#e05050}
+.llm-wiki-status.wiki-loading{background:rgba(90,159,212,.1);color:#5a9fd4;animation:confPulse 1.5s infinite}
+.llm-wiki-log{display:flex;flex-direction:column;gap:2px;max-height:60px;overflow-y:auto}
+.llm-wiki-log-row{font-size:9.5px;color:var(--vscode-descriptionForeground);
+  padding:1px 2px;border-left:2px solid var(--vscode-panel-border)}

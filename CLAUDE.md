@@ -38,8 +38,8 @@
 | 항목 | 내용 |
 |------|------|
 | 브랜치 | `extension-ui` |
-| 최신 Phase | Phase 28 채팅 UI/UX 전면 개편 완료 (2026-05-01) |
-| 패키지 버전 | `ceviz-0.2.0` |
+| 최신 Phase | Phase 29 Upgrade&Update 4종 구현 완료 (2026-05-03) |
+| 패키지 버전 | `ceviz-0.2.3` |
 | 백엔드 주소 | `100.69.155.43:8000` (기본값) |
 | 빌드 상태 | webpack 컴파일 정상 |
 | PN40 모델 | gemma3:1b · gemma4:e2b/e4b · nomic-embed-text · **qwen2.5-coder:1.5b** (2026-04-28 신규) |
@@ -210,6 +210,14 @@
 - **작업 11**: `_checkTokenAnomaly()` — 7일 평균 대비 5배·5000토큰 초과 시 `sec-anomaly-banner` 경고 (1시간 중복 방지)
 - **파일**: `src/panel.ts`, `media/webview.js`, `media/webview.css`, `pn40_skills_patch.py`
 
+### ✅ Phase 29 — Upgrade&Update 문서 반영
+- **완료**: 2026-05-03
+- **P1 (design.md)**: CEVIZ 디자인 토큰 시스템 — 8카테고리(Color/Typography/Spacing/Corners/Shadows/Borders/Opacity/Layout), W3C DTCG 형식, AI 코딩 가이드라인 포함
+- **P2 (Confidence Score)**: Message.confidence 필드, pn40_confidence_patch.py(_calc_confidence 휴리스틱), 신뢰도 배지(✓/△/⚠ 3단계), 60% 미만 환각 경고 애니메이션
+- **P3 (/goal 자율 루프)**: `/goal [목표]` 명령어, _handleGoalCommand, _checkGoalSatisfied, goal-banner UI(Active/Complete), 목표 변경 확인 다이얼로그
+- **P4 (LLM Wiki Ingest)**: Vault 패널 LLM Wiki 섹션, wikiIngest/wikiLint/wikiCreateAgentMd 메서드, agent.md 스키마 자동 생성, PN40 폴백 로컬 저장, pn40_wiki_patch.py(/wiki/ingest · /wiki/lint)
+- **파일**: `design.md`(신규), `src/panel.ts`, `media/webview.js`, `media/webview.css`, `pn40_confidence_patch.py`(신규), `pn40_wiki_patch.py`(신규)
+
 ### 🔄 Phase 18 — RSS Feed 자동 수집 + Obsidian 저장
 - **상태**: 진행 중 (2026-04-27)
 - **아키텍처**: PN40 systemd user timer → rss_worker.py → vault_sync/ → Syncthing → T480s Vault
@@ -262,6 +270,7 @@
 
 | 날짜 | 작업 목표 | 완료 요약 |
 |------|----------|----------|
+| 2026-05-03 | Upgrade&Update 문서 4종 분석·구현 (P1~P4) | design.md·Confidence배지·/goal루프·LLM Wiki 전체 완료. ceviz-0.2.3.vsix 223KB |
 | 2026-04-24 | Phase 8 커밋·패키징·설치 | `ceviz-0.2.0.vsix` 패키징, VS Code 재설치, `extension-ui` 브랜치 커밋 완료 |
 | 2026-04-24 | CLAUDE.md 자동 업데이트 규칙 설정 | CLAUDE.md 전면 재작성, Stop 훅 설정 완료 |
 | 2026-04-24 | Phase 9: 프로젝트 컨텍스트 자동 관리 | CONTEXT.md 생성·갱신, 모달 UI, 키워드 감지, 세션 복원, ceviz-0.2.0.vsix 재설치 완료 |

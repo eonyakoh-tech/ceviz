@@ -428,7 +428,7 @@ window.addEventListener("message", e => {
             break;
         case "assistantMsg":
             hideThink();
-            appendMsg("assistant", m.content, m.agent, m.tier, m.engine, m.isCloud, m.tokenUsage, m.ragDocs, m.domain, m.costUsd, m.wikiLinks, m.responseMs);
+            appendMsg("assistant", m.content, m.agent, m.tier, m.engine, m.isCloud, m.tokenUsage, m.ragDocs, m.domain, m.costUsd, m.wikiLinks, m.responseMs, m.confidence);
             if (m.isCloud && m.tokenUsage) {
                 totalTokens = m.totalTokens || totalTokens;
                 document.getElementById("tokenCount").textContent = totalTokens;
@@ -458,6 +458,16 @@ window.addEventListener("message", e => {
             break;
         case "complexityScore":
             updateComplexityIndicator(m.score);
+            break;
+        // P3: /goal 자율 루프 상태
+        case "goalStatus":
+            updateGoalBanner(m);
+            break;
+        case "goalConfirm":
+            if (confirm("기존 목표를 변경할까요?\n\n현재: " + m.oldGoal + "\n새 목표: " + m.newGoal)) {
+                vscode.postMessage({ type: "sendPrompt", prompt: "/goal clear" });
+                setTimeout(() => vscode.postMessage({ type: "sendPrompt", prompt: "/goal " + m.newGoal }), 200);
+            }
             break;
         case "hybridEscalation":
             showHybridEscalationBanner(m.message, m.score);
@@ -521,6 +531,23 @@ window.addEventListener("message", e => {
             break;
         case "vaultSearchResult":
             renderVaultResults(m.results, m.error);
+            break;
+        // P4: LLM Wiki 결과
+        case "wikiResult":
+            _setWikiStatus(m.msg, m.ok);
+            _appendWikiLog(m.msg);
+            document.getElementById("wikiIngestBtn").disabled = false;
+            if (m.ok && m.nodes && m.nodes.length > 0) {
+                vscode.postMessage({ type: "wikiRebuildIndex" });
+            }
+            break;
+        case "wikiLintResult":
+            _setWikiStatus(m.msg, m.ok);
+            _appendWikiLog(m.msg);
+            document.getElementById("wikiLintBtn").disabled = false;
+            if (m.ok && m.issues && m.issues.length > 0) {
+                m.issues.forEach(issue => _appendWikiLog("  ⚠ " + issue));
+            }
             break;
         case "projectsList":
             renderProjList(m.projects, m.current);
@@ -1103,10 +1130,10 @@ function renderChat() {
     updateInboxBar();
     const s = sessions.find(x => x.id === curId);
     if (!s) { return; }
-    s.messages.forEach(m => appendMsg(m.role, m.content, m.agent, m.tier, m.engine, m.tier === 2, m.tokenUsage, m.ragDocs, m.domain, m.costUsd, m.wikiLinks));
+    s.messages.forEach(m => appendMsg(m.role, m.content, m.agent, m.tier, m.engine, m.tier === 2, m.tokenUsage, m.ragDocs, m.domain, m.costUsd, m.wikiLinks, undefined, m.confidence));
 }
 
-function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage, ragDocs, domain, costUsd, wikiLinks, responseMs) {
+function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage, ragDocs, domain, costUsd, wikiLinks, responseMs, confidence) {
     const area = document.getElementById("chatArea");
     const msgIdx = area.querySelectorAll(".msg").length;
 
@@ -1260,6 +1287,26 @@ function appendMsg(role, content, agent, tier, engine, isCloud, tokenUsage, ragD
                 wikiRow.appendChild(badge);
             });
             inner.appendChild(wikiRow);
+        }
+
+        // P2: 신뢰도 배지 (confidence가 있을 때만 표시)
+        if (confidence !== undefined && confidence !== null) {
+            const pct = Math.round(confidence * 100);
+            const confRow = document.createElement("div");
+            confRow.className = "conf-row";
+            const confBadge = document.createElement("span");
+            confBadge.className = "conf-badge" +
+                (pct >= 90 ? " conf-high" : pct >= 60 ? " conf-mid" : " conf-low");
+            confBadge.title = "응답 신뢰도 (AI 자가 평가)";
+            confBadge.textContent = (pct >= 90 ? "✓" : pct >= 60 ? "△" : "⚠") + " " + pct + "%";
+            confRow.appendChild(confBadge);
+            if (pct < 60) {
+                const warn = document.createElement("span");
+                warn.className = "conf-warn-txt";
+                warn.textContent = " 환각 위험 — 사실 여부를 확인하세요";
+                confRow.appendChild(warn);
+            }
+            inner.appendChild(confRow);
         }
     }
 
@@ -1886,6 +1933,55 @@ document.getElementById("vaultSearchBtn").onclick = doVaultSearch;
 document.getElementById("vaultSearchInput").addEventListener("keydown", e => {
     if (e.key === "Enter") { doVaultSearch(); }
 });
+
+// ── P4: LLM Wiki 버튼 핸들러 ──────────────────────────────────────────────
+
+document.getElementById("wikiIngestBtn").onclick = () => {
+    // 현재 세션의 마지막 대화 내용을 ingest
+    const s = sessions.find(x => x.id === curId);
+    if (!s || s.messages.length === 0) {
+        _setWikiStatus("대화가 없습니다. 먼저 AI와 대화를 나눠주세요.", false);
+        return;
+    }
+    const content = s.messages
+        .slice(-6) // 최근 6개 메시지
+        .map(m => (m.role === "user" ? "**Q:** " : "**A:** ") + m.content)
+        .join("\n\n");
+    const sourceTitle = s.title || "chat-export";
+    _setWikiStatus("Ingest 요청 중...", null);
+    document.getElementById("wikiIngestBtn").disabled = true;
+    vscode.postMessage({ type: "wikiIngest", content, sourceTitle });
+};
+
+document.getElementById("wikiLintBtn").onclick = () => {
+    _setWikiStatus("Lint 실행 중...", null);
+    document.getElementById("wikiLintBtn").disabled = true;
+    vscode.postMessage({ type: "wikiLint" });
+};
+
+document.getElementById("wikiAgentMdBtn").onclick = () => {
+    _setWikiStatus("agent.md 생성 중...", null);
+    vscode.postMessage({ type: "wikiCreateAgentMd" });
+};
+
+function _setWikiStatus(msg, ok) {
+    const el = document.getElementById("llmWikiStatus");
+    if (!el) { return; }
+    el.style.display = "block";
+    el.className = "llm-wiki-status" + (ok === true ? " wiki-ok" : ok === false ? " wiki-err" : " wiki-loading");
+    el.textContent = msg;
+}
+
+function _appendWikiLog(msg) {
+    const log = document.getElementById("llmWikiLog");
+    if (!log) { return; }
+    const row = document.createElement("div");
+    row.className = "llm-wiki-log-row";
+    row.textContent = new Date().toLocaleTimeString() + " " + msg;
+    log.insertBefore(row, log.firstChild);
+    // 최대 10줄 유지
+    while (log.children.length > 10) { log.removeChild(log.lastChild); }
+}
 
 function renderVaultInfo(info) {
     const pathEl = document.getElementById("vaultPath");
@@ -4058,5 +4154,49 @@ function _showLicenseNudge(m) {
     document.getElementById("licNudgeDismissBtn")?.addEventListener("click", () => {
         el.style.display = "none";
         vscode.postMessage({ type: "licenseNudgeDismiss", nudge });
+    });
+}
+
+// ── P3: /goal 자율 루프 배너 ─────────────────────────────────────────────────
+
+function updateGoalBanner(m) {
+    let el = document.getElementById("goalBanner");
+    if (!el) {
+        el = document.createElement("div");
+        el.id = "goalBanner";
+        el.className = "goal-banner";
+        const chatArea = document.getElementById("chatArea");
+        if (chatArea && chatArea.parentNode) {
+            chatArea.parentNode.insertBefore(el, chatArea);
+        }
+    }
+
+    if (m.status === "cleared") {
+        el.style.display = "none";
+        return;
+    }
+
+    const isActive   = m.status === "active" || m.status === "started";
+    const isComplete = m.status === "complete";
+
+    el.className = "goal-banner" + (isActive ? " goal-active" : isComplete ? " goal-complete" : "");
+    el.style.display = "flex";
+
+    let statusIcon = isActive ? "🔄" : isComplete ? "✅" : "⏸";
+    let statusText = isActive ? "Active" : isComplete ? "Complete" : "Paused";
+
+    let html = `<span class="goal-icon">${statusIcon}</span>` +
+        `<span class="goal-text"><strong>/goal</strong> ${escapeHtml(m.text || "")}</span>` +
+        `<span class="goal-meta">`;
+    if (m.iterations) { html += ` ${m.iterations}회`; }
+    if (m.elapsedSec) { html += ` · ${m.elapsedSec}s`; }
+    if (m.tokenTotal) { html += ` · ~${m.tokenTotal} tok`; }
+    html += `</span>` +
+        `<span class="goal-status-badge">${statusText}</span>` +
+        `<button class="goal-clear-btn" title="목표 초기화">✕</button>`;
+    el.innerHTML = html;
+
+    el.querySelector(".goal-clear-btn").addEventListener("click", () => {
+        vscode.postMessage({ type: "sendPrompt", prompt: "/goal clear" });
     });
 }

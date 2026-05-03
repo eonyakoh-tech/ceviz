@@ -40,6 +40,16 @@ interface Message {
     domain?: string;
     costUsd?: number;    // Phase 22: 직접 Cloud API 호출 비용
     wikiLinks?: WikiLink[]; // Phase 24: 자동 감지된 Vault 위키링크
+    confidence?: number; // P2: 응답 신뢰도 (0–1)
+}
+
+// P3: /goal 자율 루프 상태
+interface GoalState {
+    text: string;
+    active: boolean;
+    iterations: number;
+    startMs: number;
+    tokenTotal: number;
 }
 
 interface Session {
@@ -398,6 +408,9 @@ export class CevizPanel implements vscode.WebviewViewProvider {
     private _recentResponseLengths: number[] = []; // 최근 5회 응답 길이 추적
     private _lowQualityWarned = false; // 저품질 경고 중복 방지
 
+    // ── P3: /goal 자율 루프 ───────────────────────────────────────────────────
+    private _goalState: GoalState | null = null;
+
     // ── Phase 28: 월 예산 & 피드백 ──────────────────────────────────────────
     private _monthlyBudgetUsd = 50;    // USD 기본값
 
@@ -696,7 +709,12 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                 case "sendPrompt":
                     this._mode = msg.mode;
                     this._model = msg.model;
-                    await this._handlePrompt(msg.prompt);
+                    // P3: /goal 명령어 인터셉트
+                    if (msg.prompt.startsWith("/goal")) {
+                        await this._handleGoalCommand(msg.prompt.slice(5).trim());
+                    } else {
+                        await this._handlePrompt(msg.prompt);
+                    }
                     break;
 
                 case "newSession":
@@ -801,6 +819,19 @@ export class CevizPanel implements vscode.WebviewViewProvider {
                     this._view?.webview.postMessage({ type: "wikiIndexReady", count: 0, rebuilding: true });
                     await this._buildWikiIndex();
                     this._view?.webview.postMessage({ type: "wikiIndexReady", count: this._wikiIndex.size });
+                    break;
+
+                // P4: LLM Wiki
+                case "wikiIngest":
+                    await this._wikiIngest(msg.content, msg.sourceTitle);
+                    break;
+
+                case "wikiLint":
+                    await this._wikiLint();
+                    break;
+
+                case "wikiCreateAgentMd":
+                    await this._wikiCreateAgentMd();
                     break;
 
                 case "projectList":
@@ -1260,6 +1291,7 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
             if (isCloud) { this._totalTokens += tokenEstimate; }
             const ragDocs: number = d.rag_docs || 0;
             const domain: string  = d.domain  || "";
+            const confidence: number | undefined = (typeof d.confidence === "number") ? d.confidence : undefined;
 
             // Phase 24: 응답에서 위키링크 자동 감지
             const wikiLinks = this._detectWikiLinks(d.result);
@@ -1272,7 +1304,8 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
                 tokenUsage: isCloud ? tokenEstimate : undefined,
                 ragDocs: ragDocs || undefined,
                 domain:  domain  || undefined,
-                wikiLinks: wikiLinks.length > 0 ? wikiLinks : undefined
+                wikiLinks: wikiLinks.length > 0 ? wikiLinks : undefined,
+                confidence,
             };
             session.messages.push(msg);
             this._lastCloudResponse = isCloud ? msg : null;
@@ -1281,6 +1314,32 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
 
             // Phase 25: 품질 추적
             this._trackResponseQuality(d.result.length);
+
+            // P3: /goal 루프 — 목표 달성 여부 검증
+            if (this._goalState?.active) {
+                this._goalState.iterations++;
+                this._goalState.tokenTotal += tokenEstimate;
+                const satisfied = this._checkGoalSatisfied(d.result, this._goalState.text);
+                if (satisfied) {
+                    const elapsed = ((Date.now() - this._goalState.startMs) / 1000).toFixed(1);
+                    this._goalState.active = false;
+                    this._view?.webview.postMessage({
+                        type: "goalStatus",
+                        status: "complete",
+                        text: this._goalState.text,
+                        iterations: this._goalState.iterations,
+                        elapsedSec: elapsed,
+                        tokenTotal: this._goalState.tokenTotal,
+                    });
+                } else {
+                    this._view?.webview.postMessage({
+                        type: "goalStatus",
+                        status: "active",
+                        text: this._goalState.text,
+                        iterations: this._goalState.iterations,
+                    });
+                }
+            }
 
             this._view?.webview.postMessage({
                 type: "assistantMsg",
@@ -1294,7 +1353,8 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
                 ragDocs,
                 domain,
                 wikiLinks: wikiLinks.length > 0 ? wikiLinks : undefined,
-                responseMs  // Phase 25: 응답 시간
+                responseMs,  // Phase 25: 응답 시간
+                confidence,  // P2: 신뢰도
             });
             // 프로젝트 컨텍스트 자동 업데이트
             if (this._currentProject) {
@@ -1399,6 +1459,75 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
         } else if (avg >= 120) {
             this._lowQualityWarned = false;
         }
+    }
+
+    // ── P3: /goal 자율 루프 ───────────────────────────────────────────────────
+
+    private async _handleGoalCommand(arg: string): Promise<void> {
+        // /goal clear — 목표 초기화
+        if (arg === "clear") {
+            this._goalState = null;
+            this._view?.webview.postMessage({ type: "goalStatus", status: "cleared" });
+            this._view?.webview.postMessage({ type: "userMsg", content: "/goal clear" });
+            this._view?.webview.postMessage({
+                type: "assistantMsg", content: "목표가 초기화되었습니다. 시스템이 대기 상태입니다.",
+                agent: "system", tier: 0
+            });
+            return;
+        }
+
+        // /goal (단독) — 현재 상태 조회
+        if (!arg) {
+            if (!this._goalState) {
+                this._view?.webview.postMessage({ type: "userMsg", content: "/goal" });
+                this._view?.webview.postMessage({
+                    type: "assistantMsg",
+                    content: "활성 목표가 없습니다. `/goal [목표 내용]`으로 목표를 설정하세요.",
+                    agent: "system", tier: 0
+                });
+            } else {
+                this._view?.webview.postMessage({
+                    type: "goalStatus",
+                    status: this._goalState.active ? "active" : "complete",
+                    text: this._goalState.text,
+                    iterations: this._goalState.iterations,
+                });
+                this._view?.webview.postMessage({ type: "userMsg", content: "/goal" });
+                this._view?.webview.postMessage({
+                    type: "assistantMsg",
+                    content: `목표 상태: **${this._goalState.active ? "Active" : "Complete"}**\n목표: ${this._goalState.text}\n반복: ${this._goalState.iterations}회`,
+                    agent: "system", tier: 0
+                });
+            }
+            return;
+        }
+
+        // /goal [목표 변경] — 기존 목표가 있으면 변경 확인
+        if (this._goalState?.active) {
+            this._view?.webview.postMessage({
+                type: "goalConfirm",
+                oldGoal: this._goalState.text,
+                newGoal: arg,
+            });
+            return;
+        }
+
+        // 신규 목표 설정 후 첫 번째 프롬프트 전송
+        this._goalState = { text: arg, active: true, iterations: 0, startMs: Date.now(), tokenTotal: 0 };
+        this._view?.webview.postMessage({ type: "goalStatus", status: "started", text: arg });
+        this._view?.webview.postMessage({ type: "userMsg", content: `/goal ${arg}` });
+
+        const goalPrompt = `[목표 기반 작업]\n목표: ${arg}\n\n이 목표를 달성하기 위한 작업을 수행하고, 응답 마지막에 **[GOAL_CHECK]** 태그 후 목표 달성 여부를 "달성됨" 또는 "미달성"으로 명시하세요.`;
+        await this._handlePrompt(goalPrompt);
+    }
+
+    /** 응답 텍스트에서 목표 달성 여부 판단 */
+    private _checkGoalSatisfied(response: string, _goalText: string): boolean {
+        const lower = response.toLowerCase();
+        if (lower.includes("[goal_check]") && lower.includes("달성됨")) { return true; }
+        if (lower.includes("완료되었습니다") || lower.includes("완성되었습니다")) { return true; }
+        if (lower.includes("목표를 달성") || lower.includes("goal achieved")) { return true; }
+        return false;
     }
 
     // ── 응답 캐시 (오프라인 폴백용) ───────────────────────────────────────────
@@ -1749,6 +1878,119 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
     }
 
     // ── Phase 24: 위키 인덱스 빌드 ───────────────────────────────────────────
+    // ── P4: LLM Wiki Ingest / Lint / agent.md ────────────────────────────────
+
+    private async _wikiIngest(content: string, sourceTitle?: string): Promise<void> {
+        const vaultPath = this._getVaultPath();
+        if (!vaultPath) {
+            this._view?.webview.postMessage({ type: "wikiResult", ok: false, msg: "Vault 경로가 설정되지 않았습니다." });
+            return;
+        }
+        this._view?.webview.postMessage({ type: "wikiResult", ok: null, msg: "Ingest 중... (PN40 처리)" });
+
+        try {
+            // PN40 /wiki/ingest 엔드포인트 호출
+            const res = await this._http.post(
+                `${this._getUrl()}/wiki/ingest`,
+                { content, source_title: sourceTitle || "chat-export", vault_path: vaultPath },
+                { timeout: 120_000 }
+            );
+            const data = res.data;
+            const nodesCreated: string[] = data.nodes_created ?? [];
+            // 생성된 노드 목록 웹뷰 전달
+            this._view?.webview.postMessage({
+                type: "wikiResult",
+                ok: true,
+                msg: `✅ ${nodesCreated.length}개 Wiki 노드 생성됨`,
+                nodes: nodesCreated,
+            });
+            // 인덱스 갱신
+            this._wikiIndexBuiltAt = 0;
+            await this._buildWikiIndex();
+        } catch (e: any) {
+            // PN40 미배포 시 로컬 폴백: 간단한 요약 노트 생성
+            if (e.response?.status === 404 || e.code === "ECONNREFUSED") {
+                await this._wikiIngestLocal(content, sourceTitle, vaultPath);
+            } else {
+                this._view?.webview.postMessage({ type: "wikiResult", ok: false, msg: "Ingest 실패: " + e.message });
+            }
+        }
+    }
+
+    /** PN40 미배포 시 로컬 폴백 — 대화를 마크다운 노트로 직접 저장 */
+    private async _wikiIngestLocal(content: string, sourceTitle: string | undefined, vaultPath: string): Promise<void> {
+        const wikiDir = path.join(vaultPath, "00_Inbox", "LLM-Wiki");
+        try {
+            fs.mkdirSync(wikiDir, { recursive: true });
+        } catch {}
+
+        const ts    = new Date().toISOString().slice(0, 16).replace("T", " ");
+        const title = (sourceTitle || "chat-export").replace(/[^\w가-힣\-\s]/g, "_").slice(0, 60);
+        const fname = `${ts.replace(/[: ]/g, "-")}_${title}.md`;
+        const safe  = path.resolve(path.join(wikiDir, fname));
+        if (!safe.startsWith(path.resolve(vaultPath))) {
+            this._view?.webview.postMessage({ type: "wikiResult", ok: false, msg: "경로 보안 오류" });
+            return;
+        }
+        const md = `---\ncreated: ${ts}\ntype: wiki-node\nsource: ${sourceTitle || "chat-export"}\n---\n\n# ${title}\n\n${content.slice(0, 8000)}\n`;
+        fs.writeFileSync(safe, md, "utf8");
+        this._view?.webview.postMessage({
+            type: "wikiResult",
+            ok: true,
+            msg: `✅ 로컬 Wiki 노드 생성: ${fname}`,
+            nodes: [fname],
+        });
+        this._wikiIndexBuiltAt = 0;
+        await this._buildWikiIndex();
+    }
+
+    private async _wikiLint(): Promise<void> {
+        const vaultPath = this._getVaultPath();
+        if (!vaultPath) {
+            this._view?.webview.postMessage({ type: "wikiLintResult", ok: false, msg: "Vault 경로 미설정" });
+            return;
+        }
+        this._view?.webview.postMessage({ type: "wikiLintResult", ok: null, msg: "Lint 실행 중..." });
+        try {
+            const res = await this._http.post(
+                `${this._getUrl()}/wiki/lint`,
+                { vault_path: vaultPath },
+                { timeout: 120_000 }
+            );
+            const issues: string[] = res.data.issues ?? [];
+            this._view?.webview.postMessage({
+                type: "wikiLintResult",
+                ok: true,
+                msg: issues.length === 0 ? "✅ 모순 없음 (Wiki 무결성 양호)" : `⚠ ${issues.length}개 충돌 감지됨`,
+                issues,
+            });
+        } catch (e: any) {
+            this._view?.webview.postMessage({ type: "wikiLintResult", ok: false, msg: "Lint 실패: " + e.message });
+        }
+    }
+
+    private async _wikiCreateAgentMd(): Promise<void> {
+        const vaultPath = this._getVaultPath();
+        if (!vaultPath) {
+            this._view?.webview.postMessage({ type: "wikiResult", ok: false, msg: "Vault 경로 미설정" });
+            return;
+        }
+        const agentMdPath = path.join(vaultPath, "agent.md");
+        const today = new Date().toISOString().slice(0, 10);
+        const content = `# CEVIZ LLM Wiki — agent.md\n\n> AI 에이전트 행동 규약. LLM이 이 파일을 참조하여 지식을 구조화합니다.\n\n## 구조 규칙\n\n- **Concepts/**: 개념 정의 노트 (예: \`Concepts/Hallucination.md\`)\n- **Projects/**: 실행 과제 노트\n- **Sources/**: 원천 데이터 (수정 불가 불변 자산)\n- **00_Inbox/LLM-Wiki/**: 미분류 ingest 노드\n\n## 분류 기준\n\n1. 개념/용어 정의 → \`Concepts/\`\n2. 진행 중인 프로젝트/작업 → \`Projects/\`\n3. 외부 자료/링크 → \`Sources/\`\n4. 미분류 → \`00_Inbox/LLM-Wiki/\`\n\n## 작성 규칙\n\n- 제목: 명사형 (예: "Transformer Architecture" not "How Transformers Work")\n- 크로스 레퍼런스: \`[[관련 노트 제목]]\` 형식으로 연결\n- 메타데이터: frontmatter 필수 (\`created\`, \`type\`, \`tags\`)\n- 언어: 한국어 본문, 영어 기술 용어 유지\n\n## Lint 기준\n\n- 동일 개념의 상충 정의 감지\n- 단방향 링크 감지 (A→B 존재하나 B→A 없음)\n- 빈 노트 또는 내용 3줄 미만 노트 경고\n\n---\n_마지막 갱신: ${today} by CEVIZ_\n`;
+
+        try {
+            fs.writeFileSync(agentMdPath, content, "utf8");
+            this._view?.webview.postMessage({
+                type: "wikiResult",
+                ok: true,
+                msg: "✅ agent.md 생성 완료: " + agentMdPath,
+            });
+        } catch (e: any) {
+            this._view?.webview.postMessage({ type: "wikiResult", ok: false, msg: "agent.md 생성 실패: " + e.message });
+        }
+    }
+
     private async _buildWikiIndex(): Promise<void> {
         const vaultPath = this._getVaultPath();
         if (!vaultPath) { return; }
@@ -2737,6 +2979,20 @@ Respond using EXACTLY this structure (plain text, no extra commentary):
       <button class="rag-reset-btn" data-domain="english">english</button>
       <button class="rag-reset-btn" data-domain="general">general</button>
     </div>
+  </div>
+  <!-- P4: LLM Wiki 섹션 -->
+  <div class="llm-wiki-section" id="llmWikiSection">
+    <div class="llm-wiki-hdr">
+      <span class="llm-wiki-title">📖 LLM Wiki</span>
+      <span class="llm-wiki-desc">구조적 마크다운 지식 저장소</span>
+    </div>
+    <div class="llm-wiki-btns">
+      <button class="llm-wiki-btn" id="wikiIngestBtn" title="현재 대화를 Wiki 노드로 구조화하여 Vault에 저장">⬇ Ingest</button>
+      <button class="llm-wiki-btn" id="wikiLintBtn" title="Wiki 노트 간 모순·충돌 감지">🔍 Lint</button>
+      <button class="llm-wiki-btn" id="wikiAgentMdBtn" title="agent.md 스키마 생성/갱신">📋 agent.md</button>
+    </div>
+    <div class="llm-wiki-status" id="llmWikiStatus" style="display:none"></div>
+    <div class="llm-wiki-log" id="llmWikiLog"></div>
   </div>
 </div>
 
