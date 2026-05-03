@@ -676,7 +676,7 @@ export const PLAN_PRICES: Record<Exclude<LicensePlan, "trial" | "expired">, stri
 
 /** 구매 URL (플레이스홀더 — LEMONSQUEEZY-SETUP.md 참조) */
 export const STORE_URL = {
-    personal: "https://LEMONSQUEEZY_STORE_URL/checkout/buy/LEMONSQUEEZY_PRODUCT_ID_PERSONAL",
-    pro:      "https://LEMONSQUEEZY_STORE_URL/checkout/buy/LEMONSQUEEZY_PRODUCT_ID_PRO",
-    founder:  "https://LEMONSQUEEZY_STORE_URL/checkout/buy/LEMONSQUEEZY_PRODUCT_ID_FOUNDER",
+    personal: "https://ceviz-ai.lemonsqueezy.com/checkout/buy/8220008d-de1c-4f08-bcfb-f166cebdee8b",
+    pro:      "https://ceviz-ai.lemonsqueezy.com/checkout/buy/5e81e140-3bca-4957-b5b9-d53af7b45cf3",
+    founder:  "https://ceviz-ai.lemonsqueezy.com/checkout/buy/5a0a92b8-8cde-43c8-a406-ccef767e2287",
 } as const;
