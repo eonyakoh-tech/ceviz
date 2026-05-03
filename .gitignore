@@ -21,3 +21,4 @@ credentials/
 jwt_private.pem
 jwt_public.pem
 release/
+__pycache__/
